@@ -1,0 +1,199 @@
+{
+    "streamlit_app.py": {
+        "file_name": "/streamlit_app.py",
+        "imports": [
+            "styleformer.Styleformer",
+            "streamlit",
+            "numpy",
+            "json"
+        ],
+        "classes": [
+            {
+                "class_name": "Demo",
+                "methods": [
+                    "__init__",
+                    "load_sf",
+                    "main"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [
+                "set_page_config",
+                "open",
+                "load"
+            ],
+            "load_sf": [
+                "Styleformer",
+                "cache"
+            ],
+            "main": [
+                "title",
+                "write",
+                "selectbox",
+                "list",
+                "keys",
+                "beta_expander",
+                "slider",
+                "number_input",
+                "spinner",
+                "load_sf",
+                "text_input",
+                "strip",
+                "transfer",
+                "markdown",
+                "success",
+                "info",
+                "warning"
+            ]
+        }
+    },
+    "setup.py": {
+        "file_name": "/setup.py",
+        "imports": [
+            "setuptools"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "styleformer/adequacy.py": {
+        "file_name": "/styleformer/adequacy.py",
+        "imports": [
+            "transformers.AutoModelForSequenceClassification",
+            "transformers.AutoTokenizer"
+        ],
+        "classes": [
+            {
+                "class_name": "Adequacy",
+                "methods": [
+                    "__init__",
+                    "filter",
+                    "score"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [
+                "from_pretrained"
+            ],
+            "filter": [
+                "tokenizer",
+                "to",
+                "adequacy_model",
+                "softmax",
+                "item",
+                "append"
+            ],
+            "score": [
+                "tokenizer",
+                "to",
+                "adequacy_model",
+                "softmax",
+                "item"
+            ]
+        }
+    },
+    "styleformer/demo.py": {
+        "file_name": "/styleformer/demo.py",
+        "imports": [
+            "styleformer.Styleformer",
+            "warnings",
+            "torch"
+        ],
+        "classes": [],
+        "functions": {
+            "set_seed": [
+                "manual_seed",
+                "is_available",
+                "manual_seed_all"
+            ]
+        }
+    },
+    "styleformer/__init__.py": {
+        "file_name": "/styleformer/__init__.py",
+        "imports": [
+            "styleformer.styleformer.Styleformer",
+            "styleformer.adequacy.Adequacy"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "styleformer/styleformer.py": {
+        "file_name": "/styleformer/styleformer.py",
+        "imports": [
+            "transformers.AutoTokenizer",
+            "transformers.AutoModelForSeq2SeqLM",
+            "styleformer.Adequacy"
+        ],
+        "classes": [
+            {
+                "class_name": "Styleformer",
+                "methods": [
+                    "__init__",
+                    "transfer",
+                    "_formal_to_casual",
+                    "_casual_to_formal",
+                    "_active_to_passive",
+                    "_passive_to_active"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [
+                "Adequacy",
+                "from_pretrained",
+                "print"
+            ],
+            "transfer": [
+                "str",
+                "print",
+                "_casual_to_formal",
+                "_formal_to_casual",
+                "_active_to_passive",
+                "_passive_to_active"
+            ],
+            "_formal_to_casual": [
+                "encode",
+                "to",
+                "generate",
+                "set",
+                "add",
+                "strip",
+                "decode",
+                "score",
+                "list",
+                "sorted",
+                "items",
+                "len"
+            ],
+            "_casual_to_formal": [
+                "encode",
+                "to",
+                "generate",
+                "set",
+                "add",
+                "strip",
+                "decode",
+                "score",
+                "list",
+                "sorted",
+                "items",
+                "len"
+            ],
+            "_active_to_passive": [
+                "encode",
+                "to",
+                "generate",
+                "strip",
+                "decode"
+            ],
+            "_passive_to_active": [
+                "encode",
+                "to",
+                "generate",
+                "strip",
+                "decode"
+            ]
+        }
+    }
+}
