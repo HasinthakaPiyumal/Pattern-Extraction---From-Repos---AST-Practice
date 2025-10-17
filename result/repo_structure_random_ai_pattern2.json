@@ -1,0 +1,207 @@
+{
+    "main.py": {
+        "file_name": "/main.py",
+        "imports": [
+            "numpy",
+            "gym",
+            "gym.spaces",
+            "tensorflow",
+            "tensorflow.keras",
+            "tensorflow.keras.Input",
+            "tensorflow.keras.Model",
+            "tensorflow.keras.Sequential",
+            "argparse",
+            "environments.grid_world.Grid_World",
+            "agents.consensus_AC.Consensus_AC_agent",
+            "training.train_CAC_agents"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "agents/__init__.py": {
+        "file_name": "/agents/__init__.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "agents/consensus_AC.py": {
+        "file_name": "/agents/consensus_AC.py",
+        "imports": [
+            "numpy",
+            "tensorflow",
+            "tensorflow.keras"
+        ],
+        "classes": [
+            {
+                "class_name": "Consensus_AC_agent",
+                "methods": [
+                    "__init__",
+                    "actor_update",
+                    "critic_update",
+                    "TR_update",
+                    "consensus_update",
+                    "get_action"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [],
+            "actor_update": [
+                "concatenate",
+                "numpy",
+                "TR",
+                "critic",
+                "train_on_batch"
+            ],
+            "critic_update": [
+                "numpy",
+                "critic",
+                "train_on_batch",
+                "identity"
+            ],
+            "TR_update": [
+                "concatenate",
+                "train_on_batch",
+                "identity"
+            ],
+            "consensus_update": [
+                "enumerate",
+                "range",
+                "len",
+                "assign",
+                "Variable"
+            ],
+            "get_action": [
+                "choice",
+                "reshape",
+                "array",
+                "predict"
+            ]
+        }
+    },
+    "training/train_CAC_agents.py": {
+        "file_name": "/training/train_CAC_agents.py",
+        "imports": [
+            "numpy",
+            "gym",
+            "gym.spaces",
+            "tensorflow",
+            "tensorflow.keras",
+            "tensorflow.keras.Input",
+            "tensorflow.keras.Model",
+            "tensorflow.keras.Sequential",
+            "tensorflow.keras.layers",
+            "matplotlib",
+            "matplotlib.pyplot"
+        ],
+        "classes": [],
+        "functions": {
+            "train_batch": [
+                "zeros",
+                "create_file_writer",
+                "range",
+                "reset",
+                "get_data",
+                "critic",
+                "reshape",
+                "get_action",
+                "step",
+                "TR_update",
+                "critic_update",
+                "append",
+                "consensus_update",
+                "actor_update",
+                "mean",
+                "as_default",
+                "scalar",
+                "flush",
+                "print",
+                "format",
+                "array"
+            ],
+            "plot_results": [
+                "zeros",
+                "enumerate",
+                "arange",
+                "len",
+                "subplots",
+                "range",
+                "set_xlabel",
+                "set_ylabel",
+                "plot",
+                "legend",
+                "savefig"
+            ]
+        }
+    },
+    "training/__init__.py": {
+        "file_name": "/training/__init__.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "environments/__init__.py": {
+        "file_name": "/environments/__init__.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "environments/grid_world.py": {
+        "file_name": "/environments/grid_world.py",
+        "imports": [
+            "numpy",
+            "gym",
+            "gym.spaces"
+        ],
+        "classes": [
+            {
+                "class_name": "Grid_World",
+                "methods": [
+                    "__init__",
+                    "_state_transition",
+                    "reset",
+                    "step",
+                    "get_data",
+                    "close"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [
+                "zeros",
+                "MultiDiscrete",
+                "range",
+                "reset",
+                "full_like",
+                "arange",
+                "array",
+                "mean",
+                "std"
+            ],
+            "_state_transition": [
+                "max",
+                "min",
+                "array"
+            ],
+            "reset": [
+                "randint",
+                "array",
+                "zeros"
+            ],
+            "step": [
+                "zeros",
+                "zip",
+                "range",
+                "_state_transition",
+                "delete",
+                "sum",
+                "abs",
+                "any",
+                "int",
+                "array_equal"
+            ],
+            "get_data": [],
+            "close": []
+        }
+    }
+}

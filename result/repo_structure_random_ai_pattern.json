@@ -1,0 +1,470 @@
+{
+    "use-cases/seo.py": {
+        "file_name": "/use-cases/seo.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "src/app/__init__.py": {
+        "file_name": "/src/app/__init__.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "src/app/main.py": {
+        "file_name": "/src/app/main.py",
+        "imports": [
+            "csv",
+            "logging",
+            "os",
+            "typing.Optional",
+            "azure.cosmos.exceptions",
+            "azure.cosmos.aio.CosmosClient",
+            "azure.identity.aio.DefaultAzureCredential",
+            "dotenv.find_dotenv",
+            "dotenv.load_dotenv",
+            "fastapi.FastAPI",
+            "fastapi.HTTPException",
+            "fastapi.Request",
+            "fastapi.status",
+            "fastapi.encoders.jsonable_encoder",
+            "fastapi.exceptions.RequestValidationError",
+            "fastapi.exceptions.ResponseValidationError",
+            "fastapi.middleware.cors.CORSMiddleware",
+            "fastapi.responses.JSONResponse",
+            "pydantic.ValidationError",
+            "app.__app__",
+            "app.__version__",
+            "app.judges.JudgeOrchestrator",
+            "app.judges.fetch_assembly",
+            "app.schemas.RESPONSES",
+            "app.schemas.Assembly",
+            "app.schemas.ErrorMessage",
+            "app.schemas.Judge",
+            "app.schemas.JudgeEvaluation",
+            "app.schemas.SuccessMessage"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "src/app/judges.py": {
+        "file_name": "/src/app/judges.py",
+        "imports": [
+            "asyncio",
+            "json",
+            "os",
+            "abc.ABC",
+            "abc.abstractmethod",
+            "typing.Any",
+            "typing.List",
+            "typing.Optional",
+            "semantic_kernel",
+            "azure.cosmos.exceptions",
+            "azure.cosmos.aio.CosmosClient",
+            "azure.identity.aio.DefaultAzureCredential",
+            "semantic_kernel.agents.chat_completion.chat_completion_agent.ChatCompletionAgent",
+            "semantic_kernel.connectors.ai.FunctionChoiceBehavior",
+            "semantic_kernel.contents.chat_history.ChatHistory",
+            "semantic_kernel.contents.function_call_content.FunctionCallContent",
+            "semantic_kernel.contents.function_result_content.FunctionResultContent",
+            "semantic_kernel.functions.kernel_arguments.KernelArguments",
+            "semantic_kernel.planners.plan.Plan",
+            "app.schemas.Assembly",
+            "app.schemas.Judge"
+        ],
+        "classes": [
+            {
+                "class_name": "Mediator",
+                "methods": [
+                    "notify"
+                ]
+            },
+            {
+                "class_name": "JudgeBase",
+                "methods": [
+                    "__init__"
+                ]
+            },
+            {
+                "class_name": "ConcreteJudge",
+                "methods": [
+                    "__init__"
+                ]
+            },
+            {
+                "class_name": "SuperJudge",
+                "methods": [
+                    "__init__",
+                    "register_judge",
+                    "notify",
+                    "final_verdict"
+                ]
+            },
+            {
+                "class_name": "JudgeEvaluationPlan",
+                "methods": [
+                    "__init__"
+                ]
+            },
+            {
+                "class_name": "JudgeFactory",
+                "methods": [
+                    "build_kernel",
+                    "create_judges"
+                ]
+            },
+            {
+                "class_name": "JudgeOrchestrator",
+                "methods": []
+            }
+        ],
+        "functions": {
+            "notify": [
+                "append"
+            ],
+            "__init__": [
+                "__init__",
+                "super"
+            ],
+            "register_judge": [
+                "append"
+            ],
+            "final_verdict": [
+                "append",
+                "join"
+            ],
+            "build_kernel": [
+                "Kernel"
+            ],
+            "create_judges": [
+                "ConcreteJudge"
+            ]
+        }
+    },
+    "src/app/plugins.py": {
+        "file_name": "/src/app/plugins.py",
+        "imports": [
+            "semantic_kernel.functions.kernel_function",
+            "random"
+        ],
+        "classes": [
+            {
+                "class_name": "ExamplePlugin",
+                "methods": [
+                    "get_rules",
+                    "get_score"
+                ]
+            }
+        ],
+        "functions": {
+            "get_rules": [
+                "kernel_function"
+            ],
+            "get_score": [
+                "str",
+                "randint",
+                "kernel_function"
+            ]
+        }
+    },
+    "src/app/plugins/cluster.py": {
+        "file_name": "/src/app/plugins/cluster.py",
+        "imports": [
+            "importlib",
+            "abc.ABC",
+            "abc.abstractmethod",
+            "pandas"
+        ],
+        "classes": [
+            {
+                "class_name": "DataSetAdapter",
+                "methods": [
+                    "load_data"
+                ]
+            },
+            {
+                "class_name": "ClusteringPlugin",
+                "methods": [
+                    "__init__",
+                    "train",
+                    "infer"
+                ]
+            },
+            {
+                "class_name": "CSVDataSetAdapter",
+                "methods": [
+                    "__init__",
+                    "load_data"
+                ]
+            }
+        ],
+        "functions": {
+            "load_data": [
+                "read_csv"
+            ],
+            "__init__": [
+                "import_module",
+                "getattr",
+                "ImportError",
+                "str",
+                "ValueError"
+            ],
+            "train": [
+                "load_data",
+                "algorithm_class",
+                "fit"
+            ],
+            "infer": [
+                "Exception",
+                "hasattr",
+                "predict",
+                "NotImplementedError"
+            ]
+        }
+    },
+    "src/app/plugins/__init__.py": {
+        "file_name": "/src/app/plugins/__init__.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "src/app/plugins/indexer.py": {
+        "file_name": "/src/app/plugins/indexer.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "src/app/plugins/kaggle.py": {
+        "file_name": "/src/app/plugins/kaggle.py",
+        "imports": [
+            "os",
+            "typing.Optional",
+            "pandas",
+            "kaggle.api.kaggle_api_extended.KaggleApi"
+        ],
+        "classes": [
+            {
+                "class_name": "KaggleDatasetReader",
+                "methods": [
+                    "__init__",
+                    "read_dataset"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [
+                "KaggleApi",
+                "authenticate"
+            ],
+            "read_dataset": [
+                "exists",
+                "makedirs",
+                "dataset_download_files",
+                "listdir",
+                "join",
+                "FileNotFoundError",
+                "endswith",
+                "lower",
+                "read_csv",
+                "open",
+                "read"
+            ]
+        }
+    },
+    "src/app/plugins/statistics.py": {
+        "file_name": "/src/app/plugins/statistics.py",
+        "imports": [
+            "numpy",
+            "pandas",
+            "scipy.stats"
+        ],
+        "classes": [
+            {
+                "class_name": "StatisticalAnalysisPlugin",
+                "methods": [
+                    "calculate_statistics",
+                    "kolmogorov_smirnov_test",
+                    "t_test_independent",
+                    "t_test_1sample",
+                    "f_test",
+                    "chi_square_test",
+                    "compute_category_statistics"
+                ]
+            }
+        ],
+        "functions": {
+            "calculate_statistics": [
+                "asarray",
+                "mode",
+                "median",
+                "mean",
+                "std",
+                "var",
+                "kurtosis",
+                "skew",
+                "percentile",
+                "zip"
+            ],
+            "kolmogorov_smirnov_test": [
+                "asarray",
+                "kstest"
+            ],
+            "t_test_independent": [
+                "asarray",
+                "ttest_ind"
+            ],
+            "t_test_1sample": [
+                "asarray",
+                "ttest_1samp"
+            ],
+            "f_test": [
+                "asarray",
+                "len",
+                "var",
+                "min",
+                "cdf"
+            ],
+            "chi_square_test": [
+                "asarray",
+                "chisquare"
+            ],
+            "compute_category_statistics": [
+                "tolist",
+                "select_dtypes",
+                "remove",
+                "groupby",
+                "series_stats",
+                "items",
+                "DataFrame",
+                "stack",
+                "from_tuples"
+            ],
+            "series_stats": [
+                "calculate_statistics",
+                "dropna"
+            ]
+        }
+    },
+    "src/app/schemas/responses.py": {
+        "file_name": "/src/app/schemas/responses.py",
+        "imports": [
+            "dataclasses.dataclass",
+            "typing.Dict",
+            "typing.List",
+            "typing.Optional",
+            "typing.Union",
+            "starlette.status.HTTP_200_OK",
+            "starlette.status.HTTP_201_CREATED",
+            "starlette.status.HTTP_202_ACCEPTED",
+            "starlette.status.HTTP_301_MOVED_PERMANENTLY",
+            "starlette.status.HTTP_302_FOUND",
+            "starlette.status.HTTP_307_TEMPORARY_REDIRECT",
+            "starlette.status.HTTP_400_BAD_REQUEST",
+            "starlette.status.HTTP_401_UNAUTHORIZED",
+            "starlette.status.HTTP_403_FORBIDDEN",
+            "starlette.status.HTTP_418_IM_A_TEAPOT",
+            "starlette.status.HTTP_422_UNPROCESSABLE_ENTITY"
+        ],
+        "classes": [
+            {
+                "class_name": "SuccessMessage",
+                "methods": []
+            },
+            {
+                "class_name": "ErrorMessage",
+                "methods": []
+            }
+        ],
+        "functions": {}
+    },
+    "src/app/schemas/__init__.py": {
+        "file_name": "/src/app/schemas/__init__.py",
+        "imports": [
+            "endpoints.JudgeEvaluation",
+            "models.Assembly",
+            "models.Judge",
+            "responses.RESPONSES",
+            "responses.ErrorMessage",
+            "responses.SuccessMessage"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "src/app/schemas/models.py": {
+        "file_name": "/src/app/schemas/models.py",
+        "imports": [
+            "json",
+            "typing.List",
+            "pydantic.BaseModel",
+            "pydantic.Field",
+            "pydantic.HttpUrl",
+            "pydantic.field_validator"
+        ],
+        "classes": [
+            {
+                "class_name": "Judge",
+                "methods": [
+                    "model_must_be_azure_url",
+                    "metaprompt_must_be_json_serializable"
+                ]
+            },
+            {
+                "class_name": "Assembly",
+                "methods": [
+                    "roles_must_not_exceed_length"
+                ]
+            }
+        ],
+        "functions": {
+            "model_must_be_azure_url": [
+                "startswith",
+                "ValueError",
+                "field_validator"
+            ],
+            "metaprompt_must_be_json_serializable": [
+                "loads",
+                "ValueError",
+                "field_validator"
+            ],
+            "roles_must_not_exceed_length": [
+                "len",
+                "ValueError",
+                "field_validator"
+            ]
+        }
+    },
+    "src/app/schemas/endpoints.py": {
+        "file_name": "/src/app/schemas/endpoints.py",
+        "imports": [
+            "typing.Literal",
+            "pydantic.BaseModel"
+        ],
+        "classes": [
+            {
+                "class_name": "JudgeEvaluation",
+                "methods": []
+            }
+        ],
+        "functions": {}
+    },
+    "src/tests/test_judges.py": {
+        "file_name": "/src/tests/test_judges.py",
+        "imports": [
+            "unittest.mock.AsyncMock",
+            "unittest.mock.MagicMock",
+            "pytest",
+            "semantic_kernel",
+            "app.judges.ConcreteJudge",
+            "app.judges.JudgeBase",
+            "app.judges.JudgeFactory",
+            "app.judges.JudgeOrchestrator",
+            "app.judges.Mediator",
+            "app.judges.SuperJudge",
+            "app.judges.fetch_assembly",
+            "app.schemas.Assembly",
+            "app.schemas.Judge"
+        ],
+        "classes": [],
+        "functions": {}
+    }
+}

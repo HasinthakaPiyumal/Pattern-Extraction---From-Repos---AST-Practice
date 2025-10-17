@@ -24,8 +24,8 @@ def save_structure_to_file(structure, output_file):
 
 if __name__ == "__main__":
 
-    repo_path = "repos/Styleformer"
-    output_file = "result/repo_structure_Styleformer.json"
+    repo_path = "repos/Adv-MARL"
+    output_file = "result/repo_structure_random_ai_pattern2.json"
     structure = extract_repo_structure(repo_path, extract_structure)
     call_graph = build_call_graph(repo_path)
     # structure["call_graph_edges"] = call_graph.edges()

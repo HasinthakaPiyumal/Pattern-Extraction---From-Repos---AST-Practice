@@ -1,0 +1,502 @@
+{
+    "session_manager.py": {
+        "file_name": "/session_manager.py",
+        "imports": [
+            "abc.ABC",
+            "typing.List",
+            "typing.Dict",
+            "typing.Optional",
+            "typing.Callable",
+            "datetime.datetime",
+            "datetime.timedelta",
+            "message.Message",
+            "message.MessageRole",
+            "uuid"
+        ],
+        "classes": [
+            {
+                "class_name": "ConversationSession",
+                "methods": [
+                    "__init__",
+                    "add_message",
+                    "get_messages",
+                    "clear_history",
+                    "is_expired"
+                ]
+            },
+            {
+                "class_name": "MessageProcessor",
+                "methods": [
+                    "__init__",
+                    "set_next",
+                    "process",
+                    "_handle"
+                ]
+            },
+            {
+                "class_name": "LoggingProcessor",
+                "methods": [
+                    "_handle"
+                ]
+            },
+            {
+                "class_name": "ContentFilterProcessor",
+                "methods": [
+                    "__init__",
+                    "_handle"
+                ]
+            },
+            {
+                "class_name": "SessionManager",
+                "methods": [
+                    "__init__",
+                    "set_processor_chain",
+                    "create_session",
+                    "get_session",
+                    "add_message",
+                    "delete_session",
+                    "cleanup_expired_sessions"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [
+                "str",
+                "uuid4",
+                "now",
+                "__init__",
+                "super"
+            ],
+            "add_message": [
+                "append",
+                "now",
+                "len",
+                "get_session",
+                "process",
+                "add_message"
+            ],
+            "get_messages": [
+                "copy"
+            ],
+            "clear_history": [
+                "clear"
+            ],
+            "is_expired": [
+                "now",
+                "timedelta"
+            ],
+            "set_next": [],
+            "process": [
+                "_handle",
+                "process"
+            ],
+            "_handle": [
+                "print",
+                "lower"
+            ],
+            "set_processor_chain": [],
+            "create_session": [
+                "ConversationSession"
+            ],
+            "get_session": [
+                "get"
+            ],
+            "delete_session": [],
+            "cleanup_expired_sessions": [
+                "items",
+                "is_expired",
+                "len"
+            ]
+        }
+    },
+    "agent_strategy.py": {
+        "file_name": "/agent_strategy.py",
+        "imports": [
+            "abc.ABC",
+            "abc.abstractmethod",
+            "typing.List",
+            "typing.Dict",
+            "typing.Any",
+            "message.Message",
+            "message.MessageRole"
+        ],
+        "classes": [
+            {
+                "class_name": "AgentBackend",
+                "methods": [
+                    "generate_response",
+                    "get_name"
+                ]
+            },
+            {
+                "class_name": "OpenAIBackend",
+                "methods": [
+                    "__init__",
+                    "generate_response",
+                    "get_name"
+                ]
+            },
+            {
+                "class_name": "LocalLLMBackend",
+                "methods": [
+                    "__init__",
+                    "generate_response",
+                    "get_name"
+                ]
+            },
+            {
+                "class_name": "RuleBasedBackend",
+                "methods": [
+                    "__init__",
+                    "generate_response",
+                    "get_name"
+                ]
+            }
+        ],
+        "functions": {
+            "generate_response": [
+                "lower",
+                "items"
+            ],
+            "get_name": [],
+            "__init__": []
+        }
+    },
+    "config.py": {
+        "file_name": "/config.py",
+        "imports": [
+            "os",
+            "dataclasses.dataclass",
+            "typing.Optional"
+        ],
+        "classes": [
+            {
+                "class_name": "ModelConfig",
+                "methods": [
+                    "__post_init__"
+                ]
+            },
+            {
+                "class_name": "AppConfig",
+                "methods": [
+                    "__post_init__"
+                ]
+            }
+        ],
+        "functions": {
+            "__post_init__": [
+                "getenv",
+                "ModelConfig"
+            ],
+            "get_config": [
+                "AppConfig"
+            ]
+        }
+    },
+    "main.py": {
+        "file_name": "/main.py",
+        "imports": [
+            "agent.ChatAgent",
+            "agent_strategy.RuleBasedBackend",
+            "agent_strategy.OpenAIBackend",
+            "agent_strategy.LocalLLMBackend",
+            "ui.ChatUI",
+            "ui.ConsoleListener",
+            "config.get_config"
+        ],
+        "classes": [],
+        "functions": {
+            "main": [
+                "get_config",
+                "ChatAgent",
+                "RuleBasedBackend",
+                "ChatUI",
+                "run"
+            ]
+        }
+    },
+    "message.py": {
+        "file_name": "/message.py",
+        "imports": [
+            "dataclasses.dataclass",
+            "dataclasses.field",
+            "datetime.datetime",
+            "enum.Enum",
+            "typing.Optional",
+            "typing.Dict",
+            "typing.Any",
+            "uuid"
+        ],
+        "classes": [
+            {
+                "class_name": "MessageRole",
+                "methods": []
+            },
+            {
+                "class_name": "Message",
+                "methods": [
+                    "to_dict",
+                    "from_dict",
+                    "__str__"
+                ]
+            }
+        ],
+        "functions": {
+            "to_dict": [
+                "isoformat"
+            ],
+            "from_dict": [
+                "cls",
+                "MessageRole",
+                "fromisoformat",
+                "get",
+                "isoformat",
+                "now",
+                "str",
+                "uuid4"
+            ],
+            "__str__": []
+        }
+    },
+    "ui.py": {
+        "file_name": "/ui.py",
+        "imports": [
+            "abc.ABC",
+            "abc.abstractmethod",
+            "typing.Optional",
+            "agent.ChatAgent",
+            "agent.AgentListener",
+            "agent_strategy.OpenAIBackend",
+            "agent_strategy.LocalLLMBackend",
+            "agent_strategy.RuleBasedBackend",
+            "message.Message"
+        ],
+        "classes": [
+            {
+                "class_name": "UserAction",
+                "methods": [
+                    "execute",
+                    "get_description"
+                ]
+            },
+            {
+                "class_name": "SendMessageAction",
+                "methods": [
+                    "__init__",
+                    "execute",
+                    "get_description"
+                ]
+            },
+            {
+                "class_name": "ChangeBackendAction",
+                "methods": [
+                    "__init__",
+                    "execute",
+                    "get_description"
+                ]
+            },
+            {
+                "class_name": "ShowHistoryAction",
+                "methods": [
+                    "__init__",
+                    "execute",
+                    "get_description"
+                ]
+            },
+            {
+                "class_name": "ShowStatsAction",
+                "methods": [
+                    "__init__",
+                    "execute",
+                    "get_description"
+                ]
+            },
+            {
+                "class_name": "ClearHistoryAction",
+                "methods": [
+                    "__init__",
+                    "execute",
+                    "get_description"
+                ]
+            },
+            {
+                "class_name": "ConsoleListener",
+                "methods": [
+                    "on_message_sent",
+                    "on_response_generated",
+                    "on_error"
+                ]
+            },
+            {
+                "class_name": "ChatUI",
+                "methods": [
+                    "__init__",
+                    "_setup_actions",
+                    "_show_help",
+                    "run"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "send_message",
+                "print",
+                "OpenAIBackend",
+                "LocalLLMBackend",
+                "RuleBasedBackend",
+                "get",
+                "lower",
+                "set_backend",
+                "get_name",
+                "join",
+                "keys",
+                "get_conversation_history",
+                "upper",
+                "get_stats",
+                "items",
+                "clear_history"
+            ],
+            "get_description": [],
+            "__init__": [
+                "_setup_actions"
+            ],
+            "on_message_sent": [
+                "print"
+            ],
+            "on_response_generated": [
+                "print"
+            ],
+            "on_error": [
+                "print",
+                "str"
+            ],
+            "_setup_actions": [
+                "ChangeBackendAction",
+                "ShowHistoryAction",
+                "ShowStatsAction",
+                "ClearHistoryAction",
+                "_show_help"
+            ],
+            "_show_help": [
+                "print"
+            ],
+            "run": [
+                "print",
+                "strip",
+                "input",
+                "lower",
+                "startswith",
+                "split",
+                "execute",
+                "SendMessageAction",
+                "str"
+            ]
+        }
+    },
+    "agent.py": {
+        "file_name": "/agent.py",
+        "imports": [
+            "typing.List",
+            "typing.Optional",
+            "typing.Callable",
+            "message.Message",
+            "message.MessageRole",
+            "agent_strategy.AgentBackend",
+            "agent_strategy.RuleBasedBackend",
+            "session_manager.ConversationSession",
+            "session_manager.SessionManager",
+            "session_manager.LoggingProcessor",
+            "session_manager.ContentFilterProcessor"
+        ],
+        "classes": [
+            {
+                "class_name": "AgentListener",
+                "methods": [
+                    "on_message_sent",
+                    "on_response_generated",
+                    "on_error"
+                ]
+            },
+            {
+                "class_name": "ChatAgent",
+                "methods": [
+                    "__init__",
+                    "add_listener",
+                    "remove_listener",
+                    "_notify_message_sent",
+                    "_notify_response_generated",
+                    "_notify_error",
+                    "set_backend",
+                    "send_message",
+                    "get_conversation_history",
+                    "clear_history",
+                    "new_session",
+                    "get_stats"
+                ]
+            }
+        ],
+        "functions": {
+            "on_message_sent": [],
+            "on_response_generated": [],
+            "on_error": [],
+            "__init__": [
+                "RuleBasedBackend",
+                "SessionManager",
+                "LoggingProcessor",
+                "ContentFilterProcessor",
+                "set_next",
+                "set_processor_chain",
+                "create_session"
+            ],
+            "add_listener": [
+                "append"
+            ],
+            "remove_listener": [
+                "remove"
+            ],
+            "_notify_message_sent": [
+                "on_message_sent",
+                "print"
+            ],
+            "_notify_response_generated": [
+                "on_response_generated",
+                "print"
+            ],
+            "_notify_error": [
+                "on_error",
+                "print"
+            ],
+            "set_backend": [
+                "print",
+                "get_name"
+            ],
+            "send_message": [
+                "Message",
+                "add_message",
+                "_notify_message_sent",
+                "get_messages",
+                "generate_response",
+                "_notify_response_generated",
+                "_notify_error",
+                "str"
+            ],
+            "get_conversation_history": [
+                "get_messages"
+            ],
+            "clear_history": [
+                "clear_history",
+                "print"
+            ],
+            "new_session": [
+                "create_session",
+                "print"
+            ],
+            "get_stats": [
+                "get_messages",
+                "len",
+                "get_name",
+                "isoformat"
+            ]
+        }
+    }
+}

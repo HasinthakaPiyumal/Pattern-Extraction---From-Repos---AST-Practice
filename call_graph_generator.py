@@ -1,7 +1,7 @@
 import ast
 import os
 import networkx as nx
-
+import community as community_louvain
 class CallGraphVisitor(ast.NodeVisitor):
     def __init__(self, filename):
         self.filename = filename
@@ -42,10 +42,23 @@ def build_call_graph(root_dir):
     return G
 
 if __name__ == "__main__":
-    repo_path = "X-AnyLabeling/"
+    repo_path = "repos/sample"
     graph = build_call_graph(repo_path)
 
-    print("Call Graph:")
-    for caller, callee in graph.edges():
-        print(f"{caller} -> {callee}")
-        print(f"  Successors: {list(graph.successors(caller))}")
+    graph_undirected = graph.to_undirected()
+    partition = community_louvain.best_partition(graph_undirected)
+
+    from collections import defaultdict
+    clusters = defaultdict(list)
+    for node, cluster_id in partition.items():
+        clusters[cluster_id].append(node)
+    output_dir = "call_graph_output"
+    for cluster_id, nodes in clusters.items():
+        print(f"Cluster {cluster_id}:")
+        for node in nodes:
+            print(f"  - {node}")
+        print()
+    # print("Call Graph:")
+    # for caller, callee in graph.edges():
+    #     print(f"{caller} -> {callee}")
+    #     print(f"  Successors: {list(graph.successors(caller))}")
