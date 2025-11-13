@@ -2,7 +2,7 @@
     <head>
         <meta charset="utf-8">
         
-            <script src="lib/bindings/utils.js"></script>
+            
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
             <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
             
@@ -96,8 +96,8 @@
                   
 
                   // parsing and collecting nodes and edges from the python
-                  nodes = new vis.DataSet([]);
-                  edges = new vis.DataSet([]);
+                  nodes = new vis.DataSet([{"color": "#EF476F", "font": {"color": "black"}, "id": "detection_engine.py:Surpriver.__init__", "label": "Surpriver.__init__", "shape": "dot", "size": 14, "title": "\u003cb\u003eFile:\u003c/b\u003e detection_engine.py\u003cbr\u003e\u003cb\u003eFunction:\u003c/b\u003e Surpriver.__init__"}, {"color": "#06D6A0", "font": {"color": "black"}, "id": "data_loader.py:DataEngine", "label": "DataEngine", "shape": "dot", "size": 14, "title": "\u003cb\u003eFile:\u003c/b\u003e data_loader.py\u003cbr\u003e\u003cb\u003eFunction:\u003c/b\u003e DataEngine"}, {"color": "#06D6A0", "font": {"color": "black"}, "id": "data_loader.py:DataEngine.__init__", "label": "DataEngine.__init__", "shape": "dot", "size": 14, "title": "\u003cb\u003eFile:\u003c/b\u003e data_loader.py\u003cbr\u003e\u003cb\u003eFunction:\u003c/b\u003e DataEngine.__init__"}, {"color": "#118AB2", "font": {"color": "black"}, "id": "feature_generator.py:TAEngine", "label": "TAEngine", "shape": "dot", "size": 14, "title": "\u003cb\u003eFile:\u003c/b\u003e feature_generator.py\u003cbr\u003e\u003cb\u003eFunction:\u003c/b\u003e TAEngine"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "color": "#666666", "from": "detection_engine.py:Surpriver.__init__", "to": "data_loader.py:DataEngine", "width": 1.4}, {"arrows": "to", "color": "#666666", "from": "data_loader.py:DataEngine.__init__", "to": "feature_generator.py:TAEngine", "width": 1.4}]);
 
                   nodeColors = {};
                   allNodes = nodes.get({ returnType: "Object" });
@@ -174,5 +174,8 @@
               }
               drawGraph();
         </script>
-    </body>
+    
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+</body>
 </html>
