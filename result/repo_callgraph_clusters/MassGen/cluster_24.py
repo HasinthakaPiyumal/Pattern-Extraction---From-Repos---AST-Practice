@@ -1,0 +1,11497 @@
+# Cluster 24
+
+class LinkValidator:
+    """Validate links in documentation files."""
+
+    def __init__(self, docs_path: Path, check_external: bool=False):
+        self.docs_path = docs_path / 'source'
+        self.check_external = check_external
+        self.errors: List[Tuple[Path, str, str]] = []
+        self.warnings: List[Tuple[Path, str, str]] = []
+
+    def check_doc_reference(self, file_path: Path, ref: str):
+        """Check if a :doc: reference is valid."""
+        if ref.startswith('../'):
+            target_path = (file_path.parent / ref).resolve()
+        elif ref.startswith('/'):
+            target_path = self.docs_path / ref.lstrip('/')
+        else:
+            target_path = file_path.parent / ref
+        if not str(target_path).endswith('.rst'):
+            target_path = Path(str(target_path) + '.rst')
+        if not target_path.exists():
+            self.errors.append((file_path, f':doc:`{ref}`', f'Referenced file does not exist: {target_path.relative_to(self.docs_path.parent)}'))
+            return False
+        return True
+
+    def check_external_link(self, file_path: Path, url: str):
+        """Check if an external link is valid (optional, slow)."""
+        if not self.check_external:
+            return True
+        try:
+            import requests
+            response = requests.head(url, timeout=5, allow_redirects=True)
+            if response.status_code >= 400:
+                self.warnings.append((file_path, url, f'HTTP {response.status_code}'))
+                return False
+        except Exception as e:
+            self.warnings.append((file_path, url, f'Connection error: {e}'))
+            return False
+        return True
+
+    def scan_file(self, file_path: Path):
+        """Scan a single file for links."""
+        try:
+            content = file_path.read_text()
+            doc_refs = re.findall(':doc:`([^`]+)`', content)
+            for ref in doc_refs:
+                custom_match = re.match('(.+)<(.+)>', ref)
+                if custom_match:
+                    ref = custom_match.group(2).strip()
+                self.check_doc_reference(file_path, ref)
+            external_links = re.findall('`[^`]+<(https?://[^>]+)>`_', content)
+            for url in external_links:
+                if self.check_external:
+                    self.check_external_link(file_path, url)
+            standalone_urls = re.findall('https?://[^\\s<>`]+', content)
+            for url in standalone_urls:
+                if url not in external_links:
+                    if self.check_external:
+                        self.check_external_link(file_path, url)
+        except Exception as e:
+            self.errors.append((file_path, 'FILE', f'Error reading file: {e}'))
+
+    def scan_all(self):
+        """Scan all RST files."""
+        rst_files = list(self.docs_path.rglob('*.rst'))
+        print(f'Scanning {len(rst_files)} documentation files for broken links...')
+        if self.check_external:
+            print('(Including external link validation - this may take a while)')
+        for file_path in rst_files:
+            rel_path = file_path.relative_to(self.docs_path)
+            print(f'  {rel_path}')
+            self.scan_file(file_path)
+
+    def generate_report(self, output_path: Path):
+        """Generate validation report."""
+        report_lines = []
+        report_lines.append('# Documentation Link Validation Report')
+        report_lines.append('')
+        report_lines.append(f'**Date:** {Path(__file__).stat().st_mtime}')
+        report_lines.append(f'**External Links Checked:** {self.check_external}')
+        report_lines.append('')
+        report_lines.append('## Summary')
+        report_lines.append('')
+        report_lines.append(f'- **Errors:** {len(self.errors)}')
+        report_lines.append(f'- **Warnings:** {len(self.warnings)}')
+        report_lines.append('')
+        if self.errors:
+            report_lines.append('## Errors (Broken Links)')
+            report_lines.append('')
+            by_file: Dict[Path, List[Tuple[str, str]]] = {}
+            for file_path, link, error in self.errors:
+                if file_path not in by_file:
+                    by_file[file_path] = []
+                by_file[file_path].append((link, error))
+            for file_path, issues in sorted(by_file.items()):
+                rel_path = file_path.relative_to(self.docs_path)
+                report_lines.append(f'### {rel_path}')
+                report_lines.append('')
+                for link, error in issues:
+                    report_lines.append(f'- **Link:** `{link}`')
+                    report_lines.append(f'  - **Error:** {error}')
+                    report_lines.append('')
+        if self.warnings:
+            report_lines.append('## Warnings (External Links)')
+            report_lines.append('')
+            by_file: Dict[Path, List[Tuple[str, str]]] = {}
+            for file_path, link, warning in self.warnings:
+                if file_path not in by_file:
+                    by_file[file_path] = []
+                by_file[file_path].append((link, warning))
+            for file_path, issues in sorted(by_file.items()):
+                rel_path = file_path.relative_to(self.docs_path)
+                report_lines.append(f'### {rel_path}')
+                report_lines.append('')
+                for link, warning in issues:
+                    report_lines.append(f'- **Link:** `{link}`')
+                    report_lines.append(f'  - **Warning:** {warning}')
+                    report_lines.append('')
+        if not self.errors and (not self.warnings):
+            report_lines.append('✓ No broken links detected!')
+            report_lines.append('')
+        report_lines.append('---')
+        report_lines.append('')
+        report_lines.append('*Generated by `scripts/validate_links.py`*')
+        output_path.write_text('\n'.join(report_lines))
+        print(f'\n✓ Report saved to {output_path}')
+
+    def print_summary(self):
+        """Print summary to console."""
+        print('\n' + '=' * 60)
+        print('LINK VALIDATION SUMMARY')
+        print('=' * 60)
+        if not self.errors and (not self.warnings):
+            print('\n✓ All links are valid!')
+        else:
+            if self.errors:
+                print(f'\n✗ {len(self.errors)} broken links found')
+                print('\nTop files with errors:')
+                by_file: Dict[Path, int] = {}
+                for file_path, _, _ in self.errors:
+                    by_file[file_path] = by_file.get(file_path, 0) + 1
+                for file_path, count in sorted(by_file.items(), key=lambda x: x[1], reverse=True)[:10]:
+                    rel_path = file_path.relative_to(self.docs_path)
+                    print(f'  {count:3d}  {rel_path}')
+            if self.warnings:
+                print(f'\n⚠ {len(self.warnings)} warnings (external links)')
+        print('\n' + '=' * 60)
+
+def scan_all(self):
+    """Scan all RST files."""
+    rst_files = list(self.docs_path.rglob('*.rst'))
+    print(f'Scanning {len(rst_files)} documentation files for broken links...')
+    if self.check_external:
+        print('(Including external link validation - this may take a while)')
+    for file_path in rst_files:
+        rel_path = file_path.relative_to(self.docs_path)
+        print(f'  {rel_path}')
+        self.scan_file(file_path)
+
+class DuplicationDetector:
+    """Detect duplicated content in documentation files."""
+
+    def __init__(self, docs_path: Path, threshold: float=0.8, min_words: int=50):
+        self.docs_path = docs_path / 'source'
+        self.threshold = threshold
+        self.min_words = min_words
+        self.paragraphs: Dict[Path, List[str]] = {}
+        self.duplications: List[Tuple[Path, Path, str, float]] = []
+
+    def extract_paragraphs(self, content: str) -> List[str]:
+        """Extract paragraphs from RST content, excluding code blocks and tables."""
+        content = re.sub('.. code-block::.*?\\n\\n(?:   .*\\n)*', '', content, flags=re.DOTALL)
+        content = re.sub('.. list-table::.*?\\n\\n(?:   .*\\n)*', '', content, flags=re.DOTALL)
+        content = re.sub('.. \\w+::.*?\\n', '', content)
+        paragraphs = re.split('\\n\\n+', content)
+        valid_paragraphs = []
+        for para in paragraphs:
+            para = para.strip()
+            if re.match('^[=\\-~]+$', para):
+                continue
+            if not para or len(para.split()) < self.min_words:
+                continue
+            if sum((c in '=~-*#' for c in para)) / len(para) > 0.5:
+                continue
+            valid_paragraphs.append(para)
+        return valid_paragraphs
+
+    def similarity(self, text1: str, text2: str) -> float:
+        """Calculate similarity between two text strings."""
+        return SequenceMatcher(None, text1, text2).ratio()
+
+    def scan_files(self):
+        """Scan all RST files and extract paragraphs."""
+        rst_files = list(self.docs_path.rglob('*.rst'))
+        print(f'Scanning {len(rst_files)} documentation files...')
+        for file_path in rst_files:
+            try:
+                content = file_path.read_text()
+                paragraphs = self.extract_paragraphs(content)
+                self.paragraphs[file_path] = paragraphs
+                print(f'  {file_path.relative_to(self.docs_path)}: {len(paragraphs)} paragraphs')
+            except Exception as e:
+                print(f'  Error reading {file_path}: {e}')
+
+    def find_duplications(self):
+        """Find duplicated paragraphs across files."""
+        print(f'\nFinding duplications (threshold: {self.threshold}, min words: {self.min_words})...')
+        files = list(self.paragraphs.keys())
+        for i, file1 in enumerate(files):
+            for file2 in files[i + 1:]:
+                for para1 in self.paragraphs[file1]:
+                    for para2 in self.paragraphs[file2]:
+                        sim = self.similarity(para1, para2)
+                        if sim >= self.threshold:
+                            self.duplications.append((file1, file2, para1, sim))
+        print(f'Found {len(self.duplications)} potential duplications')
+
+    def generate_report(self, output_path: Path):
+        """Generate duplication report."""
+        file_pairs: Dict[Tuple[Path, Path], List[Tuple[str, float]]] = defaultdict(list)
+        for file1, file2, para, sim in self.duplications:
+            pair = tuple(sorted([file1, file2]))
+            file_pairs[pair].append((para, sim))
+        report_lines = []
+        report_lines.append('# Documentation Duplication Report')
+        report_lines.append('')
+        report_lines.append(f'**Date:** {Path(__file__).stat().st_mtime}')
+        report_lines.append(f'**Threshold:** {self.threshold * 100}% similarity')
+        report_lines.append(f'**Minimum Words:** {self.min_words}')
+        report_lines.append('')
+        report_lines.append('## Summary')
+        report_lines.append('')
+        report_lines.append(f'- **Files Scanned:** {len(self.paragraphs)}')
+        report_lines.append(f'- **Total Paragraphs:** {sum((len(p) for p in self.paragraphs.values()))}')
+        report_lines.append(f'- **Duplications Found:** {len(self.duplications)}')
+        report_lines.append(f'- **File Pairs with Duplication:** {len(file_pairs)}')
+        report_lines.append('')
+        if not file_pairs:
+            report_lines.append('✓ No significant duplication detected!')
+            report_lines.append('')
+        else:
+            report_lines.append('## Duplication Details')
+            report_lines.append('')
+            for (file1, file2), duplications in sorted(file_pairs.items(), key=lambda x: len(x[1]), reverse=True):
+                rel1 = file1.relative_to(self.docs_path)
+                rel2 = file2.relative_to(self.docs_path)
+                report_lines.append(f'### {rel1} ↔ {rel2}')
+                report_lines.append('')
+                report_lines.append(f'**Duplications:** {len(duplications)}')
+                report_lines.append('')
+                for i, (para, sim) in enumerate(duplications[:3], 1):
+                    report_lines.append(f'#### Duplication {i} ({sim * 100:.1f}% similar)')
+                    report_lines.append('')
+                    preview = para[:200] + '...' if len(para) > 200 else para
+                    report_lines.append(f'> {preview}')
+                    report_lines.append('')
+                if len(duplications) > 3:
+                    report_lines.append(f'*...and {len(duplications) - 3} more duplications*')
+                    report_lines.append('')
+        report_lines.append('---')
+        report_lines.append('')
+        report_lines.append('*Generated by `scripts/check_duplication.py`*')
+        output_path.write_text('\n'.join(report_lines))
+        print(f'\n✓ Report saved to {output_path}')
+
+    def print_summary(self):
+        """Print summary to console."""
+        print('\n' + '=' * 60)
+        print('DUPLICATION SUMMARY')
+        print('=' * 60)
+        if not self.duplications:
+            print('\n✓ No significant duplication detected!')
+            print('  Your documentation follows single source of truth principles.')
+        else:
+            file_counts: Dict[Path, int] = defaultdict(int)
+            for file1, file2, para, sim in self.duplications:
+                file_counts[file1] += 1
+                file_counts[file2] += 1
+            print(f'\n⚠ Found {len(self.duplications)} duplications')
+            print('\nTop files with duplication:')
+            for file_path, count in sorted(file_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
+                rel_path = file_path.relative_to(self.docs_path)
+                print(f'  {count:3d}  {rel_path}')
+        print('\n' + '=' * 60)
+
+def scan_files(self):
+    """Scan all RST files and extract paragraphs."""
+    rst_files = list(self.docs_path.rglob('*.rst'))
+    print(f'Scanning {len(rst_files)} documentation files...')
+    for file_path in rst_files:
+        try:
+            content = file_path.read_text()
+            paragraphs = self.extract_paragraphs(content)
+            self.paragraphs[file_path] = paragraphs
+            print(f'  {file_path.relative_to(self.docs_path)}: {len(paragraphs)} paragraphs')
+        except Exception as e:
+            print(f'  Error reading {file_path}: {e}')
+
+def save_execution_metadata(query: str, config_path: Optional[str]=None, config_content: Optional[dict]=None):
+    """Save the query and config metadata to the log directory.
+
+    This allows reconstructing what was executed in this session.
+
+    Args:
+        query: The user's query/prompt
+        config_path: Path to the config file that was used (optional)
+        config_content: The actual config dictionary (optional)
+    """
+    import yaml
+    log_dir = get_log_session_dir()
+    metadata = {'query': query, 'timestamp': datetime.now().isoformat()}
+    if config_path:
+        metadata['config_path'] = str(config_path)
+    if config_content:
+        metadata['config'] = config_content
+    metadata_file = log_dir / 'execution_metadata.yaml'
+    try:
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            yaml.dump(metadata, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        logger.info(f'Saved execution metadata to: {metadata_file}')
+    except Exception as e:
+        logger.warning(f'Failed to save execution metadata: {e}')
+
+def setup_logging(debug: bool=False, log_file: Optional[str]=None, turn: Optional[int]=None):
+    """
+    Configure MassGen logging system using loguru.
+
+    Args:
+        debug: Enable debug mode with verbose logging
+        log_file: Optional path to log file for persistent logging
+        turn: Optional turn number for multi-turn conversations
+    """
+    global _DEBUG_MODE, _CONSOLE_HANDLER_ID, _CONSOLE_SUPPRESSED
+    _DEBUG_MODE = debug
+    _CONSOLE_SUPPRESSED = False
+    logger.remove()
+    if debug:
+
+        def custom_format(record):
+            name = record['extra'].get('name', '')
+            if 'orchestrator' in name:
+                name_color = 'magenta'
+            elif 'backend' in name:
+                name_color = 'yellow'
+            elif 'agent' in name:
+                name_color = 'cyan'
+            elif 'coordination' in name:
+                name_color = 'red'
+            else:
+                name_color = 'white'
+            formatted_name = name if name else '{name}'
+            return f'<green>{{time:HH:mm:ss.SSS}}</green> | <level>{{level: <8}}</level> | <{name_color}>{formatted_name}</{name_color}>:<{name_color}>{{function}}</{name_color}>:<{name_color}>{{line}}</{name_color}> - {{message}}\n{{exception}}'
+        _CONSOLE_HANDLER_ID = logger.add(sys.stderr, format=custom_format, level='DEBUG', colorize=True, backtrace=True, diagnose=True)
+        if not log_file:
+            log_session_dir = get_log_session_dir(turn=turn)
+            log_file = log_session_dir / 'massgen_debug.log'
+        logger.add(str(log_file), format=custom_format, level='DEBUG', rotation='100 MB', retention='1 week', compression='zip', backtrace=True, diagnose=True, enqueue=True, colorize=False)
+        logger.info('Debug logging enabled - logging to console and file: {}', log_file)
+    else:
+        console_format = '<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>'
+        _CONSOLE_HANDLER_ID = logger.add(sys.stderr, format=console_format, level='WARNING', colorize=True)
+        if not log_file:
+            log_session_dir = get_log_session_dir(turn=turn)
+            log_file = log_session_dir / 'massgen.log'
+        logger.add(str(log_file), format=console_format, level='INFO', rotation='10 MB', retention='3 days', compression='zip', enqueue=True, colorize=False)
+        logger.info('Logging enabled - logging INFO+ to file: {}', log_file)
+
+def suppress_console_logging():
+    """
+    Temporarily suppress console logging to prevent interference with Rich Live display.
+
+    This removes the console handler while keeping file logging active.
+    Call restore_console_logging() to re-enable console output.
+    """
+    global _CONSOLE_HANDLER_ID, _CONSOLE_SUPPRESSED
+    if _CONSOLE_HANDLER_ID is not None and (not _CONSOLE_SUPPRESSED):
+        try:
+            logger.remove(_CONSOLE_HANDLER_ID)
+            _CONSOLE_SUPPRESSED = True
+        except ValueError:
+            pass
+
+def get_logger(name: str):
+    """
+    Get a logger instance with the given name.
+
+    Args:
+        name: Logger name (typically __name__ of the module)
+
+    Returns:
+        Configured logger instance
+    """
+    return logger.bind(name=name)
+
+def _get_caller_info():
+    """
+    Get the caller's line number and function name from the stack frame.
+
+    Returns:
+        Tuple of (function_name, line_number where the logging function was called)
+    """
+    frame = inspect.currentframe()
+    if frame and frame.f_back and frame.f_back.f_back:
+        caller_frame = frame.f_back.f_back
+        function_name = caller_frame.f_code.co_name
+        line_number = caller_frame.f_lineno
+        return (function_name, line_number)
+    return ('unknown', 0)
+
+def log_orchestrator_activity(orchestrator_id: str, activity: str, details: dict=None):
+    """
+    Log orchestrator activities for debugging.
+
+    Args:
+        orchestrator_id: ID of the orchestrator
+        activity: Description of the activity
+        details: Additional details as dictionary
+    """
+    func_name, line_num = _get_caller_info()
+    log = logger.bind(name=f'orchestrator.{orchestrator_id}:{func_name}:{line_num}')
+    if _DEBUG_MODE:
+        log.opt(colors=True).debug('<magenta>🎯 {}: {}</magenta>', activity, details or {})
+
+def log_agent_message(agent_id: str, direction: str, message: dict, backend_name: str=None):
+    """
+    Log agent messages (sent/received) for debugging.
+
+    Args:
+        agent_id: ID of the agent
+        direction: "SEND" or "RECV"
+        message: Message content as dictionary
+        backend_name: Optional name of the backend provider
+    """
+    if backend_name:
+        log_name = f'{agent_id}.{backend_name}'
+        log = logger.bind(name=log_name)
+    else:
+        log_name = agent_id
+        log = logger.bind(name=log_name)
+    if _DEBUG_MODE:
+        if direction == 'SEND':
+            log.opt(colors=True).debug('<blue>📤 [{}] Sending message: {}</blue>', log_name, _format_message(message))
+        elif direction == 'RECV':
+            log.opt(colors=True).debug('<green>📥 [{}] Received message: {}</green>', log_name, _format_message(message))
+        else:
+            log.opt(colors=True).debug('<cyan>📨 [{}] {}: {}</cyan>', log_name, direction, _format_message(message))
+
+def log_orchestrator_agent_message(agent_id: str, direction: str, message: dict, backend_name: str=None):
+    """
+    Log orchestrator-to-agent messages for debugging.
+
+    Args:
+        agent_id: ID of the agent
+        direction: "SEND" or "RECV"
+        message: Message content as dictionary
+        backend_name: Optional name of the backend provider
+    """
+    func_name, line_num = _get_caller_info()
+    if backend_name:
+        log_name = f'orchestrator→{agent_id}.{backend_name}:{func_name}:{line_num}'
+        log = logger.bind(name=log_name)
+    else:
+        log_name = f'orchestrator→{agent_id}:{func_name}:{line_num}'
+        log = logger.bind(name=log_name)
+    if _DEBUG_MODE:
+        if direction == 'SEND':
+            log.opt(colors=True).debug('<magenta>🎯📤 [{}] Orchestrator sending to agent: {}</magenta>', log_name, _format_message(message))
+        elif direction == 'RECV':
+            log.opt(colors=True).debug('<magenta>🎯📥 [{}] Orchestrator received from agent: {}</magenta>', log_name, _format_message(message))
+        else:
+            log.opt(colors=True).debug('<magenta>🎯📨 [{}] {}: {}</magenta>', log_name, direction, _format_message(message))
+
+def log_backend_agent_message(agent_id: str, direction: str, message: dict, backend_name: str=None):
+    """
+    Log backend-to-LLM messages for debugging.
+
+    Args:
+        agent_id: ID of the agent
+        direction: "SEND" or "RECV"
+        message: Message content as dictionary
+        backend_name: Optional name of the backend provider
+    """
+    func_name, line_num = _get_caller_info()
+    if backend_name:
+        log_name = f'backend.{backend_name}→{agent_id}:{func_name}:{line_num}'
+        log = logger.bind(name=log_name)
+    else:
+        log_name = f'backend→{agent_id}:{func_name}:{line_num}'
+        log = logger.bind(name=log_name)
+    if _DEBUG_MODE:
+        if direction == 'SEND':
+            log.opt(colors=True).debug('<yellow>⚙️📤 [{}] Backend sending to LLM: {}</yellow>', log_name, _format_message(message))
+        elif direction == 'RECV':
+            log.opt(colors=True).debug('<yellow>⚙️📥 [{}] Backend received from LLM: {}</yellow>', log_name, _format_message(message))
+        else:
+            log.opt(colors=True).debug('<yellow>⚙️📨 [{}] {}: {}</yellow>', log_name, direction, _format_message(message))
+
+def log_backend_activity(backend_name: str, activity: str, details: dict=None, agent_id: str=None):
+    """
+    Log backend activities for debugging.
+
+    Args:
+        backend_name: Name of the backend (e.g., "openai", "claude")
+        activity: Description of the activity
+        details: Additional details as dictionary
+        agent_id: Optional ID of the agent using this backend
+    """
+    func_name, line_num = _get_caller_info()
+    if agent_id:
+        log_name = f'{agent_id}.{backend_name}'
+        log = logger.bind(name=f'{log_name}:{func_name}:{line_num}')
+    else:
+        log_name = backend_name
+        log = logger.bind(name=f'backend.{backend_name}:{func_name}:{line_num}')
+    if _DEBUG_MODE:
+        log.opt(colors=True).debug('<yellow>⚙️ [{}] {}: {}</yellow>', log_name, activity, details or {})
+
+def log_mcp_activity(backend_name: str, message: str, details: dict=None, agent_id: str=None):
+    """
+    Log MCP (Model Context Protocol) activities at INFO level.
+
+    Args:
+        backend_name: Name of the backend (e.g., "claude", "openai")
+        message: Description of the MCP activity
+        details: Additional details as dictionary
+        agent_id: Optional ID of the agent using this backend
+    """
+    func_name, line_num = _get_caller_info()
+    if agent_id:
+        log_name = f'{agent_id}.{backend_name}'
+        log = logger.bind(name=f'{log_name}:{func_name}:{line_num}')
+    else:
+        log_name = backend_name
+        log = logger.bind(name=f'backend.{backend_name}:{func_name}:{line_num}')
+    log.info('MCP: {} - {}', message, details or {})
+
+def log_tool_call(agent_id: str, tool_name: str, arguments: dict, result: Any=None, backend_name: str=None):
+    """
+    Log tool calls made by agents.
+
+    Args:
+        agent_id: ID of the agent making the tool call
+        tool_name: Name of the tool being called
+        arguments: Arguments passed to the tool
+        result: Result returned by the tool (optional)
+        backend_name: Optional name of the backend provider
+    """
+    if backend_name:
+        log_name = f'{agent_id}.{backend_name}'
+        log = logger.bind(name=f'{log_name}.tools')
+    else:
+        log_name = agent_id
+        log = logger.bind(name=f'{agent_id}.tools')
+    if _DEBUG_MODE:
+        if result is not None:
+            log.opt(colors=True).debug("<light-black>🔧 [{}] Tool '{}' called with args: {} -> Result: {}</light-black>", log_name, tool_name, arguments, result)
+        else:
+            log.opt(colors=True).debug("<light-black>🔧 [{}] Calling tool '{}' with args: {}</light-black>", log_name, tool_name, arguments)
+
+def log_coordination_step(step: str, details: dict=None):
+    """
+    Log coordination workflow steps.
+
+    Args:
+        step: Description of the coordination step
+        details: Additional details as dictionary
+    """
+    log = logger.bind(name='coordination')
+    if _DEBUG_MODE:
+        log.opt(colors=True).debug('<red>🔄 {}: {}</red>', step, details or {})
+
+def log_stream_chunk(source: str, chunk_type: str, content: Any=None, agent_id: str=None):
+    """
+    Log stream chunks at INFO level (always logged to file).
+
+    Args:
+        source: Source of the stream chunk (e.g., "orchestrator", "backend.claude_code")
+        chunk_type: Type of the chunk (e.g., "content", "tool_call", "error")
+        content: Content of the chunk
+        agent_id: Optional agent ID for context
+    """
+    frame = inspect.currentframe()
+    if frame and frame.f_back:
+        caller_frame = frame.f_back
+        function_name = caller_frame.f_code.co_name
+        line_number = caller_frame.f_lineno
+    else:
+        function_name = 'unknown'
+        line_number = 0
+    if agent_id:
+        log_name = f'{source}.{agent_id}'
+    else:
+        log_name = source
+    log = logger.bind(name=f'{log_name}:{function_name}:{line_number}')
+    if content:
+        if isinstance(content, dict):
+            log.info('Stream chunk [{}]: {}', chunk_type, content)
+        else:
+            log.info('Stream chunk [{}]: {}', chunk_type, content)
+    else:
+        log.info('Stream chunk [{}]', chunk_type)
+
+class CoordinationTracker:
+    """
+    Principled coordination tracking that simply records what happens.
+
+    The orchestrator tells us exactly what occurred and when, without
+    us having to infer or manage complex state transitions.
+    """
+
+    def __init__(self):
+        self.events: List[CoordinationEvent] = []
+        self.answers_by_agent: Dict[str, List[AgentAnswer]] = {}
+        self.final_answers: Dict[str, AgentAnswer] = {}
+        self.votes: List[AgentVote] = []
+        self.current_iteration: int = 0
+        self.agent_rounds: Dict[str, int] = {}
+        self.agent_round_context: Dict[str, Dict[int, List[str]]] = {}
+        self.iteration_available_labels: List[str] = []
+        self.pending_agent_restarts: Dict[str, bool] = {}
+        self.start_time: Optional[float] = None
+        self.end_time: Optional[float] = None
+        self.agent_ids: List[str] = []
+        self.final_winner: Optional[str] = None
+        self.final_context: Optional[Dict[str, Any]] = None
+        self.is_final_round: bool = False
+        self.user_prompt: Optional[str] = None
+        self.agent_context_labels: Dict[str, List[str]] = {}
+        self.snapshot_mappings: Dict[str, Dict[str, Any]] = {}
+
+    def _make_snapshot_path(self, kind: str, agent_id: str, timestamp: str) -> str:
+        """Generate standardized snapshot paths.
+
+        Args:
+            kind: Type of snapshot ('answer', 'vote', 'final_answer', etc.)
+            agent_id: The agent ID
+            timestamp: The timestamp or 'final' for final answers
+
+        Returns:
+            The formatted path string
+        """
+        if kind == 'final_answer' and timestamp == 'final':
+            return f'final/{agent_id}/answer.txt'
+        if kind == 'answer':
+            return f'{agent_id}/{timestamp}/answer.txt'
+        if kind == 'vote':
+            return f'{agent_id}/{timestamp}/vote.json'
+        return f'{agent_id}/{timestamp}/{kind}.txt'
+
+    def initialize_session(self, agent_ids: List[str], user_prompt: Optional[str]=None):
+        """Initialize a new coordination session."""
+        self.start_time = time.time()
+        self.agent_ids = agent_ids.copy()
+        self.answers_by_agent = {aid: [] for aid in agent_ids}
+        self.user_prompt = user_prompt
+        self.agent_rounds = {aid: 0 for aid in agent_ids}
+        self.agent_round_context = {aid: {0: []} for aid in agent_ids}
+        self.pending_agent_restarts = {aid: False for aid in agent_ids}
+        self.agent_context_labels = {aid: [] for aid in agent_ids}
+        self._add_event(EventType.SESSION_START, None, f'Started with agents: {agent_ids}')
+
+    def get_anonymous_id(self, agent_id: str) -> str:
+        """Get anonymous ID (agent1, agent2) for a full agent ID."""
+        agent_num = self._get_agent_number(agent_id)
+        return f'agent{agent_num}' if agent_num else agent_id
+
+    def _get_agent_number(self, agent_id: str) -> Optional[int]:
+        """Get the 1-based number for an agent (1, 2, 3, etc.)."""
+        if agent_id in self.agent_ids:
+            return self.agent_ids.index(agent_id) + 1
+        return None
+
+    def get_agent_context_labels(self, agent_id: str) -> List[str]:
+        """Get the answer labels this agent can currently see."""
+        return self.agent_context_labels.get(agent_id, []).copy()
+
+    def get_latest_answer_label(self, agent_id: str) -> Optional[str]:
+        """Get the latest answer label for an agent."""
+        if agent_id in self.answers_by_agent and self.answers_by_agent[agent_id]:
+            return self.answers_by_agent[agent_id][-1].label
+        return None
+
+    def get_agent_round(self, agent_id: str) -> int:
+        """Get the current round for a specific agent."""
+        return self.agent_rounds.get(agent_id, 0)
+
+    @property
+    def max_round(self) -> int:
+        """Get the highest round number across all agents."""
+        return max(self.agent_rounds.values()) if self.agent_rounds else 0
+
+    def start_new_iteration(self):
+        """Start a new coordination iteration."""
+        self.current_iteration += 1
+        self.iteration_available_labels = []
+        for agent_id, answers_list in self.answers_by_agent.items():
+            if answers_list:
+                latest_answer = answers_list[-1]
+                self.iteration_available_labels.append(latest_answer.label)
+        self._add_event(EventType.ITERATION_START, None, f'Starting coordination iteration {self.current_iteration}', {'iteration': self.current_iteration, 'available_answers': self.iteration_available_labels.copy()})
+
+    def end_iteration(self, reason: str, details: Dict[str, Any]=None):
+        """Record how an iteration ended."""
+        context = {'iteration': self.current_iteration, 'end_reason': reason, 'available_answers': self.iteration_available_labels.copy()}
+        if details:
+            context.update(details)
+        self._add_event(EventType.ITERATION_END, None, f'Iteration {self.current_iteration} ended: {reason}', context)
+
+    def set_user_prompt(self, prompt: str):
+        """Set or update the user prompt."""
+        self.user_prompt = prompt
+
+    def change_status(self, agent_id: str, new_status: AgentStatus):
+        """Record when an agent changes status."""
+        self._add_event(EventType.STATUS_CHANGE, agent_id, f'Changed to status: {new_status.value}')
+
+    def track_agent_context(self, agent_id: str, answers: Dict[str, str], conversation_history: Optional[Dict[str, Any]]=None, agent_full_context: Optional[str]=None, snapshot_dir: Optional[str]=None):
+        """Record when an agent receives context.
+
+        Args:
+            agent_id: The agent receiving context
+            answers: Dict of agent_id -> answer content
+            conversation_history: Optional conversation history
+            agent_full_context: Optional full context string/dict to save
+            snapshot_dir: Optional directory path to save context.txt
+        """
+        answer_labels = []
+        for answering_agent_id in answers.keys():
+            if answering_agent_id in self.answers_by_agent and self.answers_by_agent[answering_agent_id]:
+                latest_answer = self.answers_by_agent[answering_agent_id][-1]
+                answer_labels.append(latest_answer.label)
+        self.agent_context_labels[agent_id] = answer_labels.copy()
+        anon_answering_agents = [self.get_anonymous_id(aid) for aid in answers.keys()]
+        context = {'available_answers': anon_answering_agents, 'available_answer_labels': answer_labels.copy(), 'answer_count': len(answers), 'has_conversation_history': bool(conversation_history)}
+        self._add_event(EventType.CONTEXT_RECEIVED, agent_id, f'Received context with {len(answers)} answers', context)
+
+    def track_restart_signal(self, triggering_agent: str, agents_restarted: List[str]):
+        """Record when a restart is triggered - but don't increment rounds yet."""
+        for agent_id in agents_restarted:
+            if True:
+                self.pending_agent_restarts[agent_id] = True
+        context = {'affected_agents': agents_restarted, 'triggering_agent': triggering_agent}
+        self._add_event(EventType.RESTART_TRIGGERED, triggering_agent, f'Triggered restart affecting {len(agents_restarted)} agents', context)
+
+    def complete_agent_restart(self, agent_id: str):
+        """Record when an agent has completed its restart and increment their round.
+
+        Args:
+            agent_id: The agent that completed restart
+        """
+        if not self.pending_agent_restarts.get(agent_id, False):
+            return
+        self.pending_agent_restarts[agent_id] = False
+        self.agent_rounds[agent_id] += 1
+        new_round = self.agent_rounds[agent_id]
+        if agent_id not in self.agent_round_context:
+            self.agent_round_context[agent_id] = {}
+        context = {'agent_round': new_round}
+        self._add_event(EventType.RESTART_COMPLETED, agent_id, f'Completed restart - now in round {new_round}', context)
+
+    def add_agent_answer(self, agent_id: str, answer: str, snapshot_timestamp: Optional[str]=None):
+        """Record when an agent provides a new answer.
+
+        Args:
+            agent_id: ID of the agent
+            answer: The answer content
+            snapshot_timestamp: Timestamp of the filesystem snapshot (if any)
+        """
+        agent_answer = AgentAnswer(agent_id=agent_id, content=answer, timestamp=time.time())
+        agent_num = self._get_agent_number(agent_id)
+        answer_num = len(self.answers_by_agent[agent_id]) + 1
+        label = f'agent{agent_num}.{answer_num}'
+        agent_answer.label = label
+        self.answers_by_agent[agent_id].append(agent_answer)
+        if snapshot_timestamp:
+            self.snapshot_mappings[label] = {'type': 'answer', 'label': label, 'agent_id': agent_id, 'timestamp': snapshot_timestamp, 'iteration': self.current_iteration, 'round': self.get_agent_round(agent_id), 'path': self._make_snapshot_path('answer', agent_id, snapshot_timestamp)}
+        context = {'label': label}
+        self._add_event(EventType.NEW_ANSWER, agent_id, f'Provided answer {label}', context)
+
+    def add_agent_vote(self, agent_id: str, vote_data: Dict[str, Any], snapshot_timestamp: Optional[str]=None):
+        """Record when an agent votes.
+
+        Args:
+            agent_id: ID of the voting agent
+            vote_data: Dictionary with vote information
+            snapshot_timestamp: Timestamp of the filesystem snapshot (if any)
+        """
+        voted_for = vote_data.get('voted_for') or vote_data.get('agent_id', 'unknown')
+        reason = vote_data.get('reason', '')
+        voter_anon_id = self.get_anonymous_id(agent_id)
+        voted_for_label = 'unknown'
+        if voted_for not in self.agent_ids:
+            logger.warning(f'Vote from {agent_id} for unknown agent {voted_for}')
+        if voted_for in self.agent_ids:
+            voted_agent_answers = self.answers_by_agent.get(voted_for, [])
+            if voted_agent_answers:
+                voted_for_label = voted_agent_answers[-1].label
+        vote = AgentVote(voter_id=agent_id, voted_for=voted_for, voted_for_label=voted_for_label, voter_anon_id=voter_anon_id, reason=reason, timestamp=time.time(), available_answers=self.iteration_available_labels.copy())
+        self.votes.append(vote)
+        if snapshot_timestamp:
+            agent_num = self._get_agent_number(agent_id) or 0
+            vote_num = len([v for v in self.votes if v.voter_id == agent_id])
+            vote_label = f'agent{agent_num}.vote{vote_num}'
+            self.snapshot_mappings[vote_label] = {'type': 'vote', 'label': vote_label, 'agent_id': agent_id, 'timestamp': snapshot_timestamp, 'voted_for': voted_for, 'voted_for_label': voted_for_label, 'iteration': self.current_iteration, 'round': self.get_agent_round(agent_id), 'path': self._make_snapshot_path('vote', agent_id, snapshot_timestamp)}
+        context = {'voted_for': voted_for, 'voted_for_label': voted_for_label, 'reason': reason, 'available_answers': self.iteration_available_labels.copy()}
+        self._add_event(EventType.VOTE_CAST, agent_id, f'Voted for {voted_for_label}', context)
+
+    def set_final_agent(self, agent_id: str, vote_summary: str, all_answers: Dict[str, str]):
+        """Record when final agent is selected."""
+        self.final_winner = agent_id
+        answer_labels = []
+        answers_with_labels = {}
+        for aid, answer_content in all_answers.items():
+            if aid in self.answers_by_agent and self.answers_by_agent[aid]:
+                if self.answers_by_agent[aid]:
+                    latest_answer = self.answers_by_agent[aid][-1]
+                    answer_labels.append(latest_answer.label)
+                    answers_with_labels[latest_answer.label] = answer_content
+        self.final_context = {'vote_summary': vote_summary, 'all_answers': answer_labels, 'answers_for_context': answers_with_labels}
+        self._add_event(EventType.FINAL_AGENT_SELECTED, agent_id, 'Selected as final presenter', self.final_context)
+
+    def set_final_answer(self, agent_id: str, final_answer: str, snapshot_timestamp: Optional[str]=None):
+        """Record the final answer presentation.
+
+        Args:
+            agent_id: ID of the agent
+            final_answer: The final answer content
+            snapshot_timestamp: Timestamp of the filesystem snapshot (if any)
+        """
+        final_answer_obj = AgentAnswer(agent_id=agent_id, content=final_answer, timestamp=time.time())
+        agent_num = self._get_agent_number(agent_id)
+        label = f'agent{agent_num}.final'
+        final_answer_obj.label = label
+        self.final_answers[agent_id] = final_answer_obj
+        if snapshot_timestamp:
+            self.snapshot_mappings[label] = {'type': 'final_answer', 'label': label, 'agent_id': agent_id, 'timestamp': snapshot_timestamp, 'iteration': self.current_iteration, 'round': self.get_agent_round(agent_id), 'path': self._make_snapshot_path('final_answer', agent_id, snapshot_timestamp)}
+        context = {'label': label, **(self.final_context or {})}
+        self._add_event(EventType.FINAL_ANSWER, agent_id, f'Presented final answer {label}', context)
+
+    def start_final_round(self, selected_agent_id: str):
+        """Start the final presentation round."""
+        self.is_final_round = True
+        final_round = self.max_round + 1
+        self.agent_rounds[selected_agent_id] = final_round
+        self.final_winner = selected_agent_id
+        self.change_status(selected_agent_id, AgentStatus.STREAMING)
+        self._add_event(EventType.FINAL_ROUND_START, selected_agent_id, f'Starting final presentation round {final_round}', {'round_type': 'final', 'final_round': final_round})
+
+    def track_agent_action(self, agent_id: str, action_type, details: str=''):
+        """Track any agent action using ActionType enum."""
+        if action_type == ActionType.NEW_ANSWER:
+            self.add_agent_answer(agent_id, details)
+        elif action_type == ActionType.VOTE:
+            pass
+        else:
+            event_type = ACTION_TO_EVENT.get(action_type)
+            if event_type is None:
+                raise ValueError(f'Unsupported ActionType: {action_type}')
+            message = f'{action_type.value.upper()}: {details}' if details else action_type.value.upper()
+            self._add_event(event_type, agent_id, message)
+
+    def _add_event(self, event_type: EventType, agent_id: Optional[str], details: str, context: Optional[Dict[str, Any]]=None):
+        """Internal method to add an event."""
+        if context is None:
+            context = {}
+        context = context.copy()
+        context['iteration'] = self.current_iteration
+        if agent_id:
+            context['round'] = self.get_agent_round(agent_id)
+        else:
+            context['round'] = self.max_round
+        event = CoordinationEvent(timestamp=time.time(), event_type=event_type, agent_id=agent_id, details=details, context=context)
+        self.events.append(event)
+
+    def _end_session(self):
+        """Mark the end of the coordination session."""
+        self.end_time = time.time()
+        duration = self.end_time - (self.start_time or self.end_time)
+        self._add_event(EventType.SESSION_END, None, f'Session completed in {duration:.1f}s')
+
+    @property
+    def all_answers(self) -> Dict[str, str]:
+        """Get all answers as a label->content dictionary."""
+        result = {}
+        for answers in self.answers_by_agent.values():
+            for answer in answers:
+                result[answer.label] = answer.content
+        for answer in self.final_answers.values():
+            result[answer.label] = answer.content
+        return result
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get session summary statistics."""
+        duration = (self.end_time or time.time()) - (self.start_time or time.time())
+        restart_count = len([e for e in self.events if e.event_type == EventType.RESTART_TRIGGERED])
+        return {'duration': duration, 'total_events': len(self.events), 'total_restarts': restart_count, 'total_answers': sum((len(answers) for answers in self.answers_by_agent.values())), 'final_winner': self.final_winner, 'agent_count': len(self.agent_ids)}
+
+    def save_coordination_logs(self, log_dir):
+        """Save all coordination data and create timeline visualization.
+
+        Args:
+            log_dir: Directory to save logs
+            format_style: "old", "new", or "both" (default)
+        """
+        try:
+            log_dir = Path(log_dir)
+            log_dir.mkdir(parents=True, exist_ok=True)
+            events_file = log_dir / 'coordination_events.json'
+            with open(events_file, 'w', encoding='utf-8') as f:
+                events_data = [event.to_dict() for event in self.events]
+                session_data = {'session_metadata': {'user_prompt': self.user_prompt, 'agent_ids': self.agent_ids, 'start_time': self.start_time, 'end_time': self.end_time, 'final_winner': self.final_winner}, 'events': events_data}
+                json.dump(session_data, f, indent=2, default=str)
+            if self.snapshot_mappings:
+                snapshot_mappings_file = log_dir / 'snapshot_mappings.json'
+                with open(snapshot_mappings_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.snapshot_mappings, f, indent=2, default=str)
+            try:
+                self._generate_coordination_table(log_dir, session_data)
+            except Exception as e:
+                logger.warning(f'Warning: Could not generate coordination table: {e}', exc_info=True)
+        except Exception as e:
+            logger.warning(f'Failed to save coordination logs: {e}', exc_info=True)
+
+    def _generate_coordination_table(self, log_dir, session_data):
+        """Generate coordination table using the create_coordination_table.py module."""
+        try:
+            from massgen.frontend.displays.create_coordination_table import CoordinationTableBuilder
+            builder = CoordinationTableBuilder(session_data)
+            table_content = builder.generate_event_table()
+            table_file = log_dir / 'coordination_table.txt'
+            with open(table_file, 'w', encoding='utf-8') as f:
+                f.write(table_content)
+            logger.info(f'Coordination table generated at {table_file}')
+        except Exception as e:
+            logger.warning(f'Error generating coordination table: {e}', exc_info=True)
+
+    def _get_agent_id_from_label(self, label: str) -> str:
+        """Extract agent_id from a label like 'agent1.1' or 'agent2.final'."""
+        import re
+        match = re.match('agent(\\d+)', label)
+        if match:
+            agent_num = int(match.group(1))
+            if 0 < agent_num <= len(self.agent_ids):
+                return self.agent_ids[agent_num - 1]
+        return 'unknown'
+
+    def _get_agent_display_name(self, agent_id: str) -> str:
+        """Get display name for agent (Agent1, Agent2, etc.)."""
+        agent_num = self._get_agent_number(agent_id)
+        return f'Agent{agent_num}' if agent_num else agent_id
+
+def add_agent_vote(self, agent_id: str, vote_data: Dict[str, Any], snapshot_timestamp: Optional[str]=None):
+    """Record when an agent votes.
+
+        Args:
+            agent_id: ID of the voting agent
+            vote_data: Dictionary with vote information
+            snapshot_timestamp: Timestamp of the filesystem snapshot (if any)
+        """
+    voted_for = vote_data.get('voted_for') or vote_data.get('agent_id', 'unknown')
+    reason = vote_data.get('reason', '')
+    voter_anon_id = self.get_anonymous_id(agent_id)
+    voted_for_label = 'unknown'
+    if voted_for not in self.agent_ids:
+        logger.warning(f'Vote from {agent_id} for unknown agent {voted_for}')
+    if voted_for in self.agent_ids:
+        voted_agent_answers = self.answers_by_agent.get(voted_for, [])
+        if voted_agent_answers:
+            voted_for_label = voted_agent_answers[-1].label
+    vote = AgentVote(voter_id=agent_id, voted_for=voted_for, voted_for_label=voted_for_label, voter_anon_id=voter_anon_id, reason=reason, timestamp=time.time(), available_answers=self.iteration_available_labels.copy())
+    self.votes.append(vote)
+    if snapshot_timestamp:
+        agent_num = self._get_agent_number(agent_id) or 0
+        vote_num = len([v for v in self.votes if v.voter_id == agent_id])
+        vote_label = f'agent{agent_num}.vote{vote_num}'
+        self.snapshot_mappings[vote_label] = {'type': 'vote', 'label': vote_label, 'agent_id': agent_id, 'timestamp': snapshot_timestamp, 'voted_for': voted_for, 'voted_for_label': voted_for_label, 'iteration': self.current_iteration, 'round': self.get_agent_round(agent_id), 'path': self._make_snapshot_path('vote', agent_id, snapshot_timestamp)}
+    context = {'voted_for': voted_for, 'voted_for_label': voted_for_label, 'reason': reason, 'available_answers': self.iteration_available_labels.copy()}
+    self._add_event(EventType.VOTE_CAST, agent_id, f'Voted for {voted_for_label}', context)
+
+def save_coordination_logs(self, log_dir):
+    """Save all coordination data and create timeline visualization.
+
+        Args:
+            log_dir: Directory to save logs
+            format_style: "old", "new", or "both" (default)
+        """
+    try:
+        log_dir = Path(log_dir)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        events_file = log_dir / 'coordination_events.json'
+        with open(events_file, 'w', encoding='utf-8') as f:
+            events_data = [event.to_dict() for event in self.events]
+            session_data = {'session_metadata': {'user_prompt': self.user_prompt, 'agent_ids': self.agent_ids, 'start_time': self.start_time, 'end_time': self.end_time, 'final_winner': self.final_winner}, 'events': events_data}
+            json.dump(session_data, f, indent=2, default=str)
+        if self.snapshot_mappings:
+            snapshot_mappings_file = log_dir / 'snapshot_mappings.json'
+            with open(snapshot_mappings_file, 'w', encoding='utf-8') as f:
+                json.dump(self.snapshot_mappings, f, indent=2, default=str)
+        try:
+            self._generate_coordination_table(log_dir, session_data)
+        except Exception as e:
+            logger.warning(f'Warning: Could not generate coordination table: {e}', exc_info=True)
+    except Exception as e:
+        logger.warning(f'Failed to save coordination logs: {e}', exc_info=True)
+
+class Orchestrator(ChatAgent):
+    """
+    Orchestrator Agent - Unified chat interface with sub-agent coordination.
+
+    The orchestrator acts as a single agent from the user's perspective, but internally
+    coordinates multiple sub-agents using the proven binary decision framework.
+
+    Key Features:
+    - Unified chat interface (same as any individual agent)
+    - Automatic sub-agent coordination and conflict resolution
+    - Transparent MassGen workflow execution
+    - Real-time streaming with proper source attribution
+    - Graceful restart mechanism for dynamic case transitions
+    - Session management
+
+    TODO - Missing Configuration Options:
+    - Option to include/exclude voting details in user messages
+    - Configurable timeout settings for agent responses
+    - Configurable retry limits and backoff strategies
+    - Custom voting strategies beyond simple majority
+    - Configurable presentation formats for final answers
+    - Advanced coordination workflows (hierarchical, weighted voting, etc.)
+
+    TODO (v0.0.14 Context Sharing Enhancement - See docs/dev_notes/v0.0.14-context.md):
+    - Add permission validation logic for agent workspace access
+    - Implement validate_agent_access() method to check if agent has required permission for resource
+    - Replace current prompt-based access control with explicit system-level enforcement
+    - Add PermissionManager integration for managing agent access rules
+    - Implement audit logging for all access attempts to workspace resources
+    - Support dynamic permission negotiation during runtime
+    - Add configurable policy framework for permission management
+    - Integrate with workspace snapshot mechanism for controlled context sharing
+
+    Restart Behavior:
+    When an agent provides new_answer, all agents gracefully restart to ensure
+    consistent coordination state. This allows all agents to transition to Case 2
+    evaluation with the new answers available.
+    """
+
+    def __init__(self, agents: Dict[str, ChatAgent], orchestrator_id: str='orchestrator', session_id: Optional[str]=None, config: Optional[AgentConfig]=None, snapshot_storage: Optional[str]=None, agent_temporary_workspace: Optional[str]=None, previous_turns: Optional[List[Dict[str, Any]]]=None):
+        """
+        Initialize MassGen orchestrator.
+
+        Args:
+            agents: Dictionary of {agent_id: ChatAgent} - can be individual agents or other orchestrators
+            orchestrator_id: Unique identifier for this orchestrator (default: "orchestrator")
+            session_id: Optional session identifier
+            config: Optional AgentConfig for customizing orchestrator behavior
+            snapshot_storage: Optional path to store agent workspace snapshots
+            agent_temporary_workspace: Optional path for agent temporary workspaces
+            previous_turns: List of previous turn metadata for multi-turn conversations (loaded by CLI)
+        """
+        super().__init__(session_id)
+        self.orchestrator_id = orchestrator_id
+        self.agents = agents
+        self.agent_states = {aid: AgentState() for aid in agents.keys()}
+        self.config = config or AgentConfig.create_openai_config()
+        self.message_templates = self.config.message_templates or MessageTemplates()
+        self.workflow_tools = self.message_templates.get_standard_tools(list(agents.keys()))
+        self.current_task: Optional[str] = None
+        self.workflow_phase: str = 'idle'
+        self._coordination_messages: List[Dict[str, str]] = []
+        self._selected_agent: Optional[str] = None
+        self._final_presentation_content: Optional[str] = None
+        self.total_tokens: int = 0
+        self.coordination_start_time: float = 0
+        self.is_orchestrator_timeout: bool = False
+        self.timeout_reason: Optional[str] = None
+        self._active_streams: Dict = {}
+        self._active_tasks: Dict = {}
+        self._snapshot_storage: Optional[str] = snapshot_storage
+        self._agent_temporary_workspace: Optional[str] = agent_temporary_workspace
+        self._previous_turns: List[Dict[str, Any]] = previous_turns or []
+        self.coordination_tracker = CoordinationTracker()
+        self.coordination_tracker.initialize_session(list(agents.keys()))
+        if snapshot_storage:
+            self._snapshot_storage = snapshot_storage
+            snapshot_path = Path(self._snapshot_storage)
+            if snapshot_path.exists() and any(snapshot_path.iterdir()):
+                shutil.rmtree(snapshot_path)
+            snapshot_path.mkdir(parents=True, exist_ok=True)
+        for agent_id, agent in self.agents.items():
+            if agent.backend.filesystem_manager:
+                agent.backend.filesystem_manager.setup_orchestration_paths(agent_id=agent_id, snapshot_storage=self._snapshot_storage, agent_temporary_workspace=self._agent_temporary_workspace)
+                agent.backend.filesystem_manager.update_backend_mcp_config(agent.backend.config)
+
+    @staticmethod
+    def _get_chunk_type_value(chunk) -> str:
+        """
+        Extract chunk type as string, handling both legacy and typed chunks.
+
+        Args:
+            chunk: StreamChunk, TextStreamChunk, or MultimodalStreamChunk
+
+        Returns:
+            String representation of chunk type (e.g., "content", "tool_calls")
+        """
+        chunk_type = chunk.type
+        if isinstance(chunk_type, ChunkType):
+            return chunk_type.value
+        return str(chunk_type)
+
+    async def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]=None, reset_chat: bool=False, clear_history: bool=False) -> AsyncGenerator[StreamChunk, None]:
+        """
+        Main chat interface - handles user messages and coordinates sub-agents.
+
+        Args:
+            messages: List of conversation messages
+            tools: Ignored by orchestrator (uses internal workflow tools)
+            reset_chat: If True, reset conversation and start fresh
+            clear_history: If True, clear history before processing
+
+        Yields:
+            StreamChunk: Streaming response chunks
+        """
+        _ = tools
+        if clear_history:
+            self.conversation_history.clear()
+        if reset_chat:
+            self.reset()
+        conversation_context = self._build_conversation_context(messages)
+        user_message = conversation_context.get('current_message')
+        if not user_message:
+            log_stream_chunk('orchestrator', 'error', 'No user message found in conversation')
+            yield StreamChunk(type='error', error='No user message found in conversation')
+            return
+        self.add_to_history('user', user_message)
+        if self.workflow_phase == 'idle':
+            self.current_task = user_message
+            self.coordination_tracker.initialize_session(list(self.agents.keys()), self.current_task)
+            self.workflow_phase = 'coordinating'
+            if conversation_context and conversation_context.get('conversation_history'):
+                self._clear_agent_workspaces()
+            async for chunk in self._coordinate_agents_with_timeout(conversation_context):
+                yield chunk
+        elif self.workflow_phase == 'presenting':
+            async for chunk in self._handle_followup(user_message, conversation_context):
+                yield chunk
+        else:
+            log_stream_chunk('orchestrator', 'content', '🔄 Coordinating agents, please wait...')
+            yield StreamChunk(type='content', content='🔄 Coordinating agents, please wait...')
+
+    async def chat_simple(self, user_message: str) -> AsyncGenerator[StreamChunk, None]:
+        """
+        Backwards compatible simple chat interface.
+
+        Args:
+            user_message: Simple string message from user
+
+        Yields:
+            StreamChunk: Streaming response chunks
+        """
+        messages = [{'role': 'user', 'content': user_message}]
+        async for chunk in self.chat(messages):
+            yield chunk
+
+    def _build_conversation_context(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build conversation context from message list."""
+        conversation_history = []
+        current_message = None
+        for message in messages:
+            role = message.get('role')
+            content = message.get('content', '')
+            if role == 'user':
+                current_message = content
+                if len(conversation_history) > 0 or len(messages) > 1:
+                    conversation_history.append(message.copy())
+            elif role == 'assistant':
+                conversation_history.append(message.copy())
+            elif role == 'system':
+                pass
+        if conversation_history and conversation_history[-1].get('role') == 'user':
+            conversation_history.pop()
+        return {'current_message': current_message, 'conversation_history': conversation_history, 'full_messages': messages}
+
+    def save_coordination_logs(self):
+        """Public method to save coordination logs after final presentation is complete."""
+        self.coordination_tracker._end_session()
+        log_session_dir = get_log_session_dir()
+        if log_session_dir:
+            self.coordination_tracker.save_coordination_logs(log_session_dir)
+
+    async def _coordinate_agents_with_timeout(self, conversation_context: Optional[Dict[str, Any]]=None) -> AsyncGenerator[StreamChunk, None]:
+        """Execute coordination with orchestrator-level timeout protection."""
+        self.coordination_start_time = time.time()
+        self.total_tokens = 0
+        self.is_orchestrator_timeout = False
+        self.timeout_reason = None
+        log_orchestrator_activity(self.orchestrator_id, 'Starting coordination with timeout', {'timeout_seconds': self.config.timeout_config.orchestrator_timeout_seconds, 'agents': list(self.agents.keys())})
+        self._active_streams = {}
+        self._active_tasks = {}
+        timeout_seconds = self.config.timeout_config.orchestrator_timeout_seconds
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                async for chunk in self._coordinate_agents(conversation_context):
+                    if hasattr(chunk, 'content') and chunk.content:
+                        self.total_tokens += len(chunk.content.split())
+                    yield chunk
+        except asyncio.TimeoutError:
+            self.is_orchestrator_timeout = True
+            elapsed = time.time() - self.coordination_start_time
+            self.timeout_reason = f'Time limit exceeded ({elapsed:.1f}s/{timeout_seconds}s)'
+            for agent_id in self.agent_states.keys():
+                if not self.agent_states[agent_id].has_voted:
+                    self.coordination_tracker.track_agent_action(agent_id, ActionType.TIMEOUT, self.timeout_reason)
+            await self._cleanup_active_coordination()
+        if self.is_orchestrator_timeout:
+            async for chunk in self._handle_orchestrator_timeout():
+                yield chunk
+
+    async def _coordinate_agents(self, conversation_context: Optional[Dict[str, Any]]=None) -> AsyncGenerator[StreamChunk, None]:
+        """Execute unified MassGen coordination workflow with real-time streaming."""
+        log_coordination_step('Starting multi-agent coordination', {'agents': list(self.agents.keys()), 'has_context': conversation_context is not None})
+        if self.config.skip_coordination_rounds:
+            log_stream_chunk('orchestrator', 'content', '⚡ [DEBUG MODE] Skipping coordination rounds, going straight to final presentation...\n\n', self.orchestrator_id)
+            yield StreamChunk(type='content', content='⚡ [DEBUG MODE] Skipping coordination rounds, going straight to final presentation...\n\n', source=self.orchestrator_id)
+            self._selected_agent = list(self.agents.keys())[0]
+            log_coordination_step('Skipped coordination, selected first agent', {'selected_agent': self._selected_agent})
+            async for chunk in self._present_final_answer():
+                yield chunk
+            return
+        log_stream_chunk('orchestrator', 'content', '🚀 Starting multi-agent coordination...\n\n', self.orchestrator_id)
+        yield StreamChunk(type='content', content='🚀 Starting multi-agent coordination...\n\n', source=self.orchestrator_id)
+        votes = {}
+        for agent_id in self.agents.keys():
+            self.agent_states[agent_id].has_voted = False
+            self.agent_states[agent_id].restart_pending = True
+        log_stream_chunk('orchestrator', 'content', '## 📋 Agents Coordinating\n', self.orchestrator_id)
+        yield StreamChunk(type='content', content='## 📋 Agents Coordinating\n', source=self.orchestrator_id)
+        async for chunk in self._stream_coordination_with_agents(votes, conversation_context):
+            yield chunk
+        current_answers = {aid: state.answer for aid, state in self.agent_states.items() if state.answer}
+        self._selected_agent = self._determine_final_agent_from_votes(votes, current_answers)
+        log_coordination_step('Final agent selected', {'selected_agent': self._selected_agent, 'votes': votes})
+        async for chunk in self._present_final_answer():
+            yield chunk
+
+    async def _stream_coordination_with_agents(self, votes: Dict[str, Dict], conversation_context: Optional[Dict[str, Any]]=None) -> AsyncGenerator[StreamChunk, None]:
+        """
+        Coordinate agents with real-time streaming of their outputs.
+
+        Processes agent stream signals:
+        - "content": Streams real-time agent output to user
+        - "result": Records votes/answers, triggers restart_pending for other agents
+        - "error": Displays error and closes agent stream (self-terminating)
+        - "done": Closes agent stream gracefully
+
+        Restart Mechanism:
+        When any agent provides new_answer, all other agents get restart_pending=True
+        and gracefully terminate their current work before restarting.
+        """
+        active_streams = {}
+        active_tasks = {}
+        self._active_streams = active_streams
+        self._active_tasks = active_tasks
+        while not all((state.has_voted for state in self.agent_states.values())):
+            self.coordination_tracker.start_new_iteration()
+            if self.is_orchestrator_timeout:
+                break
+            current_answers = {aid: state.answer for aid, state in self.agent_states.items() if state.answer}
+            for agent_id in self.agents.keys():
+                if agent_id not in active_streams and (not self.agent_states[agent_id].has_voted) and (not self.agent_states[agent_id].is_killed):
+                    active_streams[agent_id] = self._stream_agent_execution(agent_id, self.current_task, current_answers, conversation_context)
+            if not active_streams:
+                break
+            for agent_id, stream in active_streams.items():
+                if agent_id not in active_tasks:
+                    active_tasks[agent_id] = asyncio.create_task(self._get_next_chunk(stream))
+            if not active_tasks:
+                break
+            done, _ = await asyncio.wait(active_tasks.values(), return_when=asyncio.FIRST_COMPLETED)
+            reset_signal = False
+            voted_agents = {}
+            answered_agents = {}
+            completed_agent_ids = set()
+            for task in done:
+                agent_id = next((aid for aid, t in active_tasks.items() if t is task))
+                del active_tasks[agent_id]
+                try:
+                    chunk_type, chunk_data = await task
+                    if chunk_type == 'content':
+                        log_stream_chunk('orchestrator', 'content', chunk_data, agent_id)
+                        yield StreamChunk(type='content', content=chunk_data, source=agent_id)
+                    elif chunk_type == 'reasoning':
+                        log_stream_chunk('orchestrator', 'reasoning', chunk_data, agent_id)
+                        yield chunk_data
+                    elif chunk_type == 'result':
+                        result_type, result_data = chunk_data
+                        completed_agent_ids.add(agent_id)
+                        log_stream_chunk('orchestrator', f'result.{result_type}', result_data, agent_id)
+                        yield StreamChunk(type='agent_status', source=agent_id, status='completed', content='')
+                        await self._close_agent_stream(agent_id, active_streams)
+                        if result_type == 'answer':
+                            agent = self.agents.get(agent_id)
+                            agent_context = self.get_last_context(agent_id)
+                            answer_timestamp = await self._save_agent_snapshot(agent_id, answer_content=result_data, context_data=agent_context)
+                            if agent and agent.backend.filesystem_manager:
+                                agent.backend.filesystem_manager.log_current_state('after providing answer')
+                            answered_agents[agent_id] = result_data
+                            self.coordination_tracker.add_agent_answer(agent_id, result_data, snapshot_timestamp=answer_timestamp)
+                            restart_triggered_id = agent_id
+                            reset_signal = True
+                            log_stream_chunk('orchestrator', 'content', '✅ Answer provided\n', agent_id)
+                            log_stream_chunk('orchestrator', 'content', '✅ Answer provided\n', agent_id)
+                            yield StreamChunk(type='content', content='✅ Answer provided\n', source=agent_id)
+                        elif result_type == 'vote':
+                            if self._check_restart_pending(agent_id):
+                                voted_for = result_data.get('agent_id', '<unknown>')
+                                reason = result_data.get('reason', 'No reason provided')
+                                self.coordination_tracker.track_agent_action(agent_id, ActionType.VOTE_IGNORED, f'Voted for {voted_for} but ignored due to restart')
+                                log_stream_chunk('orchestrator', 'content', f'🔄 Vote for [{voted_for}] ignored (reason: {reason}) - restarting due to new answers', agent_id)
+                                yield StreamChunk(type='content', content=f'🔄 Vote for [{voted_for}] ignored (reason: {reason}) - restarting due to new answers', source=agent_id)
+                            else:
+                                vote_timestamp = await self._save_agent_snapshot(agent_id=agent_id, vote_data=result_data, context_data=self.get_last_context(agent_id))
+                                agent = self.agents.get(agent_id)
+                                if agent and agent.backend.filesystem_manager:
+                                    self.agents.get(agent_id).backend.filesystem_manager.log_current_state('after voting')
+                                voted_agents[agent_id] = result_data
+                                self.coordination_tracker.add_agent_vote(agent_id, result_data, snapshot_timestamp=vote_timestamp)
+                                voted_for = result_data.get('agent_id', '<unknown>')
+                                reason = result_data.get('reason', 'No reason provided')
+                                log_stream_chunk('orchestrator', 'content', f'✅ Vote recorded for [{result_data['agent_id']}]', agent_id)
+                                yield StreamChunk(type='content', content=f'✅ Vote recorded for [{result_data['agent_id']}]', source=agent_id)
+                    elif chunk_type == 'error':
+                        self.coordination_tracker.track_agent_action(agent_id, ActionType.ERROR, chunk_data)
+                        completed_agent_ids.add(agent_id)
+                        log_stream_chunk('orchestrator', 'error', chunk_data, agent_id)
+                        yield StreamChunk(type='content', content=f'❌ {chunk_data}', source=agent_id)
+                        log_stream_chunk('orchestrator', 'agent_status', 'completed', agent_id)
+                        yield StreamChunk(type='agent_status', source=agent_id, status='completed', content='')
+                        await self._close_agent_stream(agent_id, active_streams)
+                    elif chunk_type == 'debug':
+                        log_stream_chunk('orchestrator', 'debug', chunk_data, agent_id)
+                        yield StreamChunk(type='debug', content=chunk_data, source=agent_id)
+                    elif chunk_type == 'mcp_status':
+                        mcp_message = f'🔧 MCP: {chunk_data}'
+                        log_stream_chunk('orchestrator', 'mcp_status', chunk_data, agent_id)
+                        yield StreamChunk(type='content', content=mcp_message, source=agent_id)
+                    elif chunk_type == 'done':
+                        completed_agent_ids.add(agent_id)
+                        log_stream_chunk('orchestrator', 'done', None, agent_id)
+                        yield StreamChunk(type='agent_status', source=agent_id, status='completed', content='')
+                        await self._close_agent_stream(agent_id, active_streams)
+                except Exception as e:
+                    self.coordination_tracker.track_agent_action(agent_id, ActionType.ERROR, f'Stream error - {e}')
+                    completed_agent_ids.add(agent_id)
+                    log_stream_chunk('orchestrator', 'error', f'❌ Stream error - {e}', agent_id)
+                    yield StreamChunk(type='content', content=f'❌ Stream error - {e}', source=agent_id)
+                    await self._close_agent_stream(agent_id, active_streams)
+            if reset_signal:
+                for state in self.agent_states.values():
+                    state.has_voted = False
+                votes.clear()
+                for agent_id in self.agent_states.keys():
+                    self.agent_states[agent_id].restart_pending = True
+                self.coordination_tracker.track_restart_signal(restart_triggered_id, list(self.agent_states.keys()))
+                self.coordination_tracker.complete_agent_restart(restart_triggered_id)
+            else:
+                for agent_id, vote_data in voted_agents.items():
+                    self.agent_states[agent_id].has_voted = True
+                    votes[agent_id] = vote_data
+            for agent_id, answer in answered_agents.items():
+                self.agent_states[agent_id].answer = answer
+            for agent_id in completed_agent_ids:
+                if agent_id in answered_agents:
+                    self.coordination_tracker.change_status(agent_id, AgentStatus.ANSWERED)
+                elif agent_id in voted_agents:
+                    self.coordination_tracker.change_status(agent_id, AgentStatus.VOTED)
+        for agent_id, task in active_tasks.items():
+            if not task.done():
+                self.coordination_tracker.track_agent_action(agent_id, ActionType.CANCELLED, 'All agents voted - coordination complete')
+            task.cancel()
+        for agent_id in list(active_streams.keys()):
+            await self._close_agent_stream(agent_id, active_streams)
+
+    async def _copy_all_snapshots_to_temp_workspace(self, agent_id: str) -> Optional[str]:
+        """Copy all agents' latest workspace snapshots to a temporary workspace for context sharing.
+
+        TODO (v0.0.14 Context Sharing Enhancement - See docs/dev_notes/v0.0.14-context.md):
+        - Validate agent permissions before restoring snapshots
+        - Check if agent has read access to other agents' workspaces
+        - Implement fine-grained control over which snapshots can be accessed
+        - Add audit logging for snapshot access attempts
+
+        Args:
+            agent_id: ID of the Claude Code agent receiving the context
+
+        Returns:
+            Path to the agent's workspace directory if successful, None otherwise
+        """
+        agent = self.agents.get(agent_id)
+        if not agent:
+            return None
+        if not agent.backend.filesystem_manager:
+            return None
+        agent_mapping = {}
+        sorted_agent_ids = sorted(self.agents.keys())
+        for i, real_agent_id in enumerate(sorted_agent_ids, 1):
+            agent_mapping[real_agent_id] = f'agent{i}'
+        all_snapshots = {}
+        if self._snapshot_storage:
+            snapshot_base = Path(self._snapshot_storage)
+            for source_agent_id in self.agents.keys():
+                source_snapshot = snapshot_base / source_agent_id
+                if source_snapshot.exists() and source_snapshot.is_dir():
+                    all_snapshots[source_agent_id] = source_snapshot
+        workspace_path = await agent.backend.filesystem_manager.copy_snapshots_to_temp_workspace(all_snapshots, agent_mapping)
+        return str(workspace_path) if workspace_path else None
+
+    async def _save_agent_snapshot(self, agent_id: str, answer_content: str=None, vote_data: Dict[str, Any]=None, is_final: bool=False, context_data: Any=None) -> str:
+        """
+        Save a snapshot of an agent's working directory and answer/vote with the same timestamp.
+
+        Creates a timestamped directory structure:
+        - agent_id/timestamp/workspace/ - Contains the workspace files
+        - agent_id/timestamp/answer.txt - Contains the answer text (if provided)
+        - agent_id/timestamp/vote.json - Contains the vote data (if provided)
+        - agent_id/timestamp/context.txt - Contains the context used (if provided)
+
+        Args:
+            agent_id: ID of the agent
+            answer_content: The answer content to save (if provided)
+            vote_data: The vote data to save (if provided)
+            is_final: If True, save as final snapshot for presentation
+            context_data: The context data to save (conversation, answers, etc.)
+
+        Returns:
+            The timestamp used for this snapshot
+        """
+        logger.info(f'[Orchestrator._save_agent_snapshot] Called for agent_id={agent_id}, has_answer={bool(answer_content)}, has_vote={bool(vote_data)}, is_final={is_final}')
+        agent = self.agents.get(agent_id)
+        if not agent:
+            logger.warning(f'[Orchestrator._save_agent_snapshot] Agent {agent_id} not found in agents dict')
+            return None
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        if answer_content:
+            try:
+                log_session_dir = get_log_session_dir()
+                if log_session_dir:
+                    if is_final:
+                        timestamped_dir = log_session_dir / 'final' / agent_id
+                    else:
+                        timestamped_dir = log_session_dir / agent_id / timestamp
+                    timestamped_dir.mkdir(parents=True, exist_ok=True)
+                    answer_file = timestamped_dir / 'answer.txt'
+                    answer_file.write_text(answer_content)
+                    logger.info(f'[Orchestrator._save_agent_snapshot] Saved answer to {answer_file}')
+            except Exception as e:
+                logger.warning(f'[Orchestrator._save_agent_snapshot] Failed to save answer for {agent_id}: {e}')
+        if vote_data:
+            try:
+                log_session_dir = get_log_session_dir()
+                if log_session_dir:
+                    timestamped_dir = log_session_dir / agent_id / timestamp
+                    timestamped_dir.mkdir(parents=True, exist_ok=True)
+                    vote_file = timestamped_dir / 'vote.json'
+                    current_answers = {aid: state.answer for aid, state in self.agent_states.items() if state.answer}
+                    agent_mapping = {}
+                    for i, real_id in enumerate(sorted(self.agents.keys()), 1):
+                        agent_mapping[f'agent{i}'] = real_id
+                    comprehensive_vote_data = {'voter_id': agent_id, 'voter_anon_id': next((anon for anon, real in agent_mapping.items() if real == agent_id), agent_id), 'voted_for': vote_data.get('agent_id', 'unknown'), 'voted_for_anon': next((anon for anon, real in agent_mapping.items() if real == vote_data.get('agent_id')), 'unknown'), 'reason': vote_data.get('reason', ''), 'timestamp': timestamp, 'unix_timestamp': time.time(), 'iteration': self.coordination_tracker.current_iteration if self.coordination_tracker else None, 'coordination_round': self.coordination_tracker.max_round if self.coordination_tracker else None, 'available_options': list(current_answers.keys()), 'available_options_anon': [next((anon for anon, real in agent_mapping.items() if real == aid), aid) for aid in sorted(current_answers.keys())], 'agent_mapping': agent_mapping, 'vote_context': {'total_agents': len(self.agents), 'agents_with_answers': len(current_answers), 'current_task': self.current_task}}
+                    with open(vote_file, 'w', encoding='utf-8') as f:
+                        json.dump(comprehensive_vote_data, f, indent=2)
+                    logger.info(f'[Orchestrator._save_agent_snapshot] Saved comprehensive vote to {vote_file}')
+            except Exception as e:
+                logger.error(f'[Orchestrator._save_agent_snapshot] Failed to save vote for {agent_id}: {e}')
+                logger.error(f'[Orchestrator._save_agent_snapshot] Traceback: {traceback.format_exc()}')
+        if agent.backend.filesystem_manager:
+            logger.info(f'[Orchestrator._save_agent_snapshot] Agent {agent_id} has filesystem_manager, calling save_snapshot with timestamp={(timestamp if not is_final else None)}')
+            await agent.backend.filesystem_manager.save_snapshot(timestamp=timestamp if not is_final else None, is_final=is_final)
+            if not is_final:
+                agent.backend.filesystem_manager.clear_workspace()
+                logger.info(f'[Orchestrator._save_agent_snapshot] Cleared workspace for {agent_id} after saving snapshot')
+        else:
+            logger.info(f'[Orchestrator._save_agent_snapshot] Agent {agent_id} does not have filesystem_manager')
+        if context_data and (answer_content or vote_data):
+            try:
+                log_session_dir = get_log_session_dir()
+                if log_session_dir:
+                    if is_final:
+                        timestamped_dir = log_session_dir / 'final' / agent_id
+                    else:
+                        timestamped_dir = log_session_dir / agent_id / timestamp
+                    context_file = timestamped_dir / 'context.txt'
+                    if isinstance(context_data, dict):
+                        context_file.write_text(json.dumps(context_data, indent=2, default=str))
+                    else:
+                        context_file.write_text(str(context_data))
+                    logger.info(f'[Orchestrator._save_agent_snapshot] Saved context to {context_file}')
+            except Exception as ce:
+                logger.warning(f'[Orchestrator._save_agent_snapshot] Failed to save context for {agent_id}: {ce}')
+        return timestamp if not is_final else 'final'
+
+    def get_last_context(self, agent_id: str) -> Any:
+        """Get the last context for an agent, or None if not available."""
+        return self.agent_states[agent_id].last_context if agent_id in self.agent_states else None
+
+    async def _close_agent_stream(self, agent_id: str, active_streams: Dict[str, AsyncGenerator]) -> None:
+        """Close and remove an agent stream safely."""
+        if agent_id in active_streams:
+            try:
+                await active_streams[agent_id].aclose()
+            except Exception:
+                pass
+            del active_streams[agent_id]
+
+    def _check_restart_pending(self, agent_id: str) -> bool:
+        """Check if agent should restart and yield restart message if needed. This will always be called when exiting out of _stream_agent_execution()."""
+        restart_pending = self.agent_states[agent_id].restart_pending
+        return restart_pending
+
+    async def _save_partial_work_on_restart(self, agent_id: str) -> None:
+        """
+        Save partial work snapshot when agent is restarting due to new answers from others.
+        This ensures that any work done before the restart is preserved and shared with other agents.
+
+        Args:
+            agent_id: ID of the agent being restarted
+        """
+        agent = self.agents.get(agent_id)
+        if not agent or not agent.backend.filesystem_manager:
+            return
+        logger.info(f'[Orchestrator._save_partial_work_on_restart] Saving partial work for {agent_id} before restart')
+        await self._save_agent_snapshot(agent_id, answer_content=None, context_data=self.get_last_context(agent_id), is_final=False)
+        agent.backend.filesystem_manager.log_current_state('after saving partial work on restart')
+
+    def _normalize_workspace_paths_in_answers(self, answers: Dict[str, str], viewing_agent_id: Optional[str]=None) -> Dict[str, str]:
+        """Normalize absolute workspace paths in agent answers to accessible temporary workspace paths.
+
+        This addresses the issue where agents working in separate workspace directories
+        reference the same logical files using different absolute paths, causing them
+        to think they're working on different tasks when voting.
+
+        Converts workspace paths to temporary workspace paths where the viewing agent can actually
+        access other agents' files for verification during context sharing.
+
+        TODO: Replace with Docker volume mounts to ensure consistent paths across agents.
+
+        Args:
+            answers: Dict mapping agent_id to their answer content
+            viewing_agent_id: The agent who will be reading these answers.
+                            If None, normalizes to generic "workspace/" prefix.
+
+        Returns:
+            Dict with same keys but normalized answer content with accessible paths
+        """
+        normalized_answers = {}
+        temp_workspace_base = None
+        if viewing_agent_id:
+            viewing_agent = self.agents.get(viewing_agent_id)
+            if viewing_agent and viewing_agent.backend.filesystem_manager:
+                temp_workspace_base = str(viewing_agent.backend.filesystem_manager.agent_temporary_workspace)
+        agent_mapping = {}
+        sorted_agent_ids = sorted(self.agents.keys())
+        for i, real_agent_id in enumerate(sorted_agent_ids, 1):
+            agent_mapping[real_agent_id] = f'agent{i}'
+        for agent_id, answer in answers.items():
+            normalized_answer = answer
+            for other_agent_id, other_agent in self.agents.items():
+                if not other_agent.backend.filesystem_manager:
+                    continue
+                anon_agent_id = agent_mapping.get(other_agent_id, f'agent_{other_agent_id}')
+                replace_path = os.path.join(temp_workspace_base, anon_agent_id) if temp_workspace_base else anon_agent_id
+                other_workspace = str(other_agent.backend.filesystem_manager.get_current_workspace())
+                logger.debug(f'[Orchestrator._normalize_workspace_paths_in_answers] Replacing {other_workspace} in answer from {agent_id} with path {replace_path}. original answer: {normalized_answer}')
+                normalized_answer = normalized_answer.replace(other_workspace, replace_path)
+                logger.debug(f'[Orchestrator._normalize_workspace_paths_in_answers] Intermediate normalized answer: {normalized_answer}')
+            normalized_answers[agent_id] = normalized_answer
+        return normalized_answers
+
+    def _normalize_workspace_paths_for_comparison(self, content: str, replacement_path: str='/workspace') -> str:
+        """
+        Normalize all workspace paths in content to a canonical form for equality comparison.
+
+        Unlike _normalize_workspace_paths_in_answers which normalizes paths for specific agents,
+        this method normalizes ALL workspace paths to a neutral canonical form (like '/workspace')
+        so that content can be compared for equality regardless of which agent workspace it came from.
+
+        Args:
+            content: Content that may contain workspace paths
+
+        Returns:
+            Content with all workspace paths normalized to canonical form
+        """
+        normalized_content = content
+        for agent_id, agent in self.agents.items():
+            if not agent.backend.filesystem_manager:
+                continue
+            workspace_path = str(agent.backend.filesystem_manager.get_current_workspace())
+            normalized_content = normalized_content.replace(workspace_path, replacement_path)
+        return normalized_content
+
+    async def _cleanup_active_coordination(self) -> None:
+        """Force cleanup of active coordination streams and tasks on timeout."""
+        if hasattr(self, '_active_tasks') and self._active_tasks:
+            for agent_id, task in self._active_tasks.items():
+                if not task.done():
+                    if not self.is_orchestrator_timeout:
+                        self.coordination_tracker.track_agent_action(agent_id, ActionType.CANCELLED, 'Coordination cleanup')
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+            self._active_tasks.clear()
+        if hasattr(self, '_active_streams') and self._active_streams:
+            for agent_id in list(self._active_streams.keys()):
+                await self._close_agent_stream(agent_id, self._active_streams)
+
+    def _create_tool_error_messages(self, agent: 'ChatAgent', tool_calls: List[Dict[str, Any]], primary_error_msg: str, secondary_error_msg: str=None) -> List[Dict[str, Any]]:
+        """
+        Create tool error messages for all tool calls in a response.
+
+        Args:
+            agent: The ChatAgent instance for backend access
+            tool_calls: List of tool calls that need error responses
+            primary_error_msg: Error message for the first tool call
+            secondary_error_msg: Error message for additional tool calls (defaults to primary_error_msg)
+
+        Returns:
+            List of tool result messages that can be sent back to the agent
+        """
+        if not tool_calls:
+            return []
+        if secondary_error_msg is None:
+            secondary_error_msg = primary_error_msg
+        enforcement_msgs = []
+        first_tool_call = tool_calls[0]
+        error_result_msg = agent.backend.create_tool_result_message(first_tool_call, primary_error_msg)
+        enforcement_msgs.append(error_result_msg)
+        for additional_tool_call in tool_calls[1:]:
+            neutral_msg = agent.backend.create_tool_result_message(additional_tool_call, secondary_error_msg)
+            enforcement_msgs.append(neutral_msg)
+        return enforcement_msgs
+
+    async def _stream_agent_execution(self, agent_id: str, task: str, answers: Dict[str, str], conversation_context: Optional[Dict[str, Any]]=None) -> AsyncGenerator[tuple, None]:
+        """
+        Stream agent execution with real-time content and final result.
+
+        Yields:
+            ("content", str): Real-time agent output (source attribution added by caller)
+            ("result", (type, data)): Final result - ("vote", vote_data) or ("answer", content)
+            ("error", str): Error message (self-terminating)
+            ("done", None): Graceful completion signal
+
+        Restart Behavior:
+            If restart_pending is True, agent gracefully terminates with "done" signal.
+            restart_pending is cleared at the beginning of execution.
+        """
+        agent = self.agents[agent_id]
+        backend_name = None
+        if hasattr(agent, 'backend') and hasattr(agent.backend, 'get_provider_name'):
+            backend_name = agent.backend.get_provider_name()
+        log_orchestrator_activity(self.orchestrator_id, f'Starting agent execution: {agent_id}', {'agent_id': agent_id, 'backend': backend_name, 'task': task if task else None, 'has_answers': bool(answers), 'num_answers': len(answers) if answers else 0})
+        logger.info(f'[Orchestrator] Agent {agent_id} starting execution loop...')
+        self.agent_states[agent_id].is_killed = False
+        self.agent_states[agent_id].timeout_reason = None
+        if self.agent_states[agent_id].restart_pending:
+            self.coordination_tracker.complete_agent_restart(agent_id)
+        self.agent_states[agent_id].restart_pending = False
+        await self._copy_all_snapshots_to_temp_workspace(agent_id)
+        if agent.backend.filesystem_manager:
+            agent.backend.filesystem_manager.log_current_state('before execution')
+        try:
+            agent_system_message = agent.get_configurable_system_message()
+            if agent.backend.filesystem_manager:
+                main_workspace = str(agent.backend.filesystem_manager.get_current_workspace())
+                temp_workspace = str(agent.backend.filesystem_manager.agent_temporary_workspace) if agent.backend.filesystem_manager.agent_temporary_workspace else None
+                context_paths = agent.backend.filesystem_manager.path_permission_manager.get_context_paths() if agent.backend.filesystem_manager.path_permission_manager else []
+                previous_turns_context = self._get_previous_turns_context_paths()
+                current_turn_num = len(previous_turns_context) + 1 if previous_turns_context else 1
+                turns_to_show = [t for t in previous_turns_context if t['turn'] < current_turn_num - 1]
+                workspace_prepopulated = len(previous_turns_context) > 0
+                enable_image_generation = False
+                if hasattr(agent, 'config') and agent.config:
+                    enable_image_generation = agent.config.backend_params.get('enable_image_generation', False)
+                elif hasattr(agent, 'backend') and hasattr(agent.backend, 'backend_params'):
+                    enable_image_generation = agent.backend.backend_params.get('enable_image_generation', False)
+                enable_command_execution = False
+                if hasattr(agent, 'config') and agent.config:
+                    enable_command_execution = agent.config.backend_params.get('enable_mcp_command_line', False)
+                elif hasattr(agent, 'backend') and hasattr(agent.backend, 'backend_params'):
+                    enable_command_execution = agent.backend.backend_params.get('enable_mcp_command_line', False)
+                filesystem_system_message = self.message_templates.filesystem_system_message(main_workspace=main_workspace, temp_workspace=temp_workspace, context_paths=context_paths, previous_turns=turns_to_show, workspace_prepopulated=workspace_prepopulated, enable_image_generation=enable_image_generation, agent_answers=answers, enable_command_execution=enable_command_execution)
+                agent_system_message = f'{agent_system_message}\n\n{filesystem_system_message}' if agent_system_message else filesystem_system_message
+            normalized_answers = self._normalize_workspace_paths_in_answers(answers, agent_id) if answers else answers
+            if normalized_answers:
+                logger.info(f'[Orchestrator] Agent {agent_id} sees normalized answers: {normalized_answers}')
+            else:
+                logger.info(f'[Orchestrator] Agent {agent_id} sees no existing answers')
+            is_coordination_phase = self.workflow_phase == 'coordinating'
+            planning_mode_enabled = self.config.coordination_config and self.config.coordination_config.enable_planning_mode and is_coordination_phase if self.config and hasattr(self.config, 'coordination_config') else False
+            if planning_mode_enabled and self.config.coordination_config.planning_mode_instruction:
+                planning_instructions = f'\n\n{self.config.coordination_config.planning_mode_instruction}'
+                agent_system_message = f'{agent_system_message}{planning_instructions}' if agent_system_message else planning_instructions.strip()
+            if conversation_context and conversation_context.get('conversation_history'):
+                conversation = self.message_templates.build_conversation_with_context(current_task=task, conversation_history=conversation_context.get('conversation_history', []), agent_summaries=normalized_answers, valid_agent_ids=list(normalized_answers.keys()) if normalized_answers else None, base_system_message=agent_system_message)
+            else:
+                conversation = self.message_templates.build_initial_conversation(task=task, agent_summaries=normalized_answers, valid_agent_ids=list(normalized_answers.keys()) if normalized_answers else None, base_system_message=agent_system_message)
+            self.coordination_tracker.track_agent_context(agent_id, answers, conversation.get('conversation_history', []), conversation)
+            self.agent_states[agent_id].last_context = conversation
+            backend_name = None
+            if hasattr(agent, 'backend') and hasattr(agent.backend, 'get_provider_name'):
+                backend_name = agent.backend.get_provider_name()
+            log_orchestrator_agent_message(agent_id, 'SEND', {'system': conversation['system_message'], 'user': conversation['user_message']}, backend_name=backend_name)
+            if hasattr(agent.backend, 'set_planning_mode'):
+                agent.backend.set_planning_mode(planning_mode_enabled)
+                if planning_mode_enabled:
+                    logger.info(f'[Orchestrator] Backend planning mode ENABLED for {agent_id} - MCP tools blocked')
+                else:
+                    logger.info(f'[Orchestrator] Backend planning mode DISABLED for {agent_id} - MCP tools allowed')
+            max_attempts = 3
+            conversation_messages = [{'role': 'system', 'content': conversation['system_message']}, {'role': 'user', 'content': conversation['user_message']}]
+            enforcement_msg = self.message_templates.enforcement_message()
+            self.coordination_tracker.change_status(agent_id, AgentStatus.STREAMING)
+            for attempt in range(max_attempts):
+                logger.info(f'[Orchestrator] Agent {agent_id} attempt {attempt + 1}/{max_attempts}')
+                if self._check_restart_pending(agent_id):
+                    logger.info(f'[Orchestrator] Agent {agent_id} restarting due to restart_pending flag')
+                    await self._save_partial_work_on_restart(agent_id)
+                    yield ('content', f'🔁 [{agent_id}] gracefully restarting due to new answer detected\n')
+                    yield ('done', None)
+                    return
+                if attempt == 0:
+                    chat_stream = agent.chat(conversation_messages, self.workflow_tools, reset_chat=True, current_stage=CoordinationStage.INITIAL_ANSWER)
+                elif isinstance(enforcement_msg, list):
+                    chat_stream = agent.chat(enforcement_msg, self.workflow_tools, reset_chat=False, current_stage=CoordinationStage.ENFORCEMENT)
+                else:
+                    enforcement_message = {'role': 'user', 'content': enforcement_msg}
+                    chat_stream = agent.chat([enforcement_message], self.workflow_tools, reset_chat=False, current_stage=CoordinationStage.ENFORCEMENT)
+                response_text = ''
+                tool_calls = []
+                workflow_tool_found = False
+                logger.info(f'[Orchestrator] Agent {agent_id} starting to stream chat response...')
+                async for chunk in chat_stream:
+                    chunk_type = self._get_chunk_type_value(chunk)
+                    if chunk_type == 'content':
+                        response_text += chunk.content
+                        yield ('content', chunk.content)
+                        backend_name = None
+                        if hasattr(agent, 'backend') and hasattr(agent.backend, 'get_provider_name'):
+                            backend_name = agent.backend.get_provider_name()
+                        log_orchestrator_agent_message(agent_id, 'RECV', {'content': chunk.content}, backend_name=backend_name)
+                    elif chunk_type in ['reasoning', 'reasoning_done', 'reasoning_summary', 'reasoning_summary_done']:
+                        reasoning_chunk = StreamChunk(type=chunk.type, content=chunk.content, source=agent_id, reasoning_delta=getattr(chunk, 'reasoning_delta', None), reasoning_text=getattr(chunk, 'reasoning_text', None), reasoning_summary_delta=getattr(chunk, 'reasoning_summary_delta', None), reasoning_summary_text=getattr(chunk, 'reasoning_summary_text', None), item_id=getattr(chunk, 'item_id', None), content_index=getattr(chunk, 'content_index', None), summary_index=getattr(chunk, 'summary_index', None))
+                        yield ('reasoning', reasoning_chunk)
+                    elif chunk_type == 'backend_status':
+                        pass
+                    elif chunk_type == 'mcp_status':
+                        mcp_content = f'🔧 MCP: {chunk.content}'
+                        yield ('content', mcp_content)
+                    elif chunk_type == 'debug':
+                        yield ('debug', chunk.content)
+                    elif chunk_type == 'tool_calls':
+                        chunk_tool_calls = getattr(chunk, 'tool_calls', []) or []
+                        tool_calls.extend(chunk_tool_calls)
+                        backend_name = None
+                        if hasattr(agent, 'backend') and hasattr(agent.backend, 'get_provider_name'):
+                            backend_name = agent.backend.get_provider_name()
+                        for tool_call in chunk_tool_calls:
+                            tool_name = agent.backend.extract_tool_name(tool_call)
+                            tool_args = agent.backend.extract_tool_arguments(tool_call)
+                            if tool_name == 'new_answer':
+                                content = tool_args.get('content', '')
+                                yield ('content', f'💡 Providing answer: "{content}"')
+                                log_tool_call(agent_id, 'new_answer', {'content': content}, None, backend_name)
+                            elif tool_name == 'vote':
+                                agent_voted_for = tool_args.get('agent_id', '')
+                                reason = tool_args.get('reason', '')
+                                log_tool_call(agent_id, 'vote', {'agent_id': agent_voted_for, 'reason': reason}, None, backend_name)
+                                real_agent_id = agent_voted_for
+                                if answers:
+                                    agent_mapping = {}
+                                    for i, real_id in enumerate(sorted(answers.keys()), 1):
+                                        agent_mapping[f'agent{i}'] = real_id
+                                    real_agent_id = agent_mapping.get(agent_voted_for, agent_voted_for)
+                                yield ('content', f'🗳️ Voting for [{real_agent_id}] (options: {', '.join(sorted(answers.keys()))}) : {reason}')
+                            else:
+                                yield ('content', f'🔧 Using {tool_name}')
+                                log_tool_call(agent_id, tool_name, tool_args, None, backend_name)
+                    elif chunk_type == 'error':
+                        error_msg = getattr(chunk, 'error', str(chunk.content)) if hasattr(chunk, 'error') else str(chunk.content)
+                        yield ('content', f'❌ Error: {error_msg}\n')
+                vote_calls = [tc for tc in tool_calls if agent.backend.extract_tool_name(tc) == 'vote']
+                if len(vote_calls) > 1:
+                    if attempt < max_attempts - 1:
+                        if self._check_restart_pending(agent_id):
+                            await self._save_partial_work_on_restart(agent_id)
+                            yield ('content', f'🔁 [{agent_id}] gracefully restarting due to new answer detected\n')
+                            yield ('done', None)
+                            return
+                        error_msg = f'Multiple vote calls not allowed. Made {len(vote_calls)} calls but must make exactly 1. Call vote tool once with chosen agent.'
+                        yield ('content', f'❌ {error_msg}')
+                        enforcement_msg = self._create_tool_error_messages(agent, tool_calls, error_msg, 'Vote rejected due to multiple votes.')
+                        continue
+                    else:
+                        yield ('error', f'Agent made {len(vote_calls)} vote calls in single response after max attempts')
+                        yield ('done', None)
+                        return
+                new_answer_calls = [tc for tc in tool_calls if agent.backend.extract_tool_name(tc) == 'new_answer']
+                if len(vote_calls) > 0 and len(new_answer_calls) > 0:
+                    if attempt < max_attempts - 1:
+                        if self._check_restart_pending(agent_id):
+                            await self._save_partial_work_on_restart(agent_id)
+                            yield ('content', f'🔁 [{agent_id}] gracefully restarting due to new answer detected\n')
+                            yield ('done', None)
+                            return
+                        error_msg = "Cannot use both 'vote' and 'new_answer' in same response. Choose one: vote for existing answer OR provide new answer."
+                        yield ('content', f'❌ {error_msg}')
+                        enforcement_msg = self._create_tool_error_messages(agent, tool_calls, error_msg)
+                        continue
+                    else:
+                        yield ('error', 'Agent used both vote and new_answer tools in single response after max attempts')
+                        yield ('done', None)
+                        return
+                if tool_calls:
+                    for tool_call in tool_calls:
+                        tool_name = agent.backend.extract_tool_name(tool_call)
+                        tool_args = agent.backend.extract_tool_arguments(tool_call)
+                        if tool_name == 'vote':
+                            logger.info(f'[Orchestrator] Agent {agent_id} voting from options: {(list(answers.keys()) if answers else 'No answers available')}')
+                            if self._check_restart_pending(agent_id):
+                                await self._save_partial_work_on_restart(agent_id)
+                                yield ('content', f'🔄 [{agent_id}] Vote invalid - restarting due to new answers')
+                                yield ('done', None)
+                                return
+                            workflow_tool_found = True
+                            if not answers:
+                                if attempt < max_attempts - 1:
+                                    if self._check_restart_pending(agent_id):
+                                        await self._save_partial_work_on_restart(agent_id)
+                                        yield ('content', f'🔁 [{agent_id}] gracefully restarting due to new answer detected\n')
+                                        yield ('done', None)
+                                        return
+                                    error_msg = 'Cannot vote when no answers exist. Use new_answer tool.'
+                                    yield ('content', f'❌ {error_msg}')
+                                    enforcement_msg = self._create_tool_error_messages(agent, [tool_call], error_msg)
+                                    continue
+                                else:
+                                    yield ('error', 'Cannot vote when no answers exist after max attempts')
+                                    yield ('done', None)
+                                    return
+                            voted_agent_anon = tool_args.get('agent_id')
+                            reason = tool_args.get('reason', '')
+                            agent_mapping = {}
+                            for i, real_agent_id in enumerate(sorted(answers.keys()), 1):
+                                agent_mapping[f'agent{i}'] = real_agent_id
+                            voted_agent = agent_mapping.get(voted_agent_anon, voted_agent_anon)
+                            if voted_agent not in answers:
+                                if attempt < max_attempts - 1:
+                                    if self._check_restart_pending(agent_id):
+                                        await self._save_partial_work_on_restart(agent_id)
+                                        yield ('content', f'🔁 [{agent_id}] gracefully restarting due to new answer detected\n')
+                                        yield ('done', None)
+                                        return
+                                    reverse_mapping = {real_id: f'agent{i}' for i, real_id in enumerate(sorted(answers.keys()), 1)}
+                                    valid_anon_agents = [reverse_mapping[real_id] for real_id in answers.keys()]
+                                    error_msg = f"Invalid agent_id '{voted_agent_anon}'. Valid agents: {', '.join(valid_anon_agents)}"
+                                    yield ('content', f'❌ {error_msg}')
+                                    enforcement_msg = self._create_tool_error_messages(agent, [tool_call], error_msg)
+                                    continue
+                                else:
+                                    yield ('error', f'Invalid agent_id after {max_attempts} attempts')
+                                    yield ('done', None)
+                                    return
+                            self.agent_states[agent_id].votes = {'agent_id': voted_agent, 'reason': reason}
+                            yield ('result', ('vote', {'agent_id': voted_agent, 'reason': reason}))
+                            yield ('done', None)
+                            return
+                        elif tool_name == 'new_answer':
+                            workflow_tool_found = True
+                            content = tool_args.get('content', response_text.strip())
+                            normalized_new_content = self._normalize_workspace_paths_for_comparison(content)
+                            for existing_agent_id, existing_content in answers.items():
+                                normalized_existing_content = self._normalize_workspace_paths_for_comparison(existing_content)
+                                if normalized_new_content.strip() == normalized_existing_content.strip():
+                                    if attempt < max_attempts - 1:
+                                        if self._check_restart_pending(agent_id):
+                                            await self._save_partial_work_on_restart(agent_id)
+                                            yield ('content', f'🔁 [{agent_id}] gracefully restarting due to new answer detected\n')
+                                            yield ('done', None)
+                                            return
+                                        error_msg = f'Answer already provided by {existing_agent_id}. Provide different answer or vote for existing one.'
+                                        yield ('content', f'❌ {error_msg}')
+                                        enforcement_msg = self._create_tool_error_messages(agent, [tool_call], error_msg)
+                                        continue
+                                    else:
+                                        yield ('error', f'Duplicate answer provided after {max_attempts} attempts')
+                                        yield ('done', None)
+                                        return
+                            yield ('result', ('answer', content))
+                            yield ('done', None)
+                            return
+                        elif tool_name.startswith('mcp'):
+                            pass
+                        else:
+                            yield ('content', f'🔧 used {tool_name} tool (not implemented)')
+                if not workflow_tool_found:
+                    if self._check_restart_pending(agent_id):
+                        await self._save_partial_work_on_restart(agent_id)
+                        yield ('content', f'🔁 [{agent_id}] gracefully restarting due to new answer detected\n')
+                        yield ('done', None)
+                        return
+                    if attempt < max_attempts - 1:
+                        yield ('content', '🔄 needs to use workflow tools...\n')
+                        enforcement_msg = self.message_templates.enforcement_message()
+                        continue
+                    else:
+                        yield ('error', f'Agent failed to use workflow tools after {max_attempts} attempts')
+                        yield ('done', None)
+                        return
+        except Exception as e:
+            yield ('error', f'Agent execution failed: {str(e)}')
+            yield ('done', None)
+
+    async def _get_next_chunk(self, stream: AsyncGenerator[tuple, None]) -> tuple:
+        """Get the next chunk from an agent stream."""
+        try:
+            return await stream.__anext__()
+        except StopAsyncIteration:
+            return ('done', None)
+        except Exception as e:
+            return ('error', str(e))
+
+    async def _present_final_answer(self) -> AsyncGenerator[StreamChunk, None]:
+        """Present the final coordinated answer."""
+        log_stream_chunk('orchestrator', 'content', '## 🎯 Final Coordinated Answer\n')
+        yield StreamChunk(type='content', content='## 🎯 Final Coordinated Answer\n')
+        if not self._selected_agent:
+            self._selected_agent = self._determine_final_agent_from_states()
+            if self._selected_agent:
+                log_stream_chunk('orchestrator', 'content', f'🏆 Selected Agent: {self._selected_agent}\n')
+                yield StreamChunk(type='content', content=f'🏆 Selected Agent: {self._selected_agent}\n')
+        if self._selected_agent and self._selected_agent in self.agent_states and self.agent_states[self._selected_agent].answer:
+            final_answer = self.agent_states[self._selected_agent].answer
+            self.add_to_history('assistant', final_answer)
+            log_stream_chunk('orchestrator', 'content', f'🏆 Selected Agent: {self._selected_agent}\n')
+            yield StreamChunk(type='content', content=f'🏆 Selected Agent: {self._selected_agent}\n')
+            log_stream_chunk('orchestrator', 'content', final_answer)
+            yield StreamChunk(type='content', content=final_answer)
+            log_stream_chunk('orchestrator', 'content', f'\n\n---\n*Coordinated by {len(self.agents)} agents via MassGen framework*')
+            yield StreamChunk(type='content', content=f'\n\n---\n*Coordinated by {len(self.agents)} agents via MassGen framework*')
+        else:
+            error_msg = '❌ Unable to provide coordinated answer - no successful agents'
+            self.add_to_history('assistant', error_msg)
+            log_stream_chunk('orchestrator', 'error', error_msg)
+            yield StreamChunk(type='content', content=error_msg)
+        self.workflow_phase = 'presenting'
+        log_stream_chunk('orchestrator', 'done', None)
+        yield StreamChunk(type='done')
+
+    async def _handle_orchestrator_timeout(self) -> AsyncGenerator[StreamChunk, None]:
+        """Handle orchestrator timeout by jumping directly to get_final_presentation."""
+        log_stream_chunk('orchestrator', 'content', f'\n⚠️ **Orchestrator Timeout**: {self.timeout_reason}\n', self.orchestrator_id)
+        yield StreamChunk(type='content', content=f'\n⚠️ **Orchestrator Timeout**: {self.timeout_reason}\n', source=self.orchestrator_id)
+        available_answers = {aid: state.answer for aid, state in self.agent_states.items() if state.answer and (not state.is_killed)}
+        log_stream_chunk('orchestrator', 'content', f'📊 Current state: {len(available_answers)} answers available\n', self.orchestrator_id)
+        yield StreamChunk(type='content', content=f'📊 Current state: {len(available_answers)} answers available\n', source=self.orchestrator_id)
+        if len(available_answers) == 0:
+            log_stream_chunk('orchestrator', 'error', '❌ No answers available from any agents due to timeout. No agents had enough time to provide responses.\n', self.orchestrator_id)
+            yield StreamChunk(type='content', content='❌ No answers available from any agents due to timeout. No agents had enough time to provide responses.\n', source=self.orchestrator_id)
+            self.workflow_phase = 'presenting'
+            log_stream_chunk('orchestrator', 'done', None)
+            yield StreamChunk(type='done')
+            return
+        current_votes = {aid: state.votes for aid, state in self.agent_states.items() if state.votes and (not state.is_killed)}
+        self._selected_agent = self._determine_final_agent_from_votes(current_votes, available_answers)
+        vote_results = self._get_vote_results()
+        log_stream_chunk('orchestrator', 'content', f'🎯 Jumping to final presentation with {self._selected_agent} (selected despite timeout)\n', self.orchestrator_id)
+        yield StreamChunk(type='content', content=f'🎯 Jumping to final presentation with {self._selected_agent} (selected despite timeout)\n', source=self.orchestrator_id)
+        async for chunk in self.get_final_presentation(self._selected_agent, vote_results):
+            yield chunk
+
+    def _determine_final_agent_from_votes(self, votes: Dict[str, Dict], agent_answers: Dict[str, str]) -> str:
+        """Determine which agent should present the final answer based on votes."""
+        if not votes:
+            return next(iter(agent_answers)) if agent_answers else None
+        vote_counts = {}
+        for vote_data in votes.values():
+            voted_for = vote_data.get('agent_id')
+            if voted_for:
+                vote_counts[voted_for] = vote_counts.get(voted_for, 0) + 1
+        if not vote_counts:
+            return next(iter(agent_answers)) if agent_answers else None
+        max_votes = max(vote_counts.values())
+        tied_agents = [agent_id for agent_id, count in vote_counts.items() if count == max_votes]
+        for agent_id in agent_answers.keys():
+            if agent_id in tied_agents:
+                return agent_id
+        return tied_agents[0] if tied_agents else next(iter(agent_answers)) if agent_answers else None
+
+    async def get_final_presentation(self, selected_agent_id: str, vote_results: Dict[str, Any]) -> AsyncGenerator[StreamChunk, None]:
+        """Ask the winning agent to present their final answer with voting context."""
+        self.coordination_tracker.start_final_round(selected_agent_id)
+        if selected_agent_id not in self.agents:
+            log_stream_chunk('orchestrator', 'error', f'Selected agent {selected_agent_id} not found')
+            yield StreamChunk(type='error', error=f'Selected agent {selected_agent_id} not found')
+            return
+        agent = self.agents[selected_agent_id]
+        if agent.backend.filesystem_manager:
+            agent.backend.filesystem_manager.path_permission_manager.set_context_write_access_enabled(True)
+        if hasattr(agent.backend, 'set_planning_mode'):
+            agent.backend.set_planning_mode(False)
+            logger.info(f'[Orchestrator] Backend planning mode DISABLED for final presentation: {selected_agent_id} - MCP tools now allowed')
+        temp_workspace_path = await self._copy_all_snapshots_to_temp_workspace(selected_agent_id)
+        yield StreamChunk(type='debug', content=f'Restored workspace context for final presentation: {temp_workspace_path}', source=selected_agent_id)
+        vote_counts = vote_results.get('vote_counts', {})
+        voter_details = vote_results.get('voter_details', {})
+        is_tie = vote_results.get('is_tie', False)
+        voting_summary = f'You received {vote_counts.get(selected_agent_id, 0)} vote(s)'
+        if voter_details.get(selected_agent_id):
+            reasons = [v['reason'] for v in voter_details[selected_agent_id]]
+            voting_summary += f' with feedback: {'; '.join(reasons)}'
+        if is_tie:
+            voting_summary += ' (tie-broken by registration order)'
+        all_answers = {aid: s.answer for aid, s in self.agent_states.items() if s.answer}
+        normalized_voting_summary = self._normalize_workspace_paths_in_answers({selected_agent_id: voting_summary}, selected_agent_id)[selected_agent_id]
+        normalized_all_answers = self._normalize_workspace_paths_in_answers(all_answers, selected_agent_id)
+        presentation_content = self.message_templates.build_final_presentation_message(original_task=self.current_task or 'Task coordination', vote_summary=normalized_voting_summary, all_answers=normalized_all_answers, selected_agent_id=selected_agent_id)
+        agent_system_message = agent.get_configurable_system_message()
+        enable_image_generation = False
+        if hasattr(agent, 'config') and agent.config:
+            enable_image_generation = agent.config.backend_params.get('enable_image_generation', False)
+        elif hasattr(agent, 'backend') and hasattr(agent.backend, 'backend_params'):
+            enable_image_generation = agent.backend.backend_params.get('enable_image_generation', False)
+        enable_command_execution = False
+        if hasattr(agent, 'config') and agent.config:
+            enable_command_execution = agent.config.backend_params.get('enable_mcp_command_line', False)
+        elif hasattr(agent, 'backend') and hasattr(agent.backend, 'backend_params'):
+            enable_command_execution = agent.backend.backend_params.get('enable_mcp_command_line', False)
+        enable_audio_generation = False
+        if hasattr(agent, 'config') and agent.config:
+            enable_audio_generation = agent.config.backend_params.get('enable_audio_generation', False)
+        elif hasattr(agent, 'backend') and hasattr(agent.backend, 'backend_params'):
+            enable_audio_generation = agent.backend.backend_params.get('enable_audio_generation', False)
+        has_irreversible_actions = False
+        if agent.backend.filesystem_manager:
+            context_paths = agent.backend.filesystem_manager.path_permission_manager.get_context_paths()
+            has_irreversible_actions = any((cp.get('permission') == 'write' for cp in context_paths))
+        base_system_message = self.message_templates.final_presentation_system_message(agent_system_message, enable_image_generation, enable_audio_generation, has_irreversible_actions, enable_command_execution)
+        for aid, state in self.agent_states.items():
+            if aid != selected_agent_id:
+                self.coordination_tracker.change_status(aid, AgentStatus.COMPLETED)
+        self.coordination_tracker.set_final_agent(selected_agent_id, voting_summary, all_answers)
+        if agent.backend.filesystem_manager and temp_workspace_path:
+            main_workspace = str(agent.backend.filesystem_manager.get_current_workspace())
+            temp_workspace = str(agent.backend.filesystem_manager.agent_temporary_workspace) if agent.backend.filesystem_manager.agent_temporary_workspace else None
+            context_paths = agent.backend.filesystem_manager.path_permission_manager.get_context_paths() if agent.backend.filesystem_manager.path_permission_manager else []
+            previous_turns_context = self._get_previous_turns_context_paths()
+            current_turn_num = len(previous_turns_context) + 1 if previous_turns_context else 1
+            turns_to_show = [t for t in previous_turns_context if t['turn'] < current_turn_num - 1]
+            workspace_prepopulated = len(previous_turns_context) > 0
+            base_system_message = self.message_templates.filesystem_system_message(main_workspace=main_workspace, temp_workspace=temp_workspace, context_paths=context_paths, previous_turns=turns_to_show, workspace_prepopulated=workspace_prepopulated, enable_image_generation=enable_image_generation, agent_answers=all_answers, enable_command_execution=enable_command_execution) + '\n\n## Instructions\n' + base_system_message
+        presentation_messages = [{'role': 'system', 'content': base_system_message}, {'role': 'user', 'content': presentation_content}]
+        self.agent_states[selected_agent_id].last_context = {'messages': presentation_messages, 'is_final': True, 'vote_summary': voting_summary, 'all_answers': all_answers, 'complete_vote_results': vote_results, 'vote_counts': vote_counts, 'voter_details': voter_details, 'all_votes': {aid: state.votes for aid, state in self.agent_states.items() if state.votes}}
+        log_stream_chunk('orchestrator', 'status', f'🎤  [{selected_agent_id}] presenting final answer\n')
+        yield StreamChunk(type='status', content=f'🎤  [{selected_agent_id}] presenting final answer\n')
+        presentation_content = ''
+        try:
+            async for chunk in agent.chat(presentation_messages, reset_chat=True, current_stage=CoordinationStage.PRESENTATION):
+                chunk_type = self._get_chunk_type_value(chunk)
+                self.coordination_tracker.start_new_iteration()
+                if chunk_type == 'content' and chunk.content:
+                    presentation_content += chunk.content
+                    log_stream_chunk('orchestrator', 'content', chunk.content, selected_agent_id)
+                    yield StreamChunk(type='content', content=chunk.content, source=selected_agent_id)
+                elif chunk_type in ['reasoning', 'reasoning_done', 'reasoning_summary', 'reasoning_summary_done']:
+                    reasoning_chunk = StreamChunk(type=chunk_type, content=chunk.content, source=selected_agent_id, reasoning_delta=getattr(chunk, 'reasoning_delta', None), reasoning_text=getattr(chunk, 'reasoning_text', None), reasoning_summary_delta=getattr(chunk, 'reasoning_summary_delta', None), reasoning_summary_text=getattr(chunk, 'reasoning_summary_text', None), item_id=getattr(chunk, 'item_id', None), content_index=getattr(chunk, 'content_index', None), summary_index=getattr(chunk, 'summary_index', None))
+                    log_stream_chunk('orchestrator', chunk.type, chunk.content, selected_agent_id)
+                    yield reasoning_chunk
+                elif chunk_type == 'backend_status':
+                    import json
+                    status_json = json.loads(chunk.content)
+                    cwd = status_json['cwd']
+                    session_id = status_json['session_id']
+                    content = f'Final Temp Working directory: {cwd}.\n    Final Session ID: {session_id}.\n    '
+                    log_stream_chunk('orchestrator', 'content', content, selected_agent_id)
+                    yield StreamChunk(type='content', content=content, source=selected_agent_id)
+                elif chunk_type == 'mcp_status':
+                    mcp_content = f'🔧 MCP: {chunk.content}'
+                    log_stream_chunk('orchestrator', 'content', mcp_content, selected_agent_id)
+                    yield StreamChunk(type='content', content=mcp_content, source=selected_agent_id)
+                elif chunk_type == 'done':
+                    final_answer = presentation_content.strip() if presentation_content.strip() else self.agent_states[selected_agent_id].answer
+                    final_context = self.get_last_context(selected_agent_id)
+                    await self._save_agent_snapshot(self._selected_agent, answer_content=final_answer, is_final=True, context_data=final_context)
+                    self.coordination_tracker.set_final_answer(selected_agent_id, final_answer, snapshot_timestamp='final')
+                    log_stream_chunk('orchestrator', 'done', None, selected_agent_id)
+                    yield StreamChunk(type='done', source=selected_agent_id)
+                elif chunk_type == 'error':
+                    log_stream_chunk('orchestrator', 'error', chunk.error, selected_agent_id)
+                    yield StreamChunk(type='error', error=chunk.error, source=selected_agent_id)
+                elif hasattr(chunk, 'source'):
+                    log_stream_chunk('orchestrator', chunk_type, getattr(chunk, 'content', ''), selected_agent_id)
+                    yield StreamChunk(type=chunk_type, content=getattr(chunk, 'content', ''), source=selected_agent_id, **{k: v for k, v in chunk.__dict__.items() if k not in ['type', 'content', 'source']})
+                else:
+                    log_stream_chunk('orchestrator', chunk_type, getattr(chunk, 'content', ''), selected_agent_id)
+                    yield StreamChunk(type=chunk_type, content=getattr(chunk, 'content', ''), source=selected_agent_id, **{k: v for k, v in chunk.__dict__.items() if k not in ['type', 'content', 'source']})
+        finally:
+            if presentation_content.strip():
+                self._final_presentation_content = presentation_content.strip()
+            else:
+                stored_answer = self.agent_states[selected_agent_id].answer
+                if stored_answer:
+                    fallback_content = f'\n📋 Using stored answer as final presentation:\n\n{stored_answer}'
+                    log_stream_chunk('orchestrator', 'content', fallback_content, selected_agent_id)
+                    yield StreamChunk(type='content', content=fallback_content, source=selected_agent_id)
+                    self._final_presentation_content = stored_answer
+                else:
+                    log_stream_chunk('orchestrator', 'error', '\n❌ No content generated for final presentation and no stored answer available.', selected_agent_id)
+                    yield StreamChunk(type='content', content='\n❌ No content generated for final presentation and no stored answer available.', source=selected_agent_id)
+            self.coordination_tracker.change_status(selected_agent_id, AgentStatus.COMPLETED)
+            self.save_coordination_logs()
+
+    def _get_vote_results(self) -> Dict[str, Any]:
+        """Get current vote results and statistics."""
+        agent_answers = {aid: state.answer for aid, state in self.agent_states.items() if state.answer}
+        votes = {aid: state.votes for aid, state in self.agent_states.items() if state.votes}
+        vote_counts = {}
+        voter_details = {}
+        for voter_id, vote_data in votes.items():
+            voted_for = vote_data.get('agent_id')
+            if voted_for:
+                vote_counts[voted_for] = vote_counts.get(voted_for, 0) + 1
+                if voted_for not in voter_details:
+                    voter_details[voted_for] = []
+                voter_details[voted_for].append({'voter': voter_id, 'reason': vote_data.get('reason', 'No reason provided')})
+        winner = None
+        is_tie = False
+        if vote_counts:
+            max_votes = max(vote_counts.values())
+            tied_agents = [agent_id for agent_id, count in vote_counts.items() if count == max_votes]
+            is_tie = len(tied_agents) > 1
+            for agent_id in agent_answers.keys():
+                if agent_id in tied_agents:
+                    winner = agent_id
+                    break
+            if not winner:
+                winner = tied_agents[0] if tied_agents else None
+        agent_mapping = {}
+        for i, real_id in enumerate(sorted(agent_answers.keys()), 1):
+            agent_mapping[f'agent{i}'] = real_id
+        return {'vote_counts': vote_counts, 'voter_details': voter_details, 'winner': winner, 'is_tie': is_tie, 'total_votes': len(votes), 'agents_with_answers': len(agent_answers), 'agents_voted': len([v for v in votes.values() if v.get('agent_id')]), 'agent_mapping': agent_mapping}
+
+    def _determine_final_agent_from_states(self) -> Optional[str]:
+        """Determine final agent based on current agent states."""
+        agents_with_answers = {aid: state.answer for aid, state in self.agent_states.items() if state.answer}
+        if not agents_with_answers:
+            return None
+        return next(iter(agents_with_answers))
+
+    async def _handle_followup(self, user_message: str, conversation_context: Optional[Dict[str, Any]]=None) -> AsyncGenerator[StreamChunk, None]:
+        """Handle follow-up questions after presenting final answer with conversation context."""
+        if conversation_context and len(conversation_context.get('conversation_history', [])) > 0:
+            log_stream_chunk('orchestrator', 'content', f"🤔 Thank you for your follow-up question in our ongoing conversation. I understand you're asking: '{user_message}'. Currently, the coordination is complete, but I can help clarify the answer or coordinate a new task that takes our conversation history into account.")
+            yield StreamChunk(type='content', content=f"🤔 Thank you for your follow-up question in our ongoing conversation. I understand you're asking: '{user_message}'. Currently, the coordination is complete, but I can help clarify the answer or coordinate a new task that takes our conversation history into account.")
+        else:
+            log_stream_chunk('orchestrator', 'content', f"🤔 Thank you for your follow-up: '{user_message}'. The coordination is complete, but I can help clarify the answer or coordinate a new task if needed.")
+            yield StreamChunk(type='content', content=f"🤔 Thank you for your follow-up: '{user_message}'. The coordination is complete, but I can help clarify the answer or coordinate a new task if needed.")
+        log_stream_chunk('orchestrator', 'done', None)
+        yield StreamChunk(type='done')
+
+    def add_agent(self, agent_id: str, agent: ChatAgent) -> None:
+        """Add a new sub-agent to the orchestrator."""
+        self.agents[agent_id] = agent
+        self.agent_states[agent_id] = AgentState()
+
+    def remove_agent(self, agent_id: str) -> None:
+        """Remove a sub-agent from the orchestrator."""
+        if agent_id in self.agents:
+            del self.agents[agent_id]
+        if agent_id in self.agent_states:
+            del self.agent_states[agent_id]
+
+    def get_final_result(self) -> Optional[Dict[str, Any]]:
+        """
+        Get final result for session persistence.
+
+        Returns:
+            Dict with final_answer, winning_agent_id, and workspace_path, or None if not available
+        """
+        if not self._selected_agent or not self._final_presentation_content:
+            return None
+        winning_agent = self.agents.get(self._selected_agent)
+        workspace_path = None
+        if winning_agent and winning_agent.backend.filesystem_manager:
+            workspace_path = str(winning_agent.backend.filesystem_manager.get_current_workspace())
+        return {'final_answer': self._final_presentation_content, 'winning_agent_id': self._selected_agent, 'workspace_path': workspace_path}
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get current orchestrator status."""
+        vote_results = self._get_vote_results()
+        return {'session_id': self.session_id, 'workflow_phase': self.workflow_phase, 'current_task': self.current_task, 'selected_agent': self._selected_agent, 'final_presentation_content': self._final_presentation_content, 'vote_results': vote_results, 'agents': {aid: {'agent_status': agent.get_status(), 'coordination_state': {'answer': state.answer, 'has_voted': state.has_voted}} for aid, (agent, state) in zip(self.agents.keys(), zip(self.agents.values(), self.agent_states.values()))}, 'conversation_length': len(self.conversation_history)}
+
+    def get_configurable_system_message(self) -> Optional[str]:
+        """
+        Get the configurable system message for the orchestrator.
+
+        This can define how the orchestrator should coordinate agents, construct messages,
+        handle conflicts, make decisions, etc. For example:
+        - Custom voting strategies
+        - Message construction templates
+        - Conflict resolution approaches
+        - Coordination workflow preferences
+
+        Returns:
+            Orchestrator's configurable system message if available, None otherwise
+        """
+        if self.config and hasattr(self.config, 'get_configurable_system_message'):
+            return self.config.get_configurable_system_message()
+        elif self.config and hasattr(self.config, 'custom_system_instruction'):
+            return self.config.custom_system_instruction
+        elif self.config and self.config.backend_params:
+            backend_params = self.config.backend_params
+            if 'system_prompt' in backend_params:
+                return backend_params['system_prompt']
+            elif 'append_system_prompt' in backend_params:
+                return backend_params['append_system_prompt']
+        return None
+
+    def _clear_agent_workspaces(self) -> None:
+        """
+        Clear all agent workspaces and pre-populate with previous turn's results.
+
+        This creates a WRITABLE copy of turn n-1 in each agent's workspace.
+        Note: CLI separately provides turn n-1 as a READ-ONLY context path, allowing
+        agents to both modify files (in workspace) and reference originals (via context path).
+        """
+        previous_turn_workspace = None
+        if self._previous_turns:
+            latest_turn = self._previous_turns[-1]
+            previous_turn_workspace = Path(latest_turn['path'])
+        for agent_id, agent in self.agents.items():
+            if agent.backend.filesystem_manager:
+                workspace_path = agent.backend.filesystem_manager.get_current_workspace()
+                if workspace_path and Path(workspace_path).exists():
+                    for item in Path(workspace_path).iterdir():
+                        if item.is_file():
+                            item.unlink()
+                        elif item.is_dir():
+                            shutil.rmtree(item)
+                    logger.info(f'[Orchestrator] Cleared workspace for {agent_id}: {workspace_path}')
+                    if previous_turn_workspace and previous_turn_workspace.exists():
+                        logger.info(f'[Orchestrator] Pre-populating {agent_id} workspace with writable copy of turn n-1 from {previous_turn_workspace}')
+                        for item in previous_turn_workspace.iterdir():
+                            dest = Path(workspace_path) / item.name
+                            if item.is_file():
+                                shutil.copy2(item, dest)
+                            elif item.is_dir():
+                                shutil.copytree(item, dest, dirs_exist_ok=True)
+                        logger.info(f'[Orchestrator] Pre-populated {agent_id} workspace with writable copy of turn n-1')
+
+    def _get_previous_turns_context_paths(self) -> List[Dict[str, Any]]:
+        """
+        Get previous turns as context paths for current turn's agents.
+
+        Returns:
+            List of previous turn information with path, turn number, and task
+        """
+        return self._previous_turns
+
+    async def reset(self) -> None:
+        """Reset orchestrator state for new task."""
+        self.conversation_history.clear()
+        self.current_task = None
+        self.workflow_phase = 'idle'
+        self._coordination_messages.clear()
+        self._selected_agent = None
+        self._final_presentation_content = None
+        for state in self.agent_states.values():
+            state.answer = None
+            state.has_voted = False
+            state.restart_pending = False
+            state.is_killed = False
+            state.timeout_reason = None
+        self.total_tokens = 0
+        self.coordination_start_time = 0
+        self.is_orchestrator_timeout = False
+        self.timeout_reason = None
+        self._active_streams = {}
+        self._active_tasks = {}
+
+def _clear_agent_workspaces(self) -> None:
+    """
+        Clear all agent workspaces and pre-populate with previous turn's results.
+
+        This creates a WRITABLE copy of turn n-1 in each agent's workspace.
+        Note: CLI separately provides turn n-1 as a READ-ONLY context path, allowing
+        agents to both modify files (in workspace) and reference originals (via context path).
+        """
+    previous_turn_workspace = None
+    if self._previous_turns:
+        latest_turn = self._previous_turns[-1]
+        previous_turn_workspace = Path(latest_turn['path'])
+    for agent_id, agent in self.agents.items():
+        if agent.backend.filesystem_manager:
+            workspace_path = agent.backend.filesystem_manager.get_current_workspace()
+            if workspace_path and Path(workspace_path).exists():
+                for item in Path(workspace_path).iterdir():
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        shutil.rmtree(item)
+                logger.info(f'[Orchestrator] Cleared workspace for {agent_id}: {workspace_path}')
+                if previous_turn_workspace and previous_turn_workspace.exists():
+                    logger.info(f'[Orchestrator] Pre-populating {agent_id} workspace with writable copy of turn n-1 from {previous_turn_workspace}')
+                    for item in previous_turn_workspace.iterdir():
+                        dest = Path(workspace_path) / item.name
+                        if item.is_file():
+                            shutil.copy2(item, dest)
+                        elif item.is_dir():
+                            shutil.copytree(item, dest, dirs_exist_ok=True)
+                    logger.info(f'[Orchestrator] Pre-populated {agent_id} workspace with writable copy of turn n-1')
+
+class MCPError(Exception):
+    """
+    Base exception for MCP-related errors.
+
+    Provides structured error information and context preservation
+    with enhanced debugging capabilities.
+    """
+
+    def __init__(self, message: str, context: Optional[Dict[str, Any]]=None, error_code: Optional[str]=None, timestamp: Optional[datetime]=None):
+        super().__init__(message)
+        self.context = self._sanitize_context(context or {})
+        self.error_code = error_code
+        self.timestamp = timestamp or datetime.now(timezone.utc)
+        self.original_message = message
+
+    def _sanitize_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Sanitize context to remove sensitive information and ensure serializability.
+        """
+        sanitized = {}
+        sensitive_keys = {'password', 'token', 'secret', 'key', 'auth', 'credential'}
+        for key, value in context.items():
+            if any((sensitive in key.lower() for sensitive in sensitive_keys)):
+                sanitized[key] = '[REDACTED]'
+            elif isinstance(value, (str, int, float, bool, type(None))):
+                sanitized[key] = value
+            else:
+                sanitized[key] = str(value)
+        return sanitized
+
+    def _build_context_from_kwargs(self, base_context: Optional[Dict[str, Any]]=None, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Merge base context with kwargs, ignoring None values.
+
+        Copies the provided base_context (or initializes an empty dict) and updates it
+        with key/value pairs from kwargs where the value is not None. Returns the
+        resulting context dict for use in specialized error classes.
+        """
+        context: Dict[str, Any] = dict(base_context or {})
+        for key, value in kwargs.items():
+            if value is None:
+                continue
+            context[key] = value
+        return context
+
+    def __str__(self) -> str:
+        parts = [self.original_message]
+        if self.error_code:
+            parts.append(f'Code: {self.error_code}')
+        if self.context:
+            context_items = [f'{k}={v}' for k, v in self.context.items()]
+            parts.append(f'Context: {', '.join(context_items)}')
+        return ' | '.join(parts)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {'error_type': self.__class__.__name__, 'message': self.original_message, 'error_code': self.error_code, 'context': self.context, 'timestamp': self.timestamp.isoformat()}
+
+    def log_error(self) -> None:
+        """Log the error with appropriate level and context."""
+        logger.error(f'{self.__class__.__name__}: {self.original_message}', extra={'mcp_error': self.to_dict()})
+
+def to_dict(self) -> Dict[str, Any]:
+    return {'error_type': self.__class__.__name__, 'message': self.original_message, 'error_code': self.error_code, 'context': self.context, 'timestamp': self.timestamp.isoformat()}
+
+def log_error(self) -> None:
+    """Log the error with appropriate level and context."""
+    logger.error(f'{self.__class__.__name__}: {self.original_message}', extra={'mcp_error': self.to_dict()})
+
+class MCPClient:
+    """
+    Unified MCP client for communicating with single or multiple MCP servers.
+    Provides improved security, error handling, and async context management.
+
+    Accepts a list of server configurations and automatically handles:
+    - Consistent tool naming: Always uses prefixed names (mcp__server__tool)
+    - Circuit breaker protection for all servers
+    - Parallel connection for multi-server scenarios
+    - Sequential connection for single-server scenarios
+    """
+
+    def __init__(self, server_configs: List[Dict[str, Any]], *, timeout_seconds: int=30, allowed_tools: Optional[List[str]]=None, exclude_tools: Optional[List[str]]=None, status_callback: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]]=None, hooks: Optional[Dict[HookType, List[Callable[[str, Dict[str, Any]], Awaitable[bool]]]]]=None):
+        """
+        Initialize MCP client.
+
+        Args:
+            server_configs: List of server configuration dicts (always a list, even for single server)
+            timeout_seconds: Timeout for operations in seconds
+            allowed_tools: Optional list of tool names to include (if None, includes all)
+            exclude_tools: Optional list of tool names to exclude (if None, excludes none)
+            status_callback: Optional async callback for status updates
+            hooks: Optional dict mapping hook types to lists of hook functions
+        """
+        self._server_configs = [MCPConfigValidator.validate_server_config(config) for config in server_configs]
+        self.name = self._server_configs[0]['name']
+        self.timeout_seconds = timeout_seconds
+        self.allowed_tools = allowed_tools
+        self.exclude_tools = exclude_tools
+        self.status_callback = status_callback
+        self.hooks = hooks or {}
+        self._circuit_breaker = MCPCircuitBreaker()
+        self._server_clients: Dict[str, _ServerClient] = {}
+        for config in self._server_configs:
+            self._server_clients[config['name']] = _ServerClient()
+        self.tools: Dict[str, mcp_types.Tool] = {}
+        self._tool_to_server: Dict[str, str] = {}
+        self._initialized = False
+        self._cleanup_done = False
+        self._cleanup_lock = asyncio.Lock()
+        self._context_managed = False
+
+    @property
+    def session(self) -> Optional[ClientSession]:
+        """Return first server's session for backward compatibility."""
+        if self._server_configs:
+            first_server_name = self._server_configs[0]['name']
+            server_client = self._server_clients.get(first_server_name)
+            if server_client:
+                return server_client.session
+        return None
+
+    def _get_server_session(self, server_name: str) -> ClientSession:
+        """Get session for server, raising error if not connected."""
+        server_client = self._server_clients.get(server_name)
+        if not server_client or not server_client.session:
+            raise MCPConnectionError(f"Server '{server_name}' not connected", server_name=server_name)
+        return server_client.session
+
+    async def connect(self) -> None:
+        """Connect to MCP server(s) and discover capabilities with circuit breaker integration."""
+        if self._initialized:
+            return
+        logger.info(f'Connecting to {len(self._server_configs)} MCP server(s)...')
+        if self.status_callback:
+            await self.status_callback('connecting', {'message': f'Connecting to {len(self._server_configs)} MCP server(s)', 'server_count': len(self._server_configs)})
+        if len(self._server_configs) > 1:
+            await self._connect_all_parallel()
+        else:
+            await self._connect_single()
+        self._initialized = any((sc.initialized for sc in self._server_clients.values()))
+        successful_count = len([sc for sc in self._server_clients.values() if sc.initialized])
+        failed_count = len(self._server_configs) - successful_count
+        if self.status_callback:
+            await self.status_callback('connection_summary', {'message': f'Connected to {successful_count}/{len(self._server_configs)} server(s)' + (f' ({failed_count} failed)' if failed_count > 0 else ''), 'successful_count': successful_count, 'failed_count': failed_count, 'total_count': len(self._server_configs), 'tools_count': len(self.tools)})
+
+    async def _connect_server(self, server_name: str, config: Dict[str, Any]) -> bool:
+        """Connect to a single server with circuit breaker integration.
+
+        Returns:
+            True on success, False on failure
+        """
+        server_client = self._server_clients[server_name]
+        async with server_client.connection_lock:
+            if self._circuit_breaker.should_skip_server(server_name):
+                logger.warning(f'Skipping server {server_name} due to circuit breaker')
+                server_client.connection_state = ConnectionState.FAILED
+                return False
+            server_client.connection_state = ConnectionState.CONNECTING
+            try:
+                server_client.manager_task = asyncio.create_task(self._run_manager(server_name, config))
+                await asyncio.wait_for(server_client.connected_event.wait(), timeout=30.0)
+                if not server_client.initialized or server_client.connection_state != ConnectionState.CONNECTED:
+                    raise MCPConnectionError(f'Failed to connect to {server_name}')
+                self._circuit_breaker.record_success(server_name)
+                logger.info(f"✅ MCP server '{server_name}' connected successfully!")
+                return True
+            except Exception as e:
+                self._circuit_breaker.record_failure(server_name)
+                server_client.connection_state = ConnectionState.FAILED
+                logger.error(f'Failed to connect to {server_name}: {e}')
+                if server_client.manager_task and (not server_client.manager_task.done()):
+                    server_client.disconnect_event.set()
+                    try:
+                        await asyncio.wait_for(server_client.manager_task, timeout=5.0)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Manager task for {server_name} didn't shutdown gracefully, cancelling")
+                        server_client.manager_task.cancel()
+                        try:
+                            await server_client.manager_task
+                        except asyncio.CancelledError:
+                            pass
+                    except Exception as cleanup_error:
+                        logger.error(f'Error cleaning up manager task for {server_name}: {cleanup_error}')
+                    finally:
+                        server_client.manager_task = None
+                return False
+
+    async def _connect_single(self) -> None:
+        """Connect to single server."""
+        config = self._server_configs[0]
+        server_name = config['name']
+        success = await self._connect_server(server_name, config)
+        if not success:
+            raise MCPConnectionError(f'Failed to connect to {server_name}')
+
+    async def _connect_all_parallel(self) -> None:
+        """Connect to all servers in parallel."""
+        tasks = [self._connect_server(c['name'], c) for c in self._server_configs]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        successful = sum((1 for r in results if r is True))
+        logger.info(f'Connected to {successful}/{len(self._server_configs)} servers')
+
+    def _create_transport_context(self, config: Dict[str, Any]):
+        """Create the appropriate transport context manager based on config."""
+        transport_type = config.get('type', 'stdio')
+        server_name = config['name']
+        if transport_type == 'stdio':
+            command = config.get('command', [])
+            args = config.get('args', [])
+            logger.debug(f'Setting up stdio transport for {server_name}: command={command}, args={args}')
+            if isinstance(command, str):
+                full_command = prepare_command(command)
+                if args:
+                    full_command.extend(args)
+            elif isinstance(command, list):
+                full_command = command + (args or [])
+            else:
+                full_command = args or []
+            if not full_command:
+                raise MCPConnectionError(f'No command specified for stdio transport in {server_name}')
+            env = config.get('env', {})
+            if env:
+                env = {**get_default_environment(), **env}
+            else:
+                env = get_default_environment()
+            substituted_args = []
+            for arg in full_command[1:] if len(full_command) > 1 else []:
+                if isinstance(arg, str):
+                    try:
+                        substituted_args.append(substitute_env_variables(arg))
+                    except ValueError as e:
+                        raise MCPConnectionError(f'Environment variable substitution failed in args: {e}', server_name=server_name) from e
+                else:
+                    substituted_args.append(arg)
+            for key, value in list(env.items()):
+                if isinstance(value, str):
+                    try:
+                        env[key] = substitute_env_variables(value)
+                    except ValueError as e:
+                        raise MCPConnectionError(f'Environment variable substitution failed for {key}: {e}', server_name=server_name) from e
+            cwd = config.get('cwd')
+            server_params = StdioServerParameters(command=full_command[0], args=substituted_args, env=env, cwd=cwd)
+            from ..logger_config import get_log_session_dir
+            log_dir = get_log_session_dir()
+            errlog_path = log_dir / f'mcp_{server_name}_stderr.log'
+            errlog_file = open(errlog_path, 'w', encoding='utf-8')
+            if not hasattr(self, '_errlog_files'):
+                self._errlog_files = {}
+            self._errlog_files[server_name] = errlog_file
+            return stdio_client(server_params, errlog=errlog_file)
+        elif transport_type == 'streamable-http':
+            url = config['url']
+            headers = config.get('headers', {})
+            substituted_headers = {}
+            for key, value in headers.items():
+                if isinstance(value, str):
+                    try:
+                        substituted_headers[key] = substitute_env_variables(value)
+                    except ValueError as e:
+                        raise MCPConnectionError(f'Environment variable substitution failed in header {key}: {e}', server_name=server_name) from e
+                else:
+                    substituted_headers[key] = value
+            timeout_raw = config.get('timeout', self.timeout_seconds)
+            http_read_timeout_raw = config.get('http_read_timeout', 60 * 5)
+            timeout = _ensure_timedelta(timeout_raw, self.timeout_seconds)
+            http_read_timeout = _ensure_timedelta(http_read_timeout_raw, 60 * 5)
+            return streamablehttp_client(url=url, headers=substituted_headers, timeout=timeout, sse_read_timeout=http_read_timeout)
+        else:
+            raise MCPConnectionError(f'Unsupported transport type: {transport_type}')
+
+    async def _run_manager(self, server_name: str, config: Dict[str, Any]) -> None:
+        """Background task that owns the transport and session contexts for a server."""
+        server_client = self._server_clients[server_name]
+        connection_successful = False
+        try:
+            transport_ctx = self._create_transport_context(config)
+            async with transport_ctx as session_params:
+                read, write = session_params[0:2]
+                session_timeout_timedelta = _ensure_timedelta(self.timeout_seconds, 30.0)
+                async with ClientSession(read, write, read_timeout_seconds=session_timeout_timedelta) as session:
+                    server_client.session = session
+                    await session.initialize()
+                    await self._discover_capabilities(server_name, config)
+                    server_client.initialized = True
+                    server_client.connection_state = ConnectionState.CONNECTED
+                    connection_successful = True
+                    server_client.connected_event.set()
+                    logger.info(f"✅ MCP server '{server_name}' connected successfully!")
+                    if self.status_callback:
+                        await self.status_callback('connected', {'server': server_name, 'message': f"Server '{server_name}' ready"})
+                    await server_client.disconnect_event.wait()
+        except Exception as e:
+            logger.error(f'MCP manager error for {server_name}: {e}', exc_info=True)
+            if self.status_callback:
+                await self.status_callback('error', {'server': server_name, 'message': f"Failed to connect to MCP server '{server_name}': {e}", 'error': str(e)})
+            if not server_client.connected_event.is_set():
+                server_client.connected_event.set()
+        finally:
+            server_client.initialized = False
+            server_client.session = None
+            if not connection_successful:
+                server_client.connection_state = ConnectionState.FAILED
+                if not server_client.connected_event.is_set():
+                    server_client.connected_event.set()
+            else:
+                server_client.connection_state = ConnectionState.DISCONNECTED
+
+    async def _discover_capabilities(self, server_name: str, config: Dict[str, Any]) -> None:
+        """Discover server capabilities (tools, resources, prompts) with name prefixing for multi-server."""
+        logger.debug(f'Discovering capabilities for {server_name}')
+        session = self._get_server_session(server_name)
+        try:
+            server_exclude = config.get('exclude_tools', [])
+            combined_exclude = list(set((self.exclude_tools or []) + server_exclude))
+            server_allowed = config.get('allowed_tools')
+            combined_allowed = server_allowed if server_allowed is not None else self.allowed_tools
+            available_tools = await session.list_tools()
+            tools_list = getattr(available_tools, 'tools', []) if available_tools else []
+            for tool in tools_list:
+                if combined_exclude and tool.name in combined_exclude:
+                    continue
+                if combined_allowed is None or tool.name in combined_allowed:
+                    prefixed_name = sanitize_tool_name(tool.name, server_name)
+                    self.tools[prefixed_name] = tool
+                    self._tool_to_server[prefixed_name] = server_name
+            logger.info(f'Discovered capabilities for {server_name}: {len([t for t, s in self._tool_to_server.items() if s == server_name])} tools')
+        except Exception as e:
+            logger.error(f'Failed to discover server capabilities for {server_name}: {e}', exc_info=True)
+            raise MCPConnectionError(f'Failed to discover server capabilities: {e}') from e
+
+    async def disconnect(self) -> None:
+        """Disconnect from all MCP servers."""
+        if not self._initialized:
+            return
+        tasks = [self._disconnect_one(name, client) for name, client in self._server_clients.items() if client.connection_state != ConnectionState.DISCONNECTED]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._initialized = False
+
+    async def _disconnect_one(self, server_name: str, server_client: _ServerClient) -> None:
+        """Disconnect a single server."""
+        server_client.connection_state = ConnectionState.DISCONNECTING
+        if server_client.manager_task and (not server_client.manager_task.done()):
+            server_client.disconnect_event.set()
+            try:
+                await asyncio.wait_for(server_client.manager_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"Manager task for {server_name} didn't shutdown gracefully, cancelling")
+                server_client.manager_task.cancel()
+                try:
+                    await server_client.manager_task
+                except asyncio.CancelledError:
+                    logger.debug(f'Manager task for {server_name} cancelled successfully')
+            except Exception as e:
+                logger.error(f'Error during manager task shutdown for {server_name}: {e}')
+            finally:
+                server_client.manager_task = None
+        server_client.initialized = False
+        server_client.connection_state = ConnectionState.DISCONNECTED
+
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
+        """
+        Call an MCP tool with validation and timeout handling.
+
+        Args:
+            tool_name: Name of the tool to call (always prefixed as mcp__server__toolname)
+            arguments: Tool arguments
+
+        Returns:
+            Tool execution result
+
+        Raises:
+            MCPError: If tool is not available
+            MCPConnectionError: If no active session
+            MCPValidationError: If arguments are invalid
+            MCPTimeoutError: If tool call times out
+            MCPServerError: If tool execution fails
+        """
+        if tool_name not in self.tools:
+            available_tools = list(self.tools.keys())
+            raise MCPError(f"Tool '{tool_name}' not available", context={'available_tools': available_tools, 'total': len(available_tools)})
+        try:
+            validated_arguments = validate_tool_arguments(arguments)
+        except ValueError as e:
+            raise MCPValidationError(f'Invalid tool arguments: {e}', field='arguments', value=arguments, context={'tool_name': tool_name}) from e
+        pre_tool_hooks = self.hooks.get(HookType.PRE_TOOL_USE, [])
+        for hook in pre_tool_hooks:
+            try:
+                allowed = await hook(tool_name, validated_arguments)
+                if not allowed:
+                    raise MCPValidationError('Tool call blocked by pre-tool hook', field='tool_name', value=tool_name, context={'arguments': validated_arguments})
+            except Exception as e:
+                if isinstance(e, MCPValidationError):
+                    raise
+                logger.warning(f'Pre-tool hook error for {tool_name}: {e}', exc_info=True)
+        server_name = self._tool_to_server.get(tool_name)
+        if not server_name:
+            raise MCPError(f"Tool '{tool_name}' not mapped to any server")
+        original_tool_name = tool_name[len(f'mcp__{server_name}__'):]
+        session = self._get_server_session(server_name)
+        logger.debug(f'Calling tool {original_tool_name} on {server_name} with arguments: {validated_arguments}')
+        if self.status_callback:
+            await self.status_callback('tool_call_start', {'server': server_name, 'tool': original_tool_name, 'message': f"Calling tool '{original_tool_name}' on server '{server_name}'", 'arguments': validated_arguments})
+        try:
+            result = await asyncio.wait_for(session.call_tool(original_tool_name, validated_arguments), timeout=self.timeout_seconds)
+            logger.debug(f'Tool {original_tool_name} completed successfully on {server_name}')
+            if self.status_callback:
+                await self.status_callback('tool_call_success', {'server': server_name, 'tool': original_tool_name, 'message': f"Tool '{original_tool_name}' executed successfully"})
+            return result
+        except asyncio.TimeoutError:
+            if self.status_callback:
+                await self.status_callback('tool_call_timeout', {'server': server_name, 'tool': original_tool_name, 'message': f"Tool '{original_tool_name}' timed out after {self.timeout_seconds} seconds", 'timeout': self.timeout_seconds})
+            self._circuit_breaker.record_failure(server_name)
+            raise MCPTimeoutError(f'Tool call timed out after {self.timeout_seconds} seconds', timeout_seconds=self.timeout_seconds, operation=f'call_tool({original_tool_name})', context={'tool_name': original_tool_name, 'server_name': server_name})
+        except Exception as e:
+            logger.error(f'Tool call failed for {original_tool_name} on {server_name}: {e}', exc_info=True)
+            self._circuit_breaker.record_failure(server_name)
+            if self.status_callback:
+                await self.status_callback('tool_call_error', {'server': server_name, 'tool': original_tool_name, 'message': f"Tool '{original_tool_name}' failed: {e}", 'error': str(e)})
+            raise MCPServerError(f'Tool call failed: {e}', server_name=server_name, context={'tool_name': original_tool_name, 'arguments': validated_arguments}) from e
+
+    def get_available_tools(self) -> List[str]:
+        """Get list of available tool names."""
+        return list(self.tools.keys())
+
+    def is_connected(self) -> bool:
+        """Check if any servers are connected."""
+        return self._initialized and any((sc.initialized for sc in self._server_clients.values()))
+
+    def get_server_names(self) -> List[str]:
+        """Get list of connected server names."""
+        return [name for name, sc in self._server_clients.items() if sc.initialized]
+
+    def get_active_sessions(self) -> List[ClientSession]:
+        """Return active MCP ClientSession objects for all connected servers."""
+        sessions = []
+        for server_client in self._server_clients.values():
+            if server_client.session is not None and server_client.initialized:
+                sessions.append(server_client.session)
+        return sessions
+
+    async def health_check_all(self) -> Dict[str, bool]:
+        """
+        Perform health check on all connected MCP servers.
+
+        Returns:
+            Dictionary mapping server names to health status
+        """
+        health_status = {}
+        for server_name, server_client in self._server_clients.items():
+            if not server_client.initialized or not server_client.session:
+                health_status[server_name] = False
+                continue
+            try:
+                await server_client.session.list_tools()
+                health_status[server_name] = True
+            except Exception as e:
+                logger.warning(f'Health check failed for {server_name}: {e}')
+                health_status[server_name] = False
+        return health_status
+
+    async def health_check(self) -> bool:
+        """
+        Perform a health check on all servers.
+
+        Returns:
+            True if all connected servers are healthy, False otherwise
+        """
+        health_status = await self.health_check_all()
+        return all(health_status.values()) if health_status else False
+
+    async def _reconnect_failed_servers(self, max_retries: int=3) -> Dict[str, bool]:
+        """
+        Attempt to reconnect any failed servers with circuit breaker integration.
+
+        Args:
+            max_retries: Maximum number of reconnection attempts per server
+
+        Returns:
+            Dictionary mapping server names to reconnection success status
+        """
+        health_status = await self.health_check_all()
+        reconnect_results = {}
+        for server_name, is_healthy in health_status.items():
+            if not is_healthy:
+                if self._circuit_breaker.should_skip_server(server_name):
+                    logger.warning(f'Skipping reconnection for {server_name} due to circuit breaker')
+                    reconnect_results[server_name] = False
+                    continue
+                logger.info(f'Attempting to reconnect failed server: {server_name}')
+                config = next((c for c in self._server_configs if c['name'] == server_name), None)
+                if not config:
+                    reconnect_results[server_name] = False
+                    continue
+                success = False
+                for attempt in range(max_retries):
+                    try:
+                        if attempt > 0:
+                            await asyncio.sleep(1.0 * 2 ** attempt)
+                        server_client = self._server_clients[server_name]
+                        await self._disconnect_one(server_name, server_client)
+                        server_client.connected_event = asyncio.Event()
+                        server_client.disconnect_event = asyncio.Event()
+                        server_client.manager_task = asyncio.create_task(self._run_manager(server_name, config))
+                        await asyncio.wait_for(server_client.connected_event.wait(), timeout=30.0)
+                        if server_client.initialized:
+                            self._circuit_breaker.record_success(server_name)
+                            success = True
+                            logger.info(f'Successfully reconnected server: {server_name}')
+                            break
+                    except Exception as e:
+                        logger.warning(f'Reconnection attempt {attempt + 1} failed for {server_name}: {e}')
+                        self._circuit_breaker.record_failure(server_name)
+                reconnect_results[server_name] = success
+            else:
+                reconnect_results[server_name] = True
+        return reconnect_results
+
+    async def reconnect(self, max_retries: int=3) -> bool:
+        """
+        Attempt to reconnect all servers with circuit breaker integration.
+
+        Args:
+            max_retries: Maximum number of reconnection attempts
+                Uses exponential backoff between retries: 2s, 4s, 8s, 16s...
+
+        Returns:
+            True if all reconnections successful, False otherwise
+        """
+        results = await self._reconnect_failed_servers(max_retries)
+        return all(results.values()) if results else False
+
+    async def _cleanup(self) -> None:
+        """Comprehensive cleanup of all resources."""
+        async with self._cleanup_lock:
+            if self._cleanup_done:
+                return
+            logger.debug('Starting cleanup for MCPClient')
+            try:
+                await self.disconnect()
+                if hasattr(self, '_errlog_files'):
+                    for server_name, errlog_file in self._errlog_files.items():
+                        try:
+                            errlog_file.close()
+                        except Exception as e:
+                            logger.debug(f'Error closing errlog file for {server_name}: {e}')
+                    self._errlog_files.clear()
+                self.tools.clear()
+                self._tool_to_server.clear()
+                self._cleanup_done = True
+                logger.debug('Cleanup completed for MCPClient')
+            except Exception as e:
+                logger.error(f'Error during cleanup: {e}')
+                raise
+
+    async def __aenter__(self) -> 'MCPClient':
+        """Async context manager entry."""
+        self._context_managed = True
+        await self.connect()
+        return self
+
+    async def __aexit__(self, _exc_type: Optional[type], _exc_val: Optional[BaseException], _exc_tb: Optional[TracebackType]) -> None:
+        """Async context manager exit."""
+        try:
+            await self._cleanup()
+        except Exception as e:
+            logger.error(f'Error during context manager cleanup: {e}')
+        finally:
+            self._context_managed = False
+
+    @classmethod
+    async def create_and_connect(cls, server_configs: List[Dict[str, Any]], *, timeout_seconds: int=30, allowed_tools: Optional[List[str]]=None, exclude_tools: Optional[List[str]]=None) -> 'MCPClient':
+        """
+        Create and connect MCP client in one step.
+
+        Args:
+            server_configs: List of server configuration dictionaries
+            timeout_seconds: Timeout for operations in seconds
+            allowed_tools: Optional list of tool names to include
+            exclude_tools: Optional list of tool names to exclude
+
+        Returns:
+            Connected MCPClient instance
+        """
+        client = cls(server_configs, timeout_seconds=timeout_seconds, allowed_tools=allowed_tools, exclude_tools=exclude_tools)
+        await client.connect()
+        return client
+
+def get_available_tools(self) -> List[str]:
+    """Get list of available tool names."""
+    return list(self.tools.keys())
+
+class FilesystemManager:
+    """
+    Manages filesystem operations for backends with MCP filesystem support.
+
+    This class handles:
+    - Workspace directory lifecycle (creation, cleanup)
+    - Snapshot storage and restoration for context sharing
+    - Path management for MCP filesystem server configuration
+    """
+
+    def __init__(self, cwd: str, agent_temporary_workspace_parent: str=None, context_paths: List[Dict[str, Any]]=None, context_write_access_enabled: bool=False, enforce_read_before_delete: bool=True, enable_image_generation: bool=False, enable_mcp_command_line: bool=False, command_line_allowed_commands: List[str]=None, command_line_blocked_commands: List[str]=None, command_line_execution_mode: str='local', command_line_docker_image: str='massgen/mcp-runtime:latest', command_line_docker_memory_limit: Optional[str]=None, command_line_docker_cpu_limit: Optional[float]=None, command_line_docker_network_mode: str='none', enable_audio_generation: bool=False):
+        """
+        Initialize FilesystemManager.
+
+        Args:
+            cwd: Working directory path for the agent
+            agent_temporary_workspace_parent: Parent directory for temporary workspaces
+            context_paths: List of context path configurations for access control
+            context_write_access_enabled: Whether write access is enabled for context paths
+            enforce_read_before_delete: Whether to enforce read-before-delete policy for workspace files
+            enable_image_generation: Whether to enable image generation tools
+            enable_mcp_command_line: Whether to enable MCP command line execution tool
+            command_line_allowed_commands: Whitelist of allowed command patterns (regex)
+            command_line_blocked_commands: Blacklist of blocked command patterns (regex)
+            command_line_execution_mode: Execution mode - "local" or "docker"
+            command_line_docker_image: Docker image to use for containers
+            command_line_docker_memory_limit: Memory limit for Docker containers (e.g., "2g")
+            command_line_docker_cpu_limit: CPU limit for Docker containers (e.g., 2.0 for 2 CPUs)
+            command_line_docker_network_mode: Network mode for Docker containers (none/bridge/host)
+        """
+        self.agent_id = None
+        self.enable_image_generation = enable_image_generation
+        self.enable_mcp_command_line = enable_mcp_command_line
+        self.command_line_allowed_commands = command_line_allowed_commands
+        self.command_line_blocked_commands = command_line_blocked_commands
+        self.command_line_execution_mode = command_line_execution_mode
+        self.command_line_docker_image = command_line_docker_image
+        self.command_line_docker_memory_limit = command_line_docker_memory_limit
+        self.command_line_docker_cpu_limit = command_line_docker_cpu_limit
+        self.command_line_docker_network_mode = command_line_docker_network_mode
+        self.docker_manager = None
+        if enable_mcp_command_line and command_line_execution_mode == 'docker':
+            from ._docker_manager import DockerManager
+            self.docker_manager = DockerManager(image=command_line_docker_image, network_mode=command_line_docker_network_mode, memory_limit=command_line_docker_memory_limit, cpu_limit=command_line_docker_cpu_limit)
+        self.enable_audio_generation = enable_audio_generation
+        self.path_permission_manager = PathPermissionManager(context_write_access_enabled=context_write_access_enabled, enforce_read_before_delete=enforce_read_before_delete)
+        if context_paths:
+            self.path_permission_manager.add_context_paths(context_paths)
+        self.agent_temporary_workspace_parent = agent_temporary_workspace_parent
+        if self.agent_temporary_workspace_parent:
+            temp_parent = self.agent_temporary_workspace_parent
+            temp_parent_path = Path(temp_parent)
+            if not temp_parent_path.is_absolute():
+                temp_parent_path = temp_parent_path.resolve()
+            self.agent_temporary_workspace_parent = temp_parent_path
+            self.clear_temp_workspace()
+        self.cwd = self._setup_workspace(cwd)
+        self.path_permission_manager.add_path(self.cwd, Permission.WRITE, 'workspace')
+        self.path_permission_manager.add_path(self.agent_temporary_workspace_parent, Permission.READ, 'temp_workspace')
+        self.snapshot_storage = None
+        self.agent_temporary_workspace = None
+        self._using_temporary = False
+        self._original_cwd = self.cwd
+
+    def setup_orchestration_paths(self, agent_id: str, snapshot_storage: Optional[str]=None, agent_temporary_workspace: Optional[str]=None) -> None:
+        """
+        Setup orchestration-specific paths for snapshots and temporary workspace.
+        Called by orchestrator to configure paths for this specific orchestration.
+
+        Args:
+            agent_id: The agent identifier for this orchestration
+            snapshot_storage: Base path for storing workspace snapshots
+            agent_temporary_workspace: Base path for temporary workspace during context sharing
+        """
+        logger.info(f'[FilesystemManager.setup_orchestration_paths] Called for agent_id={agent_id}, snapshot_storage={snapshot_storage}, agent_temporary_workspace={agent_temporary_workspace}')
+        self.agent_id = agent_id
+        if snapshot_storage and self.agent_id:
+            self.snapshot_storage = Path(snapshot_storage) / self.agent_id
+            self.snapshot_storage.mkdir(parents=True, exist_ok=True)
+        if agent_temporary_workspace and self.agent_id:
+            self.agent_temporary_workspace = self._setup_workspace(self.agent_temporary_workspace_parent / self.agent_id)
+        if self.agent_id:
+            log_session_dir = get_log_session_dir()
+            if log_session_dir:
+                agent_log_dir = log_session_dir / self.agent_id
+                agent_log_dir.mkdir(parents=True, exist_ok=True)
+        if self.docker_manager and self.agent_id:
+            context_paths = self.path_permission_manager.get_context_paths()
+            self.docker_manager.create_container(agent_id=self.agent_id, workspace_path=self.cwd, temp_workspace_path=self.agent_temporary_workspace_parent if self.agent_temporary_workspace_parent else None, context_paths=context_paths)
+            logger.info(f'[FilesystemManager] Docker container created for agent {self.agent_id}')
+
+    def update_backend_mcp_config(self, backend_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update MCP server configuration with agent_id after it's available.
+
+        This should be called by the backend after setup_orchestration_paths() sets agent_id.
+
+        Args:
+            backend_config: Backend configuration dict containing mcp_servers
+
+        Returns:
+            Updated backend configuration
+        """
+        if not self.enable_mcp_command_line or self.command_line_execution_mode != 'docker':
+            return backend_config
+        if not self.agent_id:
+            logger.warning('[FilesystemManager] agent_id not set, cannot update MCP config for Docker mode')
+            return backend_config
+        mcp_servers = backend_config.get('mcp_servers', [])
+        for server in mcp_servers:
+            if isinstance(server, dict) and server.get('name') == 'command_line':
+                args = server.get('args', [])
+                if '--agent-id' not in args:
+                    args.extend(['--agent-id', self.agent_id])
+                    server['args'] = args
+                    logger.info(f'[FilesystemManager] Updated command_line MCP server config with agent_id: {self.agent_id}')
+                break
+        return backend_config
+
+    def _setup_workspace(self, cwd: str) -> Path:
+        """Setup workspace directory, creating if needed and clearing existing files safely."""
+        Path(cwd)
+        workspace = Path(cwd).resolve()
+        if not workspace.is_absolute():
+            raise AssertionError('Workspace must be absolute')
+        if workspace == Path('/') or len(workspace.parts) < 3:
+            raise AssertionError(f'Refusing unsafe workspace path: {workspace}')
+        workspace.mkdir(parents=True, exist_ok=True)
+        if workspace.exists() and workspace.is_dir():
+            for item in workspace.iterdir():
+                if item.is_symlink():
+                    logger.warning(f'[FilesystemManager.save_snapshot] Skipping symlink during clear: {item}')
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
+        return workspace
+
+    def get_mcp_filesystem_config(self) -> Dict[str, Any]:
+        """
+        Generate MCP filesystem server configuration.
+
+        Returns:
+            Dictionary with MCP server configuration for filesystem access
+        """
+        paths = self.path_permission_manager.get_mcp_filesystem_paths()
+        config = {'name': 'filesystem', 'type': 'stdio', 'command': 'npx', 'args': ['-y', '@modelcontextprotocol/server-filesystem'] + paths, 'cwd': str(self.cwd), 'exclude_tools': ['read_media_file']}
+        return config
+
+    def get_workspace_tools_mcp_config(self) -> Dict[str, Any]:
+        """
+        Generate workspace tools MCP server configuration.
+
+        Returns:
+            Dictionary with MCP server configuration for workspace tools (copy, delete, compare)
+        """
+        context_paths = self.path_permission_manager.get_context_paths()
+        ','.join([cp['path'] for cp in context_paths])
+        script_path = Path(wc_module.__file__).resolve()
+        paths = self.path_permission_manager.get_mcp_filesystem_paths()
+        env = {'FASTMCP_SHOW_CLI_BANNER': 'false'}
+        config = {'name': 'workspace_tools', 'type': 'stdio', 'command': 'fastmcp', 'args': ['run', f'{script_path}:create_server'] + ['--', '--allowed-paths'] + paths, 'env': env, 'cwd': str(self.cwd)}
+        if not self.enable_image_generation:
+            config['exclude_tools'] = ['generate_and_store_image_with_input_images', 'generate_and_store_image_no_input_images']
+        if not self.enable_audio_generation:
+            if 'exclude_tools' not in config:
+                config['exclude_tools'] = []
+            config['exclude_tools'].extend(['generate_and_store_audio_with_input_audios', 'generate_and_store_audio_no_input_audios'])
+        return config
+
+    def get_command_line_mcp_config(self) -> Dict[str, Any]:
+        """
+        Generate command line execution MCP server configuration.
+
+        Returns:
+            Dictionary with MCP server configuration for command execution
+            (supports bash on Unix/Mac, cmd/PowerShell on Windows, and Docker isolation)
+        """
+        script_path = Path(ce_module.__file__).resolve()
+        paths = self.path_permission_manager.get_mcp_filesystem_paths()
+        env = {'FASTMCP_SHOW_CLI_BANNER': 'false'}
+        if 'DOCKER_HOST' in os.environ:
+            env['DOCKER_HOST'] = os.environ['DOCKER_HOST']
+        config = {'name': 'command_line', 'type': 'stdio', 'command': 'fastmcp', 'args': ['run', f'{script_path}:create_server', '--', '--allowed-paths'] + paths, 'env': env, 'cwd': str(self.cwd)}
+        config['args'].extend(['--execution-mode', self.command_line_execution_mode])
+        if self.command_line_execution_mode == 'docker' and self.agent_id:
+            config['args'].extend(['--agent-id', self.agent_id])
+        if self.command_line_allowed_commands:
+            config['args'].extend(['--allowed-commands'] + self.command_line_allowed_commands)
+        if self.command_line_blocked_commands:
+            config['args'].extend(['--blocked-commands'] + self.command_line_blocked_commands)
+        return config
+
+    def inject_filesystem_mcp(self, backend_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Inject filesystem and workspace tools MCP servers into backend configuration.
+
+        Args:
+            backend_config: Original backend configuration
+
+        Returns:
+            Modified configuration with MCP servers added
+        """
+        mcp_servers = backend_config.get('mcp_servers', [])
+        if isinstance(mcp_servers, dict):
+            existing_names = list(mcp_servers.keys())
+            converted_servers = []
+            for name, server_config in mcp_servers.items():
+                if isinstance(server_config, dict):
+                    server = server_config.copy()
+                    server['name'] = name
+                    converted_servers.append(server)
+            mcp_servers = converted_servers
+        elif isinstance(mcp_servers, list):
+            existing_names = [server.get('name') for server in mcp_servers if isinstance(server, dict)]
+        else:
+            existing_names = []
+            mcp_servers = []
+        try:
+            if 'filesystem' not in existing_names:
+                mcp_servers.append(self.get_mcp_filesystem_config())
+            else:
+                logger.warning('[FilesystemManager.inject_filesystem_mcp] Custom filesystem MCP server already present')
+            if 'workspace_tools' not in existing_names:
+                mcp_servers.append(self.get_workspace_tools_mcp_config())
+            else:
+                logger.warning('[FilesystemManager.inject_filesystem_mcp] Custom workspace_tools MCP server already present')
+            if self.enable_mcp_command_line and 'command_line' not in existing_names:
+                mcp_servers.append(self.get_command_line_mcp_config())
+            elif self.enable_mcp_command_line:
+                logger.warning('[FilesystemManager.inject_filesystem_mcp] Custom command_line MCP server already present')
+        except Exception as e:
+            logger.warning(f'[FilesystemManager.inject_filesystem_mcp] Error checking existing MCP servers: {e}')
+        backend_config['mcp_servers'] = mcp_servers
+        return backend_config
+
+    def inject_command_line_mcp(self, backend_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Inject only the command_line MCP server into backend configuration.
+
+        Used for NATIVE backends (like Claude Code) that have built-in filesystem tools
+        but need the execute_command MCP tool when using docker mode for code execution.
+
+        Args:
+            backend_config: Original backend configuration
+
+        Returns:
+            Modified configuration with command_line MCP server added
+        """
+        mcp_servers = backend_config.get('mcp_servers', [])
+        if isinstance(mcp_servers, dict):
+            existing_names = list(mcp_servers.keys())
+            converted_servers = []
+            for name, server_config in mcp_servers.items():
+                if isinstance(server_config, dict):
+                    server = server_config.copy()
+                    server['name'] = name
+                    converted_servers.append(server)
+            mcp_servers = converted_servers
+        elif isinstance(mcp_servers, list):
+            existing_names = [server.get('name') for server in mcp_servers if isinstance(server, dict)]
+        else:
+            existing_names = []
+            mcp_servers = []
+        try:
+            if 'command_line' not in existing_names:
+                mcp_servers.append(self.get_command_line_mcp_config())
+                logger.info('[FilesystemManager.inject_command_line_mcp] Added command_line MCP server for docker mode')
+            else:
+                logger.warning('[FilesystemManager.inject_command_line_mcp] Custom command_line MCP server already present')
+        except Exception as e:
+            logger.warning(f'[FilesystemManager.inject_command_line_mcp] Error adding command_line MCP server: {e}')
+        backend_config['mcp_servers'] = mcp_servers
+        return backend_config
+
+    def get_pre_tool_hooks(self) -> Dict[str, List]:
+        """
+        Get pre-tool hooks configuration for MCP clients.
+
+        Returns:
+            Dict mapping hook types to lists of hook functions
+        """
+
+        async def mcp_hook_wrapper(tool_name: str, tool_args: Dict[str, Any]) -> bool:
+            """Wrapper to adapt our hook signature to MCP client expectations."""
+            allowed, reason = await self.path_permission_manager.pre_tool_use_hook(tool_name, tool_args)
+            if not allowed and reason:
+                logger.warning(f'[FilesystemManager] Tool blocked: {tool_name} - {reason}')
+            return allowed
+        return {HookType.PRE_TOOL_USE: [mcp_hook_wrapper]}
+
+    def get_claude_code_hooks_config(self) -> Dict[str, Any]:
+        """
+        Get Claude Agent SDK hooks configuration.
+
+        Returns:
+            Hooks configuration dict for ClaudeAgentOptions
+        """
+        return self.path_permission_manager.get_claude_code_hooks_config()
+
+    def enable_write_access(self) -> None:
+        """
+        Enable write access for this filesystem manager.
+
+        This should be called for final agents to allow them to modify
+        files with write permissions in their context paths.
+        """
+        self.path_permission_manager.context_write_access_enabled = True
+        logger.info('[FilesystemManager] Context write access enabled - agent can now modify files with write permissions')
+
+    async def save_snapshot(self, timestamp: Optional[str]=None, is_final: bool=False) -> None:
+        """
+        Save a snapshot of the workspace. Always saves to snapshot_storage if available (keeping only most recent).
+        Additionally saves to log directories if logging is enabled.
+        Then, clear the workspace so it is ready for next execution.
+
+        Args:
+            timestamp: Optional timestamp to use for the snapshot directory (if not provided, generates one)
+            is_final: If True, save as final snapshot for presentation
+
+        TODO: reimplement without 'shutil' and 'os' operations for true async, though we may not need to worry about race conditions here since only one agent writes at a time
+        """
+        logger.info(f'[FilesystemManager.save_snapshot] Called for agent_id={self.agent_id}, is_final={is_final}, snapshot_storage={self.snapshot_storage}')
+        source_dir = self.cwd
+        source_path = Path(source_dir)
+        if not source_path.exists() or not source_path.is_dir():
+            logger.warning(f'[FilesystemManager] Source path invalid - exists: {source_path.exists()}, is_dir: {(source_path.is_dir() if source_path.exists() else False)}')
+            return
+        if not any(source_path.iterdir()):
+            logger.warning(f'[FilesystemManager.save_snapshot] Source path {source_path} is empty, skipping snapshot')
+            return
+        try:
+            if self.snapshot_storage:
+                if self.snapshot_storage.exists():
+                    shutil.rmtree(self.snapshot_storage)
+                self.snapshot_storage.mkdir(parents=True, exist_ok=True)
+                items_copied = 0
+                for item in source_path.iterdir():
+                    if item.is_symlink():
+                        logger.warning(f'[FilesystemManager.save_snapshot] Skipping symlink: {item}')
+                        continue
+                    if item.is_file():
+                        shutil.copy2(item, self.snapshot_storage / item.name)
+                    elif item.is_dir():
+                        shutil.copytree(item, self.snapshot_storage / item.name)
+                    items_copied += 1
+                logger.info(f'[FilesystemManager] Saved snapshot with {items_copied} items to {self.snapshot_storage}')
+            log_session_dir = get_log_session_dir()
+            if log_session_dir and self.agent_id:
+                if is_final:
+                    dest_dir = log_session_dir / 'final' / self.agent_id / 'workspace'
+                    if dest_dir.exists():
+                        shutil.rmtree(dest_dir)
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info(f'[FilesystemManager.save_snapshot] Final log snapshot dest_dir: {dest_dir}')
+                else:
+                    if not timestamp:
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                    dest_dir = log_session_dir / self.agent_id / timestamp / 'workspace'
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info(f'[FilesystemManager.save_snapshot] Regular log snapshot dest_dir: {dest_dir}')
+                items_copied = 0
+                for item in source_path.iterdir():
+                    if item.is_symlink():
+                        logger.warning(f'[FilesystemManager.save_snapshot] Skipping symlink: {item}')
+                        continue
+                    if item.is_file():
+                        shutil.copy2(item, dest_dir / item.name)
+                    elif item.is_dir():
+                        shutil.copytree(item, dest_dir / item.name, dirs_exist_ok=True)
+                    items_copied += 1
+                logger.info(f'[FilesystemManager] Saved {('final' if is_final else 'regular')} log snapshot with {items_copied} items to {dest_dir}')
+        except Exception as e:
+            logger.exception(f'[FilesystemManager.save_snapshot] Snapshot failed: {e}')
+            return
+        logger.info('[FilesystemManager] Snapshot saved successfully, workspace preserved for logs and debugging')
+
+    def clear_workspace(self) -> None:
+        """
+        Clear the current workspace to prepare for a new agent execution.
+
+        This should be called at the START of agent execution, not at the end,
+        to preserve workspace contents for logging and debugging.
+        """
+        workspace_path = self.get_current_workspace()
+        if not workspace_path.exists() or not workspace_path.is_dir():
+            logger.debug(f'[FilesystemManager] Workspace does not exist or is not a directory: {workspace_path}')
+            return
+        if workspace_path == Path('/') or len(workspace_path.parts) < 3:
+            logger.error(f'[FilesystemManager] Refusing to clear unsafe workspace path: {workspace_path}')
+            return
+        try:
+            logger.info('[FilesystemManager] Clearing workspace at agent startup. Current contents:')
+            items_to_clear = list(workspace_path.iterdir())
+            for item in items_to_clear:
+                logger.info(f' - {item}')
+                if item.is_symlink():
+                    logger.warning(f'[FilesystemManager] Skipping symlink during clear: {item}')
+                    continue
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
+            logger.info('[FilesystemManager] Workspace cleared successfully, ready for new agent execution')
+        except Exception as e:
+            logger.error(f'[FilesystemManager] Failed to clear workspace: {e}')
+
+    def clear_temp_workspace(self) -> None:
+        """
+        Clear the temporary workspace parent directory at orchestration startup.
+
+        This clears the entire temp workspace parent (e.g., temp_workspaces/),
+        removing all agent directories from previous runs to prevent cross-contamination.
+        """
+        if not self.agent_temporary_workspace_parent:
+            logger.debug('[FilesystemManager] No temp workspace parent configured to clear')
+            return
+        if not self.agent_temporary_workspace_parent.exists():
+            logger.debug(f'[FilesystemManager] Temp workspace parent does not exist: {self.agent_temporary_workspace_parent}')
+            return
+        if self.agent_temporary_workspace_parent == Path('/') or len(self.agent_temporary_workspace_parent.parts) < 3:
+            logger.error(f'[FilesystemManager] Refusing to clear unsafe temp workspace parent path: {self.agent_temporary_workspace_parent}')
+            return
+        try:
+            logger.info(f'[FilesystemManager] Clearing temp workspace parent at orchestration startup: {self.agent_temporary_workspace_parent}')
+            items_to_clear = list(self.agent_temporary_workspace_parent.iterdir())
+            for item in items_to_clear:
+                logger.info(f' - Removing temp workspace item: {item}')
+                if item.is_symlink():
+                    logger.warning(f'[FilesystemManager] Skipping symlink during temp clear: {item}')
+                    continue
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
+            logger.info('[FilesystemManager] Temp workspace parent cleared successfully')
+        except Exception as e:
+            logger.error(f'[FilesystemManager] Failed to clear temp workspace parent: {e}')
+
+    async def copy_snapshots_to_temp_workspace(self, all_snapshots: Dict[str, Path], agent_mapping: Dict[str, str]) -> Optional[Path]:
+        """
+        Copy snapshots from multiple agents to temporary workspace for context sharing.
+
+        This method is called by the orchestrator before starting an agent that needs context from others.
+        It copies the latest snapshots from log directories to a temporary workspace.
+
+        Args:
+            all_snapshots: Dictionary mapping agent_id to snapshot path (from log directories)
+            agent_mapping: Dictionary mapping real agent_id to anonymous agent_id
+
+        Returns:
+            Path to the temporary workspace with restored snapshots
+
+        TODO: reimplement without 'shutil' and 'os' operations for true async
+        """
+        if not self.agent_temporary_workspace:
+            return None
+        if self.agent_temporary_workspace.exists():
+            shutil.rmtree(self.agent_temporary_workspace)
+        self.agent_temporary_workspace.mkdir(parents=True, exist_ok=True)
+        for agent_id, snapshot_path in all_snapshots.items():
+            if snapshot_path.exists() and snapshot_path.is_dir():
+                anon_id = agent_mapping.get(agent_id, agent_id)
+                dest_dir = self.agent_temporary_workspace / anon_id
+                if any(snapshot_path.iterdir()):
+                    shutil.copytree(snapshot_path, dest_dir, dirs_exist_ok=True)
+        return self.agent_temporary_workspace
+
+    def _log_workspace_contents(self, workspace_path: Path, workspace_name: str, context: str='') -> None:
+        """
+        Log the contents of a workspace directory for visibility.
+
+        Args:
+            workspace_path: Path to the workspace to log
+            workspace_name: Human-readable name for the workspace
+            context: Additional context (e.g., "before execution", "after execution")
+        """
+        if not workspace_path or not workspace_path.exists():
+            logger.info(f'[FilesystemManager.{workspace_name}] {context} - Workspace does not exist: {workspace_path}')
+            return
+        try:
+            files = list(workspace_path.rglob('*'))
+            file_paths = [str(f.relative_to(workspace_path)) for f in files if f.is_file()]
+            dir_paths = [str(f.relative_to(workspace_path)) for f in files if f.is_dir()]
+            logger.info(f'[FilesystemManager.{workspace_name}] {context} - Workspace: {workspace_path}')
+            if file_paths:
+                logger.info(f'[FilesystemManager.{workspace_name}] {context} - Files ({len(file_paths)}): {file_paths}')
+            if dir_paths:
+                logger.info(f'[FilesystemManager.{workspace_name}] {context} - Directories ({len(dir_paths)}): {dir_paths}')
+            if not file_paths and (not dir_paths):
+                logger.info(f'[FilesystemManager.{workspace_name}] {context} - Empty workspace')
+        except Exception as e:
+            logger.warning(f'[FilesystemManager.{workspace_name}] {context} - Error reading workspace: {e}')
+
+    def log_current_state(self, context: str='') -> None:
+        """
+        Log the current state of both main and temp workspaces.
+
+        Args:
+            context: Context for the logging (e.g., "before execution", "after answer")
+        """
+        agent_context = f'agent_id={self.agent_id}, {context}' if context else f'agent_id={self.agent_id}'
+        self._log_workspace_contents(self.get_current_workspace(), 'main_workspace', agent_context)
+        if self.agent_temporary_workspace:
+            self._log_workspace_contents(self.agent_temporary_workspace, 'temp_workspace', agent_context)
+
+    def set_temporary_workspace(self, use_temporary: bool=True) -> None:
+        """
+        Switch between main workspace and temporary workspace.
+
+        Args:
+            use_temporary: If True, use temporary workspace; if False, use main workspace
+        """
+        self._using_temporary = use_temporary
+        if use_temporary and self.agent_temporary_workspace:
+            self.cwd = self.agent_temporary_workspace
+        else:
+            self.cwd = self._original_cwd
+
+    def get_current_workspace(self) -> Path:
+        """
+        Get the current active workspace path.
+
+        Returns:
+            Path to the current workspace
+        """
+        return self.cwd
+
+    def cleanup(self) -> None:
+        """Cleanup temporary resources (not the main workspace) and Docker containers."""
+        if self.docker_manager and self.agent_id:
+            self.docker_manager.cleanup(self.agent_id)
+        p = self.agent_temporary_workspace
+        if not p:
+            return
+        try:
+            p = p.resolve()
+            if not p.exists():
+                return
+            assert p.is_absolute(), 'Temporary workspace must be absolute'
+            assert p.is_dir(), 'Temporary workspace must be a directory'
+            if self.agent_temporary_workspace_parent:
+                parent = Path(self.agent_temporary_workspace_parent).resolve()
+                try:
+                    p.relative_to(parent)
+                except ValueError:
+                    raise AssertionError(f'Refusing to delete workspace outside of parent: {p}')
+            if p == Path('/') or len(p.parts) < 3:
+                raise AssertionError(f'Unsafe path for deletion: {p}')
+            shutil.rmtree(p)
+        except Exception as e:
+            logger.warning(f'[FilesystemManager] cleanup failed for {p}: {e}')
+
+def update_backend_mcp_config(self, backend_config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+        Update MCP server configuration with agent_id after it's available.
+
+        This should be called by the backend after setup_orchestration_paths() sets agent_id.
+
+        Args:
+            backend_config: Backend configuration dict containing mcp_servers
+
+        Returns:
+            Updated backend configuration
+        """
+    if not self.enable_mcp_command_line or self.command_line_execution_mode != 'docker':
+        return backend_config
+    if not self.agent_id:
+        logger.warning('[FilesystemManager] agent_id not set, cannot update MCP config for Docker mode')
+        return backend_config
+    mcp_servers = backend_config.get('mcp_servers', [])
+    for server in mcp_servers:
+        if isinstance(server, dict) and server.get('name') == 'command_line':
+            args = server.get('args', [])
+            if '--agent-id' not in args:
+                args.extend(['--agent-id', self.agent_id])
+                server['args'] = args
+                logger.info(f'[FilesystemManager] Updated command_line MCP server config with agent_id: {self.agent_id}')
+            break
+    return backend_config
+
+def _setup_workspace(self, cwd: str) -> Path:
+    """Setup workspace directory, creating if needed and clearing existing files safely."""
+    Path(cwd)
+    workspace = Path(cwd).resolve()
+    if not workspace.is_absolute():
+        raise AssertionError('Workspace must be absolute')
+    if workspace == Path('/') or len(workspace.parts) < 3:
+        raise AssertionError(f'Refusing unsafe workspace path: {workspace}')
+    workspace.mkdir(parents=True, exist_ok=True)
+    if workspace.exists() and workspace.is_dir():
+        for item in workspace.iterdir():
+            if item.is_symlink():
+                logger.warning(f'[FilesystemManager.save_snapshot] Skipping symlink during clear: {item}')
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
+    return workspace
+
+def inject_filesystem_mcp(self, backend_config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+        Inject filesystem and workspace tools MCP servers into backend configuration.
+
+        Args:
+            backend_config: Original backend configuration
+
+        Returns:
+            Modified configuration with MCP servers added
+        """
+    mcp_servers = backend_config.get('mcp_servers', [])
+    if isinstance(mcp_servers, dict):
+        existing_names = list(mcp_servers.keys())
+        converted_servers = []
+        for name, server_config in mcp_servers.items():
+            if isinstance(server_config, dict):
+                server = server_config.copy()
+                server['name'] = name
+                converted_servers.append(server)
+        mcp_servers = converted_servers
+    elif isinstance(mcp_servers, list):
+        existing_names = [server.get('name') for server in mcp_servers if isinstance(server, dict)]
+    else:
+        existing_names = []
+        mcp_servers = []
+    try:
+        if 'filesystem' not in existing_names:
+            mcp_servers.append(self.get_mcp_filesystem_config())
+        else:
+            logger.warning('[FilesystemManager.inject_filesystem_mcp] Custom filesystem MCP server already present')
+        if 'workspace_tools' not in existing_names:
+            mcp_servers.append(self.get_workspace_tools_mcp_config())
+        else:
+            logger.warning('[FilesystemManager.inject_filesystem_mcp] Custom workspace_tools MCP server already present')
+        if self.enable_mcp_command_line and 'command_line' not in existing_names:
+            mcp_servers.append(self.get_command_line_mcp_config())
+        elif self.enable_mcp_command_line:
+            logger.warning('[FilesystemManager.inject_filesystem_mcp] Custom command_line MCP server already present')
+    except Exception as e:
+        logger.warning(f'[FilesystemManager.inject_filesystem_mcp] Error checking existing MCP servers: {e}')
+    backend_config['mcp_servers'] = mcp_servers
+    return backend_config
+
+def inject_command_line_mcp(self, backend_config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+        Inject only the command_line MCP server into backend configuration.
+
+        Used for NATIVE backends (like Claude Code) that have built-in filesystem tools
+        but need the execute_command MCP tool when using docker mode for code execution.
+
+        Args:
+            backend_config: Original backend configuration
+
+        Returns:
+            Modified configuration with command_line MCP server added
+        """
+    mcp_servers = backend_config.get('mcp_servers', [])
+    if isinstance(mcp_servers, dict):
+        existing_names = list(mcp_servers.keys())
+        converted_servers = []
+        for name, server_config in mcp_servers.items():
+            if isinstance(server_config, dict):
+                server = server_config.copy()
+                server['name'] = name
+                converted_servers.append(server)
+        mcp_servers = converted_servers
+    elif isinstance(mcp_servers, list):
+        existing_names = [server.get('name') for server in mcp_servers if isinstance(server, dict)]
+    else:
+        existing_names = []
+        mcp_servers = []
+    try:
+        if 'command_line' not in existing_names:
+            mcp_servers.append(self.get_command_line_mcp_config())
+            logger.info('[FilesystemManager.inject_command_line_mcp] Added command_line MCP server for docker mode')
+        else:
+            logger.warning('[FilesystemManager.inject_command_line_mcp] Custom command_line MCP server already present')
+    except Exception as e:
+        logger.warning(f'[FilesystemManager.inject_command_line_mcp] Error adding command_line MCP server: {e}')
+    backend_config['mcp_servers'] = mcp_servers
+    return backend_config
+
+def get_pre_tool_hooks(self) -> Dict[str, List]:
+    """
+        Get pre-tool hooks configuration for MCP clients.
+
+        Returns:
+            Dict mapping hook types to lists of hook functions
+        """
+
+    async def mcp_hook_wrapper(tool_name: str, tool_args: Dict[str, Any]) -> bool:
+        """Wrapper to adapt our hook signature to MCP client expectations."""
+        allowed, reason = await self.path_permission_manager.pre_tool_use_hook(tool_name, tool_args)
+        if not allowed and reason:
+            logger.warning(f'[FilesystemManager] Tool blocked: {tool_name} - {reason}')
+        return allowed
+    return {HookType.PRE_TOOL_USE: [mcp_hook_wrapper]}
+
+def enable_write_access(self) -> None:
+    """
+        Enable write access for this filesystem manager.
+
+        This should be called for final agents to allow them to modify
+        files with write permissions in their context paths.
+        """
+    self.path_permission_manager.context_write_access_enabled = True
+    logger.info('[FilesystemManager] Context write access enabled - agent can now modify files with write permissions')
+
+def clear_workspace(self) -> None:
+    """
+        Clear the current workspace to prepare for a new agent execution.
+
+        This should be called at the START of agent execution, not at the end,
+        to preserve workspace contents for logging and debugging.
+        """
+    workspace_path = self.get_current_workspace()
+    if not workspace_path.exists() or not workspace_path.is_dir():
+        logger.debug(f'[FilesystemManager] Workspace does not exist or is not a directory: {workspace_path}')
+        return
+    if workspace_path == Path('/') or len(workspace_path.parts) < 3:
+        logger.error(f'[FilesystemManager] Refusing to clear unsafe workspace path: {workspace_path}')
+        return
+    try:
+        logger.info('[FilesystemManager] Clearing workspace at agent startup. Current contents:')
+        items_to_clear = list(workspace_path.iterdir())
+        for item in items_to_clear:
+            logger.info(f' - {item}')
+            if item.is_symlink():
+                logger.warning(f'[FilesystemManager] Skipping symlink during clear: {item}')
+                continue
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
+        logger.info('[FilesystemManager] Workspace cleared successfully, ready for new agent execution')
+    except Exception as e:
+        logger.error(f'[FilesystemManager] Failed to clear workspace: {e}')
+
+def clear_temp_workspace(self) -> None:
+    """
+        Clear the temporary workspace parent directory at orchestration startup.
+
+        This clears the entire temp workspace parent (e.g., temp_workspaces/),
+        removing all agent directories from previous runs to prevent cross-contamination.
+        """
+    if not self.agent_temporary_workspace_parent:
+        logger.debug('[FilesystemManager] No temp workspace parent configured to clear')
+        return
+    if not self.agent_temporary_workspace_parent.exists():
+        logger.debug(f'[FilesystemManager] Temp workspace parent does not exist: {self.agent_temporary_workspace_parent}')
+        return
+    if self.agent_temporary_workspace_parent == Path('/') or len(self.agent_temporary_workspace_parent.parts) < 3:
+        logger.error(f'[FilesystemManager] Refusing to clear unsafe temp workspace parent path: {self.agent_temporary_workspace_parent}')
+        return
+    try:
+        logger.info(f'[FilesystemManager] Clearing temp workspace parent at orchestration startup: {self.agent_temporary_workspace_parent}')
+        items_to_clear = list(self.agent_temporary_workspace_parent.iterdir())
+        for item in items_to_clear:
+            logger.info(f' - Removing temp workspace item: {item}')
+            if item.is_symlink():
+                logger.warning(f'[FilesystemManager] Skipping symlink during temp clear: {item}')
+                continue
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
+        logger.info('[FilesystemManager] Temp workspace parent cleared successfully')
+    except Exception as e:
+        logger.error(f'[FilesystemManager] Failed to clear temp workspace parent: {e}')
+
+def _log_workspace_contents(self, workspace_path: Path, workspace_name: str, context: str='') -> None:
+    """
+        Log the contents of a workspace directory for visibility.
+
+        Args:
+            workspace_path: Path to the workspace to log
+            workspace_name: Human-readable name for the workspace
+            context: Additional context (e.g., "before execution", "after execution")
+        """
+    if not workspace_path or not workspace_path.exists():
+        logger.info(f'[FilesystemManager.{workspace_name}] {context} - Workspace does not exist: {workspace_path}')
+        return
+    try:
+        files = list(workspace_path.rglob('*'))
+        file_paths = [str(f.relative_to(workspace_path)) for f in files if f.is_file()]
+        dir_paths = [str(f.relative_to(workspace_path)) for f in files if f.is_dir()]
+        logger.info(f'[FilesystemManager.{workspace_name}] {context} - Workspace: {workspace_path}')
+        if file_paths:
+            logger.info(f'[FilesystemManager.{workspace_name}] {context} - Files ({len(file_paths)}): {file_paths}')
+        if dir_paths:
+            logger.info(f'[FilesystemManager.{workspace_name}] {context} - Directories ({len(dir_paths)}): {dir_paths}')
+        if not file_paths and (not dir_paths):
+            logger.info(f'[FilesystemManager.{workspace_name}] {context} - Empty workspace')
+    except Exception as e:
+        logger.warning(f'[FilesystemManager.{workspace_name}] {context} - Error reading workspace: {e}')
+
+def _perform_copy(source: Path, destination: Path, overwrite: bool=False) -> Dict[str, Any]:
+    """
+    Perform the actual copy operation.
+
+    Args:
+        source: Source path
+        destination: Destination path
+        overwrite: Whether to overwrite existing files
+
+    Returns:
+        Dict with operation results
+    """
+    try:
+        if destination.exists() and (not overwrite):
+            raise ValueError(f'Destination already exists (use overwrite=true): {destination}')
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_file():
+            shutil.copy2(source, destination)
+            return {'type': 'file', 'source': str(source), 'destination': str(destination), 'size': destination.stat().st_size}
+        elif source.is_dir():
+            if destination.exists():
+                shutil.rmtree(destination)
+            shutil.copytree(source, destination)
+            file_count = len([f for f in destination.rglob('*') if f.is_file()])
+            return {'type': 'directory', 'source': str(source), 'destination': str(destination), 'file_count': file_count}
+        else:
+            raise ValueError(f'Source is neither file nor directory: {source}')
+    except Exception as e:
+        raise ValueError(f'Copy operation failed: {e}')
+
+@mcp.tool()
+def delete_file(path: str, recursive: bool=False) -> Dict[str, Any]:
+    """
+        Delete a file or directory from the workspace.
+
+        This tool allows agents to clean up outdated files or directories, helping maintain
+        a clean workspace without cluttering it with old versions.
+
+        Args:
+            path: Path to file/directory to delete - can be:
+                - Relative path: Resolved relative to your workspace (e.g., "old_file.txt")
+                - Absolute path: Must be within allowed directories for security
+            recursive: Whether to delete directories and their contents (default: False)
+                      Required for non-empty directories
+
+        Returns:
+            Dictionary with deletion operation results
+
+        Security:
+            - Requires WRITE permission on path (validated by PathPermissionManager hook)
+            - Must be within allowed directories
+            - System files (.git, .env, etc.) cannot be deleted
+            - Permission path roots themselves cannot be deleted
+            - Protected paths specified in config are immune from deletion
+        """
+    try:
+        if Path(path).is_absolute():
+            target_path = Path(path).resolve()
+        else:
+            target_path = (Path.cwd() / path).resolve()
+        _validate_path_access(target_path, mcp.allowed_paths)
+        if not target_path.exists():
+            return {'success': False, 'operation': 'delete_file', 'error': f'Path does not exist: {target_path}'}
+        if _is_critical_path(target_path, mcp.allowed_paths):
+            return {'success': False, 'operation': 'delete_file', 'error': f'Cannot delete critical system path: {target_path}'}
+        if _is_permission_path_root(target_path, mcp.allowed_paths):
+            return {'success': False, 'operation': 'delete_file', 'error': f'Cannot delete permission path root: {target_path}. You can delete files/directories within it, but not the root itself.'}
+        if target_path.is_file():
+            size = target_path.stat().st_size
+            target_path.unlink()
+            return {'success': True, 'operation': 'delete_file', 'details': {'type': 'file', 'path': str(target_path), 'size': size}}
+        elif target_path.is_dir():
+            if not recursive:
+                if any(target_path.iterdir()):
+                    return {'success': False, 'operation': 'delete_file', 'error': f'Directory not empty (use recursive=true): {target_path}'}
+                target_path.rmdir()
+            else:
+                file_count = len([f for f in target_path.rglob('*') if f.is_file()])
+                shutil.rmtree(target_path)
+                return {'success': True, 'operation': 'delete_file', 'details': {'type': 'directory', 'path': str(target_path), 'file_count': file_count}}
+            return {'success': True, 'operation': 'delete_file', 'details': {'type': 'directory', 'path': str(target_path)}}
+        else:
+            return {'success': False, 'operation': 'delete_file', 'error': f'Path is neither file nor directory: {target_path}'}
+    except Exception as e:
+        return {'success': False, 'operation': 'delete_file', 'error': str(e)}
+
+class PathPermissionManager:
+    """
+    Manages all filesystem paths and implements PreToolUse hook functionality similar to Claude Code,
+    allowing us to intercept and validate tool calls based on some predefined rules (here, permissions).
+
+    This manager handles all types of paths with unified permission control:
+    - Workspace paths (typically write)
+    - Temporary workspace paths (typically read-only)
+    - Context paths (user-specified permissions)
+    - Tool call validation (PreToolUse hook)
+    - Path access control
+    """
+    DEFAULT_EXCLUDED_PATTERNS = ['.massgen', '.env', '.git', 'node_modules', '__pycache__', '.venv', 'venv', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.DS_Store', 'massgen_logs']
+
+    def __init__(self, context_write_access_enabled: bool=False, enforce_read_before_delete: bool=True):
+        """
+        Initialize path permission manager.
+
+        Args:
+            context_write_access_enabled: Whether write access is enabled for context paths (workspace paths always
+                have write access). If False, we change all context paths to read-only. Can be later updated with
+                set_context_write_access_enabled(), in which case all existing context paths will be updated
+                accordingly so that those that were "write" in YAML become writable again.
+            enforce_read_before_delete: Whether to enforce read-before-delete policy for workspace files
+        """
+        self.managed_paths: List[ManagedPath] = []
+        self.context_write_access_enabled = context_write_access_enabled
+        self._permission_cache: Dict[Path, Permission] = {}
+        self.file_operation_tracker = FileOperationTracker(enforce_read_before_delete=enforce_read_before_delete)
+        logger.info(f'[PathPermissionManager] Initialized with context_write_access_enabled={context_write_access_enabled}, enforce_read_before_delete={enforce_read_before_delete}')
+
+    def add_path(self, path: Path, permission: Permission, path_type: str) -> None:
+        """
+        Add a managed path.
+
+        Args:
+            path: Path to manage
+            permission: Permission level for this path
+            path_type: Type of path ("workspace", "temp_workspace", "context", etc.)
+        """
+        if not path.exists():
+            if path_type == 'context':
+                logger.warning(f'[PathPermissionManager] Context path does not exist: {path}')
+                return
+            else:
+                logger.debug(f'[PathPermissionManager] Path will be created later: {path} ({path_type})')
+        managed_path = ManagedPath(path=path.resolve(), permission=permission, path_type=path_type)
+        self.managed_paths.append(managed_path)
+        self._permission_cache.clear()
+        logger.info(f'[PathPermissionManager] Added {path_type} path: {path} ({permission.value})')
+
+    def get_context_paths(self) -> List[Dict[str, str]]:
+        """
+        Get context paths in configuration format for system prompts.
+
+        Returns:
+            List of context path dictionaries with path, permission, and will_be_writable flag
+        """
+        context_paths = []
+        for mp in self.managed_paths:
+            if mp.path_type == 'context':
+                context_paths.append({'path': str(mp.path), 'permission': mp.permission.value, 'will_be_writable': mp.will_be_writable})
+        return context_paths
+
+    def set_context_write_access_enabled(self, enabled: bool) -> None:
+        """
+        Update write access setting for context paths and recalculate their permissions.
+        Note: Workspace paths always have write access regardless of this setting.
+
+        Args:
+            enabled: Whether to enable write access for context paths
+        """
+        if self.context_write_access_enabled == enabled:
+            return
+        logger.info(f'[PathPermissionManager] Setting context_write_access_enabled to {enabled}')
+        logger.info(f'[PathPermissionManager] Before update: self.managed_paths={self.managed_paths!r}')
+        self.context_write_access_enabled = enabled
+        for mp in self.managed_paths:
+            if mp.path_type == 'context' and mp.will_be_writable:
+                if enabled:
+                    mp.permission = Permission.WRITE
+                    logger.debug(f'[PathPermissionManager] Enabled write access for {mp.path}')
+                else:
+                    mp.permission = Permission.READ
+                    logger.debug(f'[PathPermissionManager] Keeping read-only for {mp.path}')
+        logger.info(f'[PathPermissionManager] Updated context path permissions based on context_write_access_enabled={enabled}, now is self.managed_paths={self.managed_paths!r}')
+        self._permission_cache.clear()
+
+    def add_context_paths(self, context_paths: List[Dict[str, Any]]) -> None:
+        """
+        Add context paths from configuration.
+
+        Now supports both files and directories as context paths, with optional protected paths.
+
+        Args:
+            context_paths: List of context path configurations
+                Format: [
+                    {
+                        "path": "C:/project/src",
+                        "permission": "write",
+                        "protected_paths": ["tests/do-not-touch/", "config.yaml"]  # Optional
+                    },
+                    {"path": "C:/project/logo.png", "permission": "read"}
+                ]
+
+        Note: During coordination, all context paths are read-only regardless of YAML settings.
+              Only the final agent with context_write_access_enabled=True can write to paths marked as "write".
+              Protected paths are ALWAYS read-only and immune from deletion, even if parent has write permission.
+        """
+        for config in context_paths:
+            path_str = config.get('path', '')
+            permission_str = config.get('permission', 'read')
+            protected_paths_config = config.get('protected_paths', [])
+            if not path_str:
+                continue
+            path = Path(path_str)
+            if not path.exists():
+                logger.warning(f'[PathPermissionManager] Context path does not exist: {path}')
+                continue
+            is_file = path.is_file()
+            protected_paths = []
+            for protected_str in protected_paths_config:
+                protected_path = Path(protected_str)
+                if not protected_path.is_absolute():
+                    if is_file:
+                        protected_path = (path.parent / protected_str).resolve()
+                    else:
+                        protected_path = (path / protected_str).resolve()
+                else:
+                    protected_path = protected_path.resolve()
+                try:
+                    if is_file:
+                        protected_path.relative_to(path.parent.resolve())
+                    else:
+                        protected_path.relative_to(path.resolve())
+                    protected_paths.append(protected_path)
+                    logger.info(f'[PathPermissionManager] Added protected path: {protected_path}')
+                except ValueError:
+                    logger.warning(f'[PathPermissionManager] Protected path {protected_path} is not within context path {path}, skipping')
+            if is_file:
+                logger.info(f'[PathPermissionManager] Detected file context path: {path}')
+                parent_dir = path.parent
+                if not any((mp.path == parent_dir.resolve() and mp.path_type == 'file_context_parent' for mp in self.managed_paths)):
+                    parent_managed = ManagedPath(path=parent_dir.resolve(), permission=Permission.READ, path_type='file_context_parent', will_be_writable=False, is_file=False)
+                    self.managed_paths.append(parent_managed)
+                    logger.debug(f'[PathPermissionManager] Added parent directory for file context: {parent_dir}')
+            try:
+                yaml_permission = Permission(permission_str.lower())
+            except ValueError:
+                logger.warning(f"[PathPermissionManager] Invalid permission '{permission_str}', using 'read'")
+                yaml_permission = Permission.READ
+            will_be_writable = yaml_permission == Permission.WRITE
+            if self.context_write_access_enabled and will_be_writable:
+                actual_permission = Permission.WRITE
+                logger.debug(f'[PathPermissionManager] Final agent: context path {path} gets write permission')
+            else:
+                actual_permission = Permission.READ if will_be_writable else yaml_permission
+                if will_be_writable:
+                    logger.debug(f'[PathPermissionManager] Coordination agent: context path {path} read-only (will be writable later)')
+            managed_path = ManagedPath(path=path.resolve(), permission=actual_permission, path_type='context', will_be_writable=will_be_writable, is_file=is_file, protected_paths=protected_paths)
+            self.managed_paths.append(managed_path)
+            self._permission_cache.clear()
+            path_type_str = 'file' if is_file else 'directory'
+            protected_count = len(protected_paths)
+            logger.info(f'[PathPermissionManager] Added context {path_type_str}: {path} ({actual_permission.value}, will_be_writable: {will_be_writable}, protected_paths: {protected_count})')
+
+    def add_previous_turn_paths(self, turn_paths: List[Dict[str, Any]]) -> None:
+        """
+        Add previous turn workspace paths for read access.
+        These are tracked separately from regular context paths.
+
+        Args:
+            turn_paths: List of turn path configurations
+                Format: [{"path": "/path/to/turn_1/workspace", "permission": "read"}, ...]
+        """
+        for config in turn_paths:
+            path_str = config.get('path', '')
+            if not path_str:
+                continue
+            path = Path(path_str).resolve()
+            managed_path = ManagedPath(path=path, permission=Permission.READ, path_type='previous_turn', will_be_writable=False)
+            self.managed_paths.append(managed_path)
+            self._permission_cache.clear()
+            logger.info(f'[PathPermissionManager] Added previous turn path: {path} (read-only)')
+
+    def _is_excluded_path(self, path: Path) -> bool:
+        """
+        Check if a path matches any default excluded patterns.
+
+        System files like .massgen/, .env, .git/ are always excluded from write access,
+        EXCEPT when they are within a managed workspace path (which has explicit permissions).
+
+        Args:
+            path: Path to check
+
+        Returns:
+            True if path should be excluded from write access
+        """
+        for managed_path in self.managed_paths:
+            if managed_path.path_type == 'workspace' and managed_path.contains(path):
+                return False
+        parts = path.parts
+        for part in parts:
+            if part in self.DEFAULT_EXCLUDED_PATTERNS:
+                return True
+        return False
+
+    def get_permission(self, path: Path) -> Optional[Permission]:
+        """
+        Get permission level for a path.
+
+        Now handles file-specific context paths correctly.
+
+        Args:
+            path: Path to check
+
+        Returns:
+            Permission level or None if path is not in context
+        """
+        resolved_path = path.resolve()
+        if resolved_path in self._permission_cache:
+            logger.debug(f'[PathPermissionManager] Permission cache hit for {resolved_path}: {self._permission_cache[resolved_path].value}')
+            return self._permission_cache[resolved_path]
+        if self._is_excluded_path(resolved_path):
+            logger.info(f'[PathPermissionManager] Path {resolved_path} matches excluded pattern, forcing read-only')
+            self._permission_cache[resolved_path] = Permission.READ
+            return Permission.READ
+        for managed_path in self.managed_paths:
+            if managed_path.contains(resolved_path) and managed_path.is_protected(resolved_path):
+                logger.info(f'[PathPermissionManager] Path {resolved_path} is protected, forcing read-only')
+                self._permission_cache[resolved_path] = Permission.READ
+                return Permission.READ
+        file_paths = [mp for mp in self.managed_paths if mp.is_file]
+        dir_paths = [mp for mp in self.managed_paths if not mp.is_file and mp.path_type != 'file_context_parent']
+        for managed_path in file_paths:
+            if managed_path.contains(resolved_path):
+                logger.info(f'[PathPermissionManager] Found file-specific permission for {resolved_path}: {managed_path.permission.value} (from {managed_path.path}, type: {managed_path.path_type}, will_be_writable: {managed_path.will_be_writable})')
+                self._permission_cache[resolved_path] = managed_path.permission
+                return managed_path.permission
+        sorted_dir_paths = sorted(dir_paths, key=lambda mp: len(mp.path.parts), reverse=True)
+        for managed_path in sorted_dir_paths:
+            if managed_path.contains(resolved_path) or managed_path.path == resolved_path:
+                logger.info(f'[PathPermissionManager] Found permission for {resolved_path}: {managed_path.permission.value} (from {managed_path.path}, type: {managed_path.path_type}, will_be_writable: {managed_path.will_be_writable})')
+                self._permission_cache[resolved_path] = managed_path.permission
+                return managed_path.permission
+        logger.debug(f'[PathPermissionManager] No permission found for {resolved_path} in managed paths: {[(str(mp.path), mp.permission.value, mp.path_type) for mp in self.managed_paths]}')
+        return None
+
+    async def pre_tool_use_hook(self, tool_name: str, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """
+        PreToolUse hook to validate tool calls based on permissions.
+
+        This can be used directly with Claude Code SDK hooks or as validation
+        for other backends that need manual tool call filtering.
+
+        Args:
+            tool_name: Name of the tool being called
+            tool_args: Arguments passed to the tool
+
+        Returns:
+            Tuple of (allowed: bool, reason: Optional[str])
+            - allowed: Whether the tool call should proceed
+            - reason: Explanation if blocked (None if allowed)
+        """
+        if self._is_read_tool(tool_name):
+            self._track_read_operation(tool_name, tool_args)
+        if self._is_write_tool(tool_name):
+            result = self._validate_write_tool(tool_name, tool_args)
+            if result[0] and self._is_create_tool(tool_name):
+                self._track_create_operation(tool_name, tool_args)
+            return result
+        if self._is_delete_tool(tool_name):
+            return self._validate_delete_tool(tool_name, tool_args)
+        command_tools = {'Bash', 'bash', 'shell', 'exec', 'execute_command'}
+        if tool_name in command_tools:
+            return self._validate_command_tool(tool_name, tool_args)
+        return self._validate_file_context_access(tool_name, tool_args)
+
+    def _is_write_tool(self, tool_name: str) -> bool:
+        """
+        Check if a tool is a write operation using pattern matching.
+
+        Main Claude Code tools: Bash, Glob, Grep, Read, Edit, MultiEdit, Write, WebFetch, WebSearch
+
+        This catches various write tools including:
+        - Claude Code: Write, Edit, MultiEdit, NotebookEdit, etc.
+        - MCP filesystem: write_file, edit_file, create_directory, move_file
+        - Any other tools with write/edit/create/move in the name
+
+        Note: Delete operations are handled separately by _is_delete_tool
+        """
+        write_patterns = ['.*[Ww]rite.*', '.*[Ee]dit.*', '.*[Cc]reate.*', '.*[Mm]ove.*', '.*[Cc]opy.*']
+        for pattern in write_patterns:
+            if re.match(pattern, tool_name):
+                return True
+        return False
+
+    def _is_read_tool(self, tool_name: str) -> bool:
+        """
+        Check if a tool is a read operation that should be tracked.
+
+        Uses substring matching to handle MCP prefixes (e.g., mcp__workspace_tools__compare_files)
+
+        Tools that read file contents:
+        - read/Read: File content reading (matches: Read, read_text_file, read_multimodal_files, etc.)
+        - compare_files: File comparison
+        - compare_directories: Directory comparison
+        """
+        tool_lower = tool_name.lower()
+        read_keywords = ['compare_files', 'compare_directories']
+        return any((keyword in tool_lower for keyword in read_keywords))
+
+    def _is_delete_tool(self, tool_name: str) -> bool:
+        """
+        Check if a tool is a delete operation.
+
+        Tools that delete files:
+        - delete_file: Single file deletion
+        - delete_files_batch: Batch file deletion
+        - Any tool with delete/remove in the name
+        """
+        delete_patterns = ['.*[Dd]elete.*', '.*[Rr]emove.*']
+        for pattern in delete_patterns:
+            if re.match(pattern, tool_name):
+                return True
+        return False
+
+    def _is_create_tool(self, tool_name: str) -> bool:
+        """
+        Check if a tool creates new files (for tracking created files).
+
+        Tools that create files:
+        - Write: Creates new files
+        - write_file: MCP filesystem write
+        - create_directory: Creates directories
+        """
+        create_patterns = ['.*[Ww]rite.*', '.*[Cc]reate.*']
+        for pattern in create_patterns:
+            if re.match(pattern, tool_name):
+                return True
+        return False
+
+    def _track_read_operation(self, tool_name: str, tool_args: Dict[str, Any]) -> None:
+        """
+        Track files that are read by the agent.
+
+        Uses substring matching to handle MCP prefixes consistently.
+
+        Args:
+            tool_name: Name of the read tool
+            tool_args: Arguments passed to the tool
+        """
+        tool_lower = tool_name.lower()
+        if 'compare_files' in tool_lower:
+            file1 = tool_args.get('file1') or tool_args.get('file_path1')
+            file2 = tool_args.get('file2') or tool_args.get('file_path2')
+            if file1:
+                path1 = self._resolve_path_against_workspace(file1)
+                self.file_operation_tracker.mark_as_read(Path(path1))
+            if file2:
+                path2 = self._resolve_path_against_workspace(file2)
+                self.file_operation_tracker.mark_as_read(Path(path2))
+        elif 'compare_directories' in tool_lower:
+            if tool_args.get('show_content_diff'):
+                pass
+        elif 'read_multiple_files' in tool_lower:
+            paths = tool_args.get('paths', [])
+            for file_path in paths:
+                resolved_path = self._resolve_path_against_workspace(file_path)
+                self.file_operation_tracker.mark_as_read(Path(resolved_path))
+        else:
+            file_path = self._extract_file_path(tool_args)
+            if file_path:
+                resolved_path = self._resolve_path_against_workspace(file_path)
+                self.file_operation_tracker.mark_as_read(Path(resolved_path))
+
+    def _track_create_operation(self, tool_name: str, tool_args: Dict[str, Any]) -> None:
+        """
+        Track files that are created by the agent.
+
+        Args:
+            tool_name: Name of the create tool
+            tool_args: Arguments passed to the tool
+        """
+        file_path = self._extract_file_path(tool_args)
+        if file_path:
+            resolved_path = self._resolve_path_against_workspace(file_path)
+            self.file_operation_tracker.mark_as_created(Path(resolved_path))
+
+    def _validate_delete_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """
+        Validate delete tool operations using read-before-delete policy.
+
+        Args:
+            tool_name: Name of the delete tool
+            tool_args: Arguments passed to the tool
+
+        Returns:
+            Tuple of (allowed: bool, reason: Optional[str])
+        """
+        permission_result = self._validate_write_tool(tool_name, tool_args)
+        if not permission_result[0]:
+            return permission_result
+        if tool_name == 'delete_files_batch':
+            return self._validate_delete_files_batch(tool_args)
+        file_path = self._extract_file_path(tool_args)
+        if not file_path:
+            return (True, None)
+        resolved_path = self._resolve_path_against_workspace(file_path)
+        path = Path(resolved_path)
+        if path.is_dir():
+            can_delete, reason = self.file_operation_tracker.can_delete_directory(path)
+            if not can_delete:
+                return (False, reason)
+        else:
+            can_delete, reason = self.file_operation_tracker.can_delete(path)
+            if not can_delete:
+                return (False, reason)
+        return (True, None)
+
+    def _validate_delete_files_batch(self, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """
+        Validate batch delete operations by checking all files that would be deleted.
+
+        Args:
+            tool_args: Arguments for delete_files_batch
+
+        Returns:
+            Tuple of (allowed: bool, reason: Optional[str])
+        """
+        try:
+            base_path = tool_args.get('base_path')
+            include_patterns = tool_args.get('include_patterns') or ['*']
+            exclude_patterns = tool_args.get('exclude_patterns') or []
+            if not base_path:
+                return (False, 'delete_files_batch requires base_path')
+            resolved_base = self._resolve_path_against_workspace(base_path)
+            base = Path(resolved_base)
+            if not base.exists():
+                return (True, None)
+            unread_files = []
+            for item in base.rglob('*'):
+                if not item.is_file():
+                    continue
+                rel_path = item.relative_to(base)
+                rel_path_str = str(rel_path)
+                included = any((fnmatch.fnmatch(rel_path_str, pattern) for pattern in include_patterns))
+                if not included:
+                    continue
+                excluded = any((fnmatch.fnmatch(rel_path_str, pattern) for pattern in exclude_patterns))
+                if excluded:
+                    continue
+                if not self.file_operation_tracker.was_read(item):
+                    unread_files.append(rel_path_str)
+            if unread_files:
+                example_files = unread_files[:3]
+                suffix = f' (and {len(unread_files) - 3} more)' if len(unread_files) > 3 else ''
+                reason = f'Cannot delete {len(unread_files)} unread file(s). Examples: {', '.join(example_files)}{suffix}. Please read files before deletion using Read or read_multimodal_files.'
+                logger.info(f'[PathPermissionManager] Blocking batch delete: {reason}')
+                return (False, reason)
+            return (True, None)
+        except Exception as e:
+            logger.error(f'[PathPermissionManager] Error validating batch delete: {e}')
+            return (False, f'Batch delete validation failed: {e}')
+
+    def _is_path_within_allowed_directories(self, path: Path) -> bool:
+        """
+        Check if a path is within any allowed directory (workspace or context paths).
+
+        This enforces directory boundaries - paths outside managed directories are not allowed.
+
+        Args:
+            path: Path to check
+
+        Returns:
+            True if path is within allowed directories, False otherwise
+        """
+        resolved_path = path.resolve()
+        for managed_path in self.managed_paths:
+            if managed_path.path_type == 'file_context_parent':
+                continue
+            if managed_path.contains(resolved_path) or managed_path.path == resolved_path:
+                return True
+        return False
+
+    def _validate_file_context_access(self, tool_name: str, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """
+        Validate access for all file operations - enforces directory boundaries and permissions.
+
+        This method ensures that:
+        1. ALL file operations are restricted to workspace + context paths (directory boundary)
+        2. Read/write permissions are enforced within allowed directories
+        3. Sibling file access is prevented for file-specific context paths
+
+        Args:
+            tool_name: Name of the tool being called
+            tool_args: Arguments passed to the tool
+
+        Returns:
+            Tuple of (allowed: bool, reason: Optional[str])
+        """
+        file_path = self._extract_file_path(tool_args)
+        if not file_path:
+            return (True, None)
+        file_path = self._resolve_path_against_workspace(file_path)
+        path = Path(file_path).resolve()
+        if not self._is_path_within_allowed_directories(path):
+            logger.warning(f"[PathPermissionManager] BLOCKED: '{tool_name}' attempted to access path outside allowed directories: {path}")
+            return (False, f"Access denied: '{path}' is outside allowed directories. Only workspace and context paths are accessible.")
+        permission = self.get_permission(path)
+        logger.debug(f"[PathPermissionManager] Validating '{tool_name}' on path: {path} with permission: {permission}")
+        if permission is None:
+            parent_paths = [mp for mp in self.managed_paths if mp.path_type == 'file_context_parent']
+            for parent_mp in parent_paths:
+                if parent_mp.contains(path):
+                    return (False, f"Access denied: '{path}' is not an explicitly allowed file in this directory")
+            return (True, None)
+        return (True, None)
+
+    def _validate_write_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Validate write tool access."""
+        if tool_name == 'copy_files_batch':
+            return self._validate_copy_files_batch(tool_args)
+        file_path = self._extract_file_path(tool_args)
+        if not file_path:
+            return (True, None)
+        file_path = self._resolve_path_against_workspace(file_path)
+        path = Path(file_path).resolve()
+        permission = self.get_permission(path)
+        logger.debug(f"[PathPermissionManager] Validating write tool '{tool_name}' for path: {path} with permission: {permission}")
+        if permission is None:
+            parent_paths = [mp for mp in self.managed_paths if mp.path_type == 'file_context_parent']
+            for parent_mp in parent_paths:
+                if parent_mp.contains(path):
+                    return (False, f"Access denied: '{path}' is not an explicitly allowed file in this directory")
+            return (True, None)
+        if permission == Permission.WRITE:
+            return (True, None)
+        else:
+            return (False, f"No write permission for '{path}' (read-only context path)")
+
+    def _resolve_path_against_workspace(self, path_str: str) -> str:
+        """
+        Resolve a path string against the workspace directory if it's relative.
+
+        When MCP servers run with cwd set to workspace, they resolve relative paths
+        against the workspace. This function does the same for validation purposes.
+
+        Args:
+            path_str: Path string that may be relative or absolute
+
+        Returns:
+            Absolute path string (resolved against workspace if relative)
+        """
+        if not path_str:
+            return path_str
+        if path_str.startswith('~'):
+            path = Path(path_str).expanduser()
+            return str(path)
+        path = Path(path_str)
+        if path.is_absolute():
+            return path_str
+        mcp_paths = self.get_mcp_filesystem_paths()
+        if mcp_paths:
+            workspace_path = Path(mcp_paths[0])
+            resolved = workspace_path / path_str
+            logger.debug(f"[PathPermissionManager] Resolved relative path '{path_str}' to '{resolved}'")
+            return str(resolved)
+        return path_str
+
+    def _validate_copy_files_batch(self, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Validate copy_files_batch by checking all destination paths after globbing."""
+        try:
+            logger.debug(f'[PathPermissionManager] copy_files_batch validation - context_write_access_enabled: {self.context_write_access_enabled}')
+            source_base_path = tool_args.get('source_base_path')
+            destination_base_path = tool_args.get('destination_base_path', '')
+            include_patterns = tool_args.get('include_patterns')
+            exclude_patterns = tool_args.get('exclude_patterns')
+            if not source_base_path:
+                return (False, 'copy_files_batch requires source_base_path')
+            destination_base_path = self._resolve_path_against_workspace(destination_base_path)
+            file_pairs = get_copy_file_pairs(self.get_mcp_filesystem_paths(), source_base_path, destination_base_path, include_patterns, exclude_patterns)
+            blocked_paths = []
+            for source_file, dest_file in file_pairs:
+                permission = self.get_permission(dest_file)
+                logger.debug(f'[PathPermissionManager] copy_files_batch checking dest: {dest_file}, permission: {permission}')
+                if permission == Permission.READ:
+                    blocked_paths.append(str(dest_file))
+            if blocked_paths:
+                example_paths = blocked_paths[:3]
+                suffix = f' (and {len(blocked_paths) - 3} more)' if len(blocked_paths) > 3 else ''
+                return (False, f'No write permission for destination paths: {', '.join(example_paths)}{suffix}')
+            return (True, None)
+        except Exception as e:
+            return (False, f'copy_files_batch validation failed: {e}')
+
+    def _validate_command_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Validate command tool access.
+
+        As of v0.0.20, only Claude Code supports execution.
+
+        For Claude Code: Validates directory boundaries for all paths in Bash commands.
+        This prevents access to paths outside workspace + context paths.
+
+        """
+        command = tool_args.get('command', '') or tool_args.get('cmd', '')
+        dangerous_patterns = ['rm ', 'rm -', 'rmdir', 'del ', 'sudo ', 'su ', 'chmod ', 'chown ', 'format ', 'fdisk', 'mkfs']
+        write_patterns = ['>', '>>', 'mv ', 'move ', 'cp ', 'copy ', 'touch ', 'mkdir ', 'echo ', 'sed -i', 'perl -i']
+        for pattern in write_patterns:
+            if pattern in command:
+                target_file = self._extract_file_from_command(command, pattern)
+                if target_file:
+                    path = Path(target_file).resolve()
+                    permission = self.get_permission(path)
+                    if permission and permission == Permission.READ:
+                        return (False, f'Command would modify read-only context path: {path}')
+        for pattern in dangerous_patterns:
+            if pattern in command.lower():
+                return (False, f"Dangerous command pattern '{pattern}' is not allowed")
+        if '$' in command:
+            safe_vars = ['$?', '$#', '$$']
+            has_unsafe_var = False
+            if '$(' in command or '${' in command:
+                has_unsafe_var = True
+            elif any((c in command for c in ['$HOME', '$USER', '$TMPDIR', '$PWD', '$OLDPWD', '$PATH'])):
+                has_unsafe_var = True
+            else:
+                import re
+                if re.search('\\$[A-Za-z_][A-Za-z0-9_]*', command):
+                    for safe in safe_vars:
+                        command = command.replace(safe, '')
+                    if re.search('\\$[A-Za-z_][A-Za-z0-9_]*', command):
+                        has_unsafe_var = True
+            if has_unsafe_var:
+                return (False, 'Environment variables in Bash commands are not allowed (security risk: can reference paths outside workspace)')
+        if '`' in command:
+            return (False, 'Backtick command substitution is not allowed (security risk)')
+        if '<(' in command or '>(' in command:
+            return (False, 'Process substitution is not allowed (security risk)')
+        paths = self._extract_paths_from_command(command)
+        for path_str in paths:
+            try:
+                resolved_path_str = self._resolve_path_against_workspace(path_str)
+                path = Path(resolved_path_str).resolve()
+                if not self._is_path_within_allowed_directories(path):
+                    logger.warning(f'[PathPermissionManager] BLOCKED Bash command accessing path outside allowed directories: {path} (from: {path_str})')
+                    return (False, f"Access denied: Bash command references '{path_str}' which resolves to '{path}' outside allowed directories")
+            except Exception as e:
+                logger.debug(f"[PathPermissionManager] Could not validate path '{path_str}' in Bash command: {e}")
+                continue
+        return (True, None)
+
+    def _extract_file_path(self, tool_args: Dict[str, Any]) -> Optional[str]:
+        """Extract file path from tool arguments."""
+        path_keys = ['file_path', 'path', 'filename', 'file', 'notebook_path', 'target', 'destination', 'destination_path', 'destination_base_path']
+        for key in path_keys:
+            if key in tool_args:
+                return tool_args[key]
+        return None
+
+    def _extract_file_from_command(self, command: str, pattern: str) -> Optional[str]:
+        """Try to extract target file from a command string."""
+        if pattern in ['>', '>>']:
+            parts = command.split(pattern)
+            if len(parts) > 1:
+                target = parts[1].strip().split()[0] if parts[1].strip() else None
+                if target:
+                    return target.strip('"\'')
+        if pattern in ['mv ', 'cp ', 'move ', 'copy ']:
+            parts = command.split()
+            try:
+                idx = parts.index(pattern.strip())
+                if idx + 2 < len(parts):
+                    return parts[idx + 2]
+            except (ValueError, IndexError):
+                pass
+        if pattern in ['touch ', 'mkdir ', 'echo ']:
+            parts = command.split()
+            try:
+                idx = parts.index(pattern.strip())
+                if idx + 1 < len(parts):
+                    return parts[idx + 1].strip('"\'')
+            except (ValueError, IndexError):
+                pass
+        return None
+
+    def _extract_paths_from_command(self, command: str) -> List[str]:
+        """
+        Extract all potential file/directory paths from a Bash command for validation.
+
+        This is Claude Code specific - extracts paths to validate directory boundaries.
+        Looks for both absolute paths (starting with /) and relative paths (including ../).
+
+        Args:
+            command: Bash command string
+
+        Returns:
+            List of path strings found in the command
+        """
+        import shlex
+        paths = []
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            tokens = command.split()
+        for token in tokens:
+            cleaned = token.strip('"\'').strip()
+            if not cleaned:
+                continue
+            if cleaned.startswith('-'):
+                continue
+            if cleaned in ['&&', '||', '|', ';', '>']:
+                continue
+            if cleaned.startswith('/') or cleaned.startswith('~') or cleaned.startswith('../') or (cleaned == '..') or cleaned.startswith('./'):
+                if '*' in cleaned or '?' in cleaned or '[' in cleaned:
+                    base = cleaned.split('*')[0].split('?')[0].split('[')[0]
+                    if base.endswith('/'):
+                        base = base[:-1]
+                    if base:
+                        paths.append(base)
+                else:
+                    paths.append(cleaned)
+        return paths
+
+    def get_accessible_paths(self) -> List[Path]:
+        """Get list of all accessible paths."""
+        return [path.path for path in self.managed_paths]
+
+    def get_mcp_filesystem_paths(self) -> List[str]:
+        """
+        Get all managed paths for MCP filesystem server configuration. Workspace path will be first.
+
+        Only returns directories, as MCP filesystem server cannot accept file paths as arguments.
+        For file context paths, the parent directory is already added with path_type="file_context_parent".
+
+        Returns:
+            List of directory path strings to include in MCP filesystem server args
+        """
+        workspace_paths = [str(mp.path) for mp in self.managed_paths if mp.path_type == 'workspace']
+        other_paths = [str(mp.path) for mp in self.managed_paths if mp.path_type != 'workspace' and (not mp.is_file)]
+        out = workspace_paths + other_paths
+        return out
+
+    def get_permission_summary(self) -> str:
+        """Get a human-readable summary of permissions."""
+        if not self.managed_paths:
+            return 'No managed paths configured'
+        lines = [f'Managed paths ({len(self.managed_paths)} total):']
+        for managed_path in self.managed_paths:
+            emoji = '📝' if managed_path.permission == Permission.WRITE else '👁️'
+            lines.append(f'  {emoji} {managed_path.path} ({managed_path.permission.value}, {managed_path.path_type})')
+        return '\n'.join(lines)
+
+    async def validate_context_access(self, input_data: Dict[str, Any], tool_use_id: Optional[str], context: Any) -> Dict[str, Any]:
+        """
+        Claude Code SDK compatible hook function for PreToolUse.
+
+        Args:
+            input_data: Tool input data with 'tool_name' and 'tool_input'
+            tool_use_id: Tool use identifier
+            context: HookContext from claude_code_sdk
+
+        Returns:
+            Hook response dict with permission decision
+        """
+        logger.info(f'[PathPermissionManager] PreToolUse hook called for tool_use_id={tool_use_id}, input_data={input_data}')
+        tool_name = input_data.get('tool_name', '')
+        tool_input = input_data.get('tool_input', {})
+        allowed, reason = await self.pre_tool_use_hook(tool_name, tool_input)
+        if not allowed:
+            logger.warning(f'[PathPermissionManager] Blocked {tool_name}: {reason}')
+            return {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny', 'permissionDecisionReason': reason or 'Access denied based on context path permissions'}}
+        return {}
+
+    def get_claude_code_hooks_config(self) -> Dict[str, Any]:
+        """
+        Get Claude Agent SDK hooks configuration.
+
+        Returns:
+            Hooks configuration dict for ClaudeAgentOptions
+        """
+        if not self.managed_paths:
+            return {}
+        try:
+            from claude_agent_sdk import HookMatcher
+        except ImportError:
+            logger.warning('[PathPermissionManager] claude_agent_sdk not available, hooks disabled')
+            return {}
+        return {'PreToolUse': [HookMatcher(matcher='Read', hooks=[self.validate_context_access]), HookMatcher(matcher='Write', hooks=[self.validate_context_access]), HookMatcher(matcher='Edit', hooks=[self.validate_context_access]), HookMatcher(matcher='MultiEdit', hooks=[self.validate_context_access]), HookMatcher(matcher='NotebookEdit', hooks=[self.validate_context_access]), HookMatcher(matcher='Grep', hooks=[self.validate_context_access]), HookMatcher(matcher='Glob', hooks=[self.validate_context_access]), HookMatcher(matcher='LS', hooks=[self.validate_context_access]), HookMatcher(matcher='Bash', hooks=[self.validate_context_access])]}
+
+def add_path(self, path: Path, permission: Permission, path_type: str) -> None:
+    """
+        Add a managed path.
+
+        Args:
+            path: Path to manage
+            permission: Permission level for this path
+            path_type: Type of path ("workspace", "temp_workspace", "context", etc.)
+        """
+    if not path.exists():
+        if path_type == 'context':
+            logger.warning(f'[PathPermissionManager] Context path does not exist: {path}')
+            return
+        else:
+            logger.debug(f'[PathPermissionManager] Path will be created later: {path} ({path_type})')
+    managed_path = ManagedPath(path=path.resolve(), permission=permission, path_type=path_type)
+    self.managed_paths.append(managed_path)
+    self._permission_cache.clear()
+    logger.info(f'[PathPermissionManager] Added {path_type} path: {path} ({permission.value})')
+
+def set_context_write_access_enabled(self, enabled: bool) -> None:
+    """
+        Update write access setting for context paths and recalculate their permissions.
+        Note: Workspace paths always have write access regardless of this setting.
+
+        Args:
+            enabled: Whether to enable write access for context paths
+        """
+    if self.context_write_access_enabled == enabled:
+        return
+    logger.info(f'[PathPermissionManager] Setting context_write_access_enabled to {enabled}')
+    logger.info(f'[PathPermissionManager] Before update: self.managed_paths={self.managed_paths!r}')
+    self.context_write_access_enabled = enabled
+    for mp in self.managed_paths:
+        if mp.path_type == 'context' and mp.will_be_writable:
+            if enabled:
+                mp.permission = Permission.WRITE
+                logger.debug(f'[PathPermissionManager] Enabled write access for {mp.path}')
+            else:
+                mp.permission = Permission.READ
+                logger.debug(f'[PathPermissionManager] Keeping read-only for {mp.path}')
+    logger.info(f'[PathPermissionManager] Updated context path permissions based on context_write_access_enabled={enabled}, now is self.managed_paths={self.managed_paths!r}')
+    self._permission_cache.clear()
+
+def get_permission(self, path: Path) -> Optional[Permission]:
+    """
+        Get permission level for a path.
+
+        Now handles file-specific context paths correctly.
+
+        Args:
+            path: Path to check
+
+        Returns:
+            Permission level or None if path is not in context
+        """
+    resolved_path = path.resolve()
+    if resolved_path in self._permission_cache:
+        logger.debug(f'[PathPermissionManager] Permission cache hit for {resolved_path}: {self._permission_cache[resolved_path].value}')
+        return self._permission_cache[resolved_path]
+    if self._is_excluded_path(resolved_path):
+        logger.info(f'[PathPermissionManager] Path {resolved_path} matches excluded pattern, forcing read-only')
+        self._permission_cache[resolved_path] = Permission.READ
+        return Permission.READ
+    for managed_path in self.managed_paths:
+        if managed_path.contains(resolved_path) and managed_path.is_protected(resolved_path):
+            logger.info(f'[PathPermissionManager] Path {resolved_path} is protected, forcing read-only')
+            self._permission_cache[resolved_path] = Permission.READ
+            return Permission.READ
+    file_paths = [mp for mp in self.managed_paths if mp.is_file]
+    dir_paths = [mp for mp in self.managed_paths if not mp.is_file and mp.path_type != 'file_context_parent']
+    for managed_path in file_paths:
+        if managed_path.contains(resolved_path):
+            logger.info(f'[PathPermissionManager] Found file-specific permission for {resolved_path}: {managed_path.permission.value} (from {managed_path.path}, type: {managed_path.path_type}, will_be_writable: {managed_path.will_be_writable})')
+            self._permission_cache[resolved_path] = managed_path.permission
+            return managed_path.permission
+    sorted_dir_paths = sorted(dir_paths, key=lambda mp: len(mp.path.parts), reverse=True)
+    for managed_path in sorted_dir_paths:
+        if managed_path.contains(resolved_path) or managed_path.path == resolved_path:
+            logger.info(f'[PathPermissionManager] Found permission for {resolved_path}: {managed_path.permission.value} (from {managed_path.path}, type: {managed_path.path_type}, will_be_writable: {managed_path.will_be_writable})')
+            self._permission_cache[resolved_path] = managed_path.permission
+            return managed_path.permission
+    logger.debug(f'[PathPermissionManager] No permission found for {resolved_path} in managed paths: {[(str(mp.path), mp.permission.value, mp.path_type) for mp in self.managed_paths]}')
+    return None
+
+def _validate_delete_files_batch(self, tool_args: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+        Validate batch delete operations by checking all files that would be deleted.
+
+        Args:
+            tool_args: Arguments for delete_files_batch
+
+        Returns:
+            Tuple of (allowed: bool, reason: Optional[str])
+        """
+    try:
+        base_path = tool_args.get('base_path')
+        include_patterns = tool_args.get('include_patterns') or ['*']
+        exclude_patterns = tool_args.get('exclude_patterns') or []
+        if not base_path:
+            return (False, 'delete_files_batch requires base_path')
+        resolved_base = self._resolve_path_against_workspace(base_path)
+        base = Path(resolved_base)
+        if not base.exists():
+            return (True, None)
+        unread_files = []
+        for item in base.rglob('*'):
+            if not item.is_file():
+                continue
+            rel_path = item.relative_to(base)
+            rel_path_str = str(rel_path)
+            included = any((fnmatch.fnmatch(rel_path_str, pattern) for pattern in include_patterns))
+            if not included:
+                continue
+            excluded = any((fnmatch.fnmatch(rel_path_str, pattern) for pattern in exclude_patterns))
+            if excluded:
+                continue
+            if not self.file_operation_tracker.was_read(item):
+                unread_files.append(rel_path_str)
+        if unread_files:
+            example_files = unread_files[:3]
+            suffix = f' (and {len(unread_files) - 3} more)' if len(unread_files) > 3 else ''
+            reason = f'Cannot delete {len(unread_files)} unread file(s). Examples: {', '.join(example_files)}{suffix}. Please read files before deletion using Read or read_multimodal_files.'
+            logger.info(f'[PathPermissionManager] Blocking batch delete: {reason}')
+            return (False, reason)
+        return (True, None)
+    except Exception as e:
+        logger.error(f'[PathPermissionManager] Error validating batch delete: {e}')
+        return (False, f'Batch delete validation failed: {e}')
+
+def get_claude_code_hooks_config(self) -> Dict[str, Any]:
+    """
+        Get Claude Agent SDK hooks configuration.
+
+        Returns:
+            Hooks configuration dict for ClaudeAgentOptions
+        """
+    if not self.managed_paths:
+        return {}
+    try:
+        from claude_agent_sdk import HookMatcher
+    except ImportError:
+        logger.warning('[PathPermissionManager] claude_agent_sdk not available, hooks disabled')
+        return {}
+    return {'PreToolUse': [HookMatcher(matcher='Read', hooks=[self.validate_context_access]), HookMatcher(matcher='Write', hooks=[self.validate_context_access]), HookMatcher(matcher='Edit', hooks=[self.validate_context_access]), HookMatcher(matcher='MultiEdit', hooks=[self.validate_context_access]), HookMatcher(matcher='NotebookEdit', hooks=[self.validate_context_access]), HookMatcher(matcher='Grep', hooks=[self.validate_context_access]), HookMatcher(matcher='Glob', hooks=[self.validate_context_access]), HookMatcher(matcher='LS', hooks=[self.validate_context_access]), HookMatcher(matcher='Bash', hooks=[self.validate_context_access])]}
+
+class DockerManager:
+    """
+    Manages Docker containers for isolated command execution.
+
+    Each agent gets a persistent container for the orchestration session:
+    - Volume mounts for workspace and context paths
+    - Network isolation (configurable)
+    - Resource limits (CPU, memory)
+    - Commands executed via docker exec
+    - State persists across turns (packages stay installed)
+    """
+
+    def __init__(self, image: str='massgen/mcp-runtime:latest', network_mode: str='none', memory_limit: Optional[str]=None, cpu_limit: Optional[float]=None):
+        """
+        Initialize Docker manager.
+
+        Args:
+            image: Docker image to use for containers
+            network_mode: Network mode (none/bridge/host)
+            memory_limit: Memory limit (e.g., "2g", "512m")
+            cpu_limit: CPU limit (e.g., 2.0 for 2 CPUs)
+
+        Raises:
+            RuntimeError: If Docker is not available or cannot connect
+        """
+        if not DOCKER_AVAILABLE:
+            raise RuntimeError('Docker Python library not available. Install with: pip install docker')
+        self.image = image
+        self.network_mode = network_mode
+        self.memory_limit = memory_limit
+        self.cpu_limit = cpu_limit
+        try:
+            self.client = docker.from_env()
+            self.client.ping()
+            version_info = self.client.version()
+            docker_version = version_info.get('Version', 'unknown')
+            api_version = version_info.get('ApiVersion', 'unknown')
+            logger.info('🐳 [Docker] Client initialized successfully')
+            logger.info(f'    Docker version: {docker_version}')
+            logger.info(f'    API version: {api_version}')
+        except DockerException as e:
+            logger.error(f'❌ [Docker] Failed to connect to Docker daemon: {e}')
+            raise RuntimeError(f'Failed to connect to Docker: {e}')
+        self.containers: Dict[str, Container] = {}
+
+    def ensure_image_exists(self) -> None:
+        """
+        Ensure the Docker image exists locally.
+
+        Pulls the image if not found locally.
+
+        Raises:
+            RuntimeError: If image cannot be pulled
+        """
+        try:
+            self.client.images.get(self.image)
+            logger.info(f"✅ [Docker] Image '{self.image}' found locally")
+        except ImageNotFound:
+            logger.info(f"📥 [Docker] Image '{self.image}' not found locally, pulling...")
+            try:
+                self.client.images.pull(self.image)
+                logger.info(f"✅ [Docker] Successfully pulled image '{self.image}'")
+            except DockerException as e:
+                raise RuntimeError(f"Failed to pull Docker image '{self.image}': {e}")
+
+    def create_container(self, agent_id: str, workspace_path: Path, temp_workspace_path: Optional[Path]=None, context_paths: Optional[List[Dict[str, Any]]]=None) -> str:
+        """
+        Create and start a persistent Docker container for an agent.
+
+        The container runs for the entire orchestration session and maintains state
+        across command executions (installed packages, generated files, etc.).
+
+        IMPORTANT: Paths are mounted at the SAME location as on the host to maintain
+        path transparency. The LLM sees identical paths whether in Docker or local mode.
+
+        Args:
+            agent_id: Unique identifier for the agent
+            workspace_path: Path to agent's workspace (mounted at same path, read-write)
+            temp_workspace_path: Path to shared temp workspace (mounted at same path, read-only)
+            context_paths: List of context path dicts with 'path', 'permission', and optional 'name' keys
+                          (each mounted at its host path)
+
+        Returns:
+            Container ID
+
+        Raises:
+            RuntimeError: If container creation fails
+        """
+        if agent_id in self.containers:
+            logger.warning(f'⚠️ [Docker] Container for agent {agent_id} already exists')
+            return self.containers[agent_id].id
+        self.ensure_image_exists()
+        container_name = f'massgen-{agent_id}'
+        try:
+            existing = self.client.containers.get(container_name)
+            logger.warning(f"🔄 [Docker] Found existing container '{container_name}' (id: {existing.short_id}), removing it")
+            existing.remove(force=True)
+        except NotFound:
+            pass
+        except DockerException as e:
+            logger.warning(f"⚠️ [Docker] Error checking for existing container '{container_name}': {e}")
+        logger.info(f"🐳 [Docker] Creating container for agent '{agent_id}'")
+        logger.info(f'    Image: {self.image}')
+        logger.info(f'    Network: {self.network_mode}')
+        if self.memory_limit:
+            logger.info(f'    Memory limit: {self.memory_limit}')
+        if self.cpu_limit:
+            logger.info(f'    CPU limit: {self.cpu_limit} cores')
+        volumes = {}
+        mount_info = []
+        workspace_path = workspace_path.resolve()
+        volumes[str(workspace_path)] = {'bind': str(workspace_path), 'mode': 'rw'}
+        mount_info.append(f'      {workspace_path} ← {workspace_path} (rw)')
+        if temp_workspace_path:
+            temp_workspace_path = temp_workspace_path.resolve()
+            volumes[str(temp_workspace_path)] = {'bind': str(temp_workspace_path), 'mode': 'ro'}
+            mount_info.append(f'      {temp_workspace_path} ← {temp_workspace_path} (ro)')
+        if context_paths:
+            for ctx_path_config in context_paths:
+                ctx_path = Path(ctx_path_config['path']).resolve()
+                permission = ctx_path_config.get('permission', 'read')
+                mode = 'rw' if permission == 'write' else 'ro'
+                volumes[str(ctx_path)] = {'bind': str(ctx_path), 'mode': mode}
+                mount_info.append(f'      {ctx_path} ← {ctx_path} ({mode})')
+        if mount_info:
+            logger.info('    Volume mounts:')
+            for mount_line in mount_info:
+                logger.info(mount_line)
+        resource_config = {}
+        if self.memory_limit:
+            resource_config['mem_limit'] = self.memory_limit
+        if self.cpu_limit:
+            resource_config['nano_cpus'] = int(self.cpu_limit * 1000000000.0)
+        container_config = {'image': self.image, 'name': container_name, 'command': ['tail', '-f', '/dev/null'], 'detach': True, 'volumes': volumes, 'working_dir': str(workspace_path), 'network_mode': self.network_mode, 'auto_remove': False, 'stdin_open': True, 'tty': True, **resource_config}
+        try:
+            container = self.client.containers.run(**container_config)
+            self.containers[agent_id] = container
+            container.reload()
+            status = container.status
+            logger.info('✅ [Docker] Container created successfully')
+            logger.info(f'    Container ID: {container.short_id}')
+            logger.info(f'    Container name: {container_name}')
+            logger.info(f'    Status: {status}')
+            logger.debug(f'💡 [Docker] Inspect container: docker inspect {container.short_id}')
+            logger.debug(f'💡 [Docker] View logs: docker logs {container.short_id}')
+            logger.debug(f'💡 [Docker] Execute commands: docker exec -it {container.short_id} /bin/bash')
+            return container.id
+        except DockerException as e:
+            logger.error(f'❌ [Docker] Failed to create container for agent {agent_id}: {e}')
+            raise RuntimeError(f'Failed to create Docker container for agent {agent_id}: {e}')
+
+    def get_container(self, agent_id: str) -> Optional[Container]:
+        """
+        Get container for an agent.
+
+        Args:
+            agent_id: Agent identifier
+
+        Returns:
+            Container object or None if not found
+        """
+        return self.containers.get(agent_id)
+
+    def exec_command(self, agent_id: str, command: str, workdir: Optional[str]=None, timeout: Optional[int]=None) -> Dict[str, Any]:
+        """
+        Execute a command inside the agent's container.
+
+        Args:
+            agent_id: Agent identifier
+            command: Command to execute (as string, will be run in shell)
+            workdir: Working directory (uses host path - same path is mounted in container)
+            timeout: Command timeout in seconds (implemented using threading)
+
+        Returns:
+            Dictionary with:
+            - success: bool (True if exit_code == 0)
+            - exit_code: int
+            - stdout: str
+            - stderr: str (combined with stdout in Docker exec)
+            - execution_time: float
+            - command: str
+            - work_dir: str
+
+        Raises:
+            ValueError: If container not found
+            RuntimeError: If execution fails
+        """
+        container = self.containers.get(agent_id)
+        if not container:
+            raise ValueError(f'No container found for agent {agent_id}')
+        effective_workdir = workdir if workdir else None
+        try:
+            exec_config = {'cmd': ['/bin/sh', '-c', command], 'stdout': True, 'stderr': True}
+            if effective_workdir:
+                exec_config['workdir'] = effective_workdir
+            logger.debug(f'🔧 [Docker] Executing in container {container.short_id}: {command}')
+            start_time = time.time()
+            if timeout:
+                result_container = {}
+                exception_container = {}
+
+                def run_exec():
+                    try:
+                        result_container['data'] = container.exec_run(**exec_config)
+                    except Exception as e:
+                        exception_container['error'] = e
+                thread = threading.Thread(target=run_exec)
+                thread.daemon = True
+                thread.start()
+                thread.join(timeout=timeout)
+                execution_time = time.time() - start_time
+                if thread.is_alive():
+                    logger.warning(f'⚠️ [Docker] Command timed out after {timeout}s: {command}')
+                    return {'success': False, 'exit_code': -1, 'stdout': '', 'stderr': f'Command timed out after {timeout} seconds', 'execution_time': execution_time, 'command': command, 'work_dir': effective_workdir or '(container default)'}
+                if 'error' in exception_container:
+                    raise exception_container['error']
+                exit_code, output = result_container['data']
+            else:
+                exit_code, output = container.exec_run(**exec_config)
+                execution_time = time.time() - start_time
+            output_str = output.decode('utf-8') if isinstance(output, bytes) else output
+            if exit_code != 0:
+                logger.debug(f'⚠️ [Docker] Command exited with code {exit_code}')
+            return {'success': exit_code == 0, 'exit_code': exit_code, 'stdout': output_str, 'stderr': '', 'execution_time': execution_time, 'command': command, 'work_dir': effective_workdir or '(container default)'}
+        except DockerException as e:
+            logger.error(f'❌ [Docker] Failed to execute command in container: {e}')
+            raise RuntimeError(f'Failed to execute command in container: {e}')
+
+    def stop_container(self, agent_id: str, timeout: int=10) -> None:
+        """
+        Stop a container gracefully.
+
+        Args:
+            agent_id: Agent identifier
+            timeout: Seconds to wait before killing
+
+        Raises:
+            ValueError: If container not found
+        """
+        container = self.containers.get(agent_id)
+        if not container:
+            raise ValueError(f'No container found for agent {agent_id}')
+        try:
+            logger.info(f'🛑 [Docker] Stopping container {container.short_id} for agent {agent_id}')
+            container.stop(timeout=timeout)
+            logger.info('✅ [Docker] Container stopped successfully')
+        except DockerException as e:
+            logger.error(f'❌ [Docker] Failed to stop container for agent {agent_id}: {e}')
+
+    def remove_container(self, agent_id: str, force: bool=False) -> None:
+        """
+        Remove a container.
+
+        Args:
+            agent_id: Agent identifier
+            force: Force removal even if running
+
+        Raises:
+            ValueError: If container not found
+        """
+        container = self.containers.get(agent_id)
+        if not container:
+            raise ValueError(f'No container found for agent {agent_id}')
+        try:
+            container_id = container.short_id
+            logger.info(f'🗑️  [Docker] Removing container {container_id} for agent {agent_id}')
+            container.remove(force=force)
+            del self.containers[agent_id]
+            logger.info('✅ [Docker] Container removed successfully')
+        except DockerException as e:
+            logger.error(f'❌ [Docker] Failed to remove container for agent {agent_id}: {e}')
+
+    def cleanup(self, agent_id: Optional[str]=None) -> None:
+        """
+        Clean up containers.
+
+        Args:
+            agent_id: If provided, cleanup specific agent. Otherwise cleanup all.
+        """
+        if agent_id:
+            if agent_id in self.containers:
+                logger.info(f'🧹 [Docker] Cleaning up container for agent {agent_id}')
+                try:
+                    self.stop_container(agent_id)
+                    self.remove_container(agent_id, force=True)
+                except Exception as e:
+                    logger.error(f'❌ [Docker] Error cleaning up container for agent {agent_id}: {e}')
+        else:
+            if self.containers:
+                logger.info(f'🧹 [Docker] Cleaning up {len(self.containers)} container(s)')
+            for aid in list(self.containers.keys()):
+                try:
+                    self.stop_container(aid)
+                    self.remove_container(aid, force=True)
+                except Exception as e:
+                    logger.error(f'❌ [Docker] Error cleaning up container for agent {aid}: {e}')
+
+    def log_container_info(self, agent_id: str) -> None:
+        """
+        Log detailed container information (useful for debugging).
+
+        Args:
+            agent_id: Agent identifier
+        """
+        container = self.containers.get(agent_id)
+        if not container:
+            logger.warning(f'⚠️ [Docker] No container found for agent {agent_id}')
+            return
+        try:
+            container.reload()
+            logger.info(f"📊 [Docker] Container information for agent '{agent_id}':")
+            logger.info(f'    ID: {container.short_id}')
+            logger.info(f'    Name: {container.name}')
+            logger.info(f'    Status: {container.status}')
+            logger.info(f'    Network: {self.network_mode}')
+            if self.memory_limit:
+                logger.info(f'    Memory limit: {self.memory_limit}')
+            if self.cpu_limit:
+                logger.info(f'    CPU limit: {self.cpu_limit} cores')
+        except Exception as e:
+            logger.warning(f'⚠️ [Docker] Could not log container info: {e}')
+
+    def __del__(self):
+        """Cleanup all containers on deletion."""
+        try:
+            if hasattr(self, 'containers') and self.containers:
+                self.cleanup()
+        except Exception:
+            pass
+
+def ensure_image_exists(self) -> None:
+    """
+        Ensure the Docker image exists locally.
+
+        Pulls the image if not found locally.
+
+        Raises:
+            RuntimeError: If image cannot be pulled
+        """
+    try:
+        self.client.images.get(self.image)
+        logger.info(f"✅ [Docker] Image '{self.image}' found locally")
+    except ImageNotFound:
+        logger.info(f"📥 [Docker] Image '{self.image}' not found locally, pulling...")
+        try:
+            self.client.images.pull(self.image)
+            logger.info(f"✅ [Docker] Successfully pulled image '{self.image}'")
+        except DockerException as e:
+            raise RuntimeError(f"Failed to pull Docker image '{self.image}': {e}")
+
+def create_container(self, agent_id: str, workspace_path: Path, temp_workspace_path: Optional[Path]=None, context_paths: Optional[List[Dict[str, Any]]]=None) -> str:
+    """
+        Create and start a persistent Docker container for an agent.
+
+        The container runs for the entire orchestration session and maintains state
+        across command executions (installed packages, generated files, etc.).
+
+        IMPORTANT: Paths are mounted at the SAME location as on the host to maintain
+        path transparency. The LLM sees identical paths whether in Docker or local mode.
+
+        Args:
+            agent_id: Unique identifier for the agent
+            workspace_path: Path to agent's workspace (mounted at same path, read-write)
+            temp_workspace_path: Path to shared temp workspace (mounted at same path, read-only)
+            context_paths: List of context path dicts with 'path', 'permission', and optional 'name' keys
+                          (each mounted at its host path)
+
+        Returns:
+            Container ID
+
+        Raises:
+            RuntimeError: If container creation fails
+        """
+    if agent_id in self.containers:
+        logger.warning(f'⚠️ [Docker] Container for agent {agent_id} already exists')
+        return self.containers[agent_id].id
+    self.ensure_image_exists()
+    container_name = f'massgen-{agent_id}'
+    try:
+        existing = self.client.containers.get(container_name)
+        logger.warning(f"🔄 [Docker] Found existing container '{container_name}' (id: {existing.short_id}), removing it")
+        existing.remove(force=True)
+    except NotFound:
+        pass
+    except DockerException as e:
+        logger.warning(f"⚠️ [Docker] Error checking for existing container '{container_name}': {e}")
+    logger.info(f"🐳 [Docker] Creating container for agent '{agent_id}'")
+    logger.info(f'    Image: {self.image}')
+    logger.info(f'    Network: {self.network_mode}')
+    if self.memory_limit:
+        logger.info(f'    Memory limit: {self.memory_limit}')
+    if self.cpu_limit:
+        logger.info(f'    CPU limit: {self.cpu_limit} cores')
+    volumes = {}
+    mount_info = []
+    workspace_path = workspace_path.resolve()
+    volumes[str(workspace_path)] = {'bind': str(workspace_path), 'mode': 'rw'}
+    mount_info.append(f'      {workspace_path} ← {workspace_path} (rw)')
+    if temp_workspace_path:
+        temp_workspace_path = temp_workspace_path.resolve()
+        volumes[str(temp_workspace_path)] = {'bind': str(temp_workspace_path), 'mode': 'ro'}
+        mount_info.append(f'      {temp_workspace_path} ← {temp_workspace_path} (ro)')
+    if context_paths:
+        for ctx_path_config in context_paths:
+            ctx_path = Path(ctx_path_config['path']).resolve()
+            permission = ctx_path_config.get('permission', 'read')
+            mode = 'rw' if permission == 'write' else 'ro'
+            volumes[str(ctx_path)] = {'bind': str(ctx_path), 'mode': mode}
+            mount_info.append(f'      {ctx_path} ← {ctx_path} ({mode})')
+    if mount_info:
+        logger.info('    Volume mounts:')
+        for mount_line in mount_info:
+            logger.info(mount_line)
+    resource_config = {}
+    if self.memory_limit:
+        resource_config['mem_limit'] = self.memory_limit
+    if self.cpu_limit:
+        resource_config['nano_cpus'] = int(self.cpu_limit * 1000000000.0)
+    container_config = {'image': self.image, 'name': container_name, 'command': ['tail', '-f', '/dev/null'], 'detach': True, 'volumes': volumes, 'working_dir': str(workspace_path), 'network_mode': self.network_mode, 'auto_remove': False, 'stdin_open': True, 'tty': True, **resource_config}
+    try:
+        container = self.client.containers.run(**container_config)
+        self.containers[agent_id] = container
+        container.reload()
+        status = container.status
+        logger.info('✅ [Docker] Container created successfully')
+        logger.info(f'    Container ID: {container.short_id}')
+        logger.info(f'    Container name: {container_name}')
+        logger.info(f'    Status: {status}')
+        logger.debug(f'💡 [Docker] Inspect container: docker inspect {container.short_id}')
+        logger.debug(f'💡 [Docker] View logs: docker logs {container.short_id}')
+        logger.debug(f'💡 [Docker] Execute commands: docker exec -it {container.short_id} /bin/bash')
+        return container.id
+    except DockerException as e:
+        logger.error(f'❌ [Docker] Failed to create container for agent {agent_id}: {e}')
+        raise RuntimeError(f'Failed to create Docker container for agent {agent_id}: {e}')
+
+def exec_command(self, agent_id: str, command: str, workdir: Optional[str]=None, timeout: Optional[int]=None) -> Dict[str, Any]:
+    """
+        Execute a command inside the agent's container.
+
+        Args:
+            agent_id: Agent identifier
+            command: Command to execute (as string, will be run in shell)
+            workdir: Working directory (uses host path - same path is mounted in container)
+            timeout: Command timeout in seconds (implemented using threading)
+
+        Returns:
+            Dictionary with:
+            - success: bool (True if exit_code == 0)
+            - exit_code: int
+            - stdout: str
+            - stderr: str (combined with stdout in Docker exec)
+            - execution_time: float
+            - command: str
+            - work_dir: str
+
+        Raises:
+            ValueError: If container not found
+            RuntimeError: If execution fails
+        """
+    container = self.containers.get(agent_id)
+    if not container:
+        raise ValueError(f'No container found for agent {agent_id}')
+    effective_workdir = workdir if workdir else None
+    try:
+        exec_config = {'cmd': ['/bin/sh', '-c', command], 'stdout': True, 'stderr': True}
+        if effective_workdir:
+            exec_config['workdir'] = effective_workdir
+        logger.debug(f'🔧 [Docker] Executing in container {container.short_id}: {command}')
+        start_time = time.time()
+        if timeout:
+            result_container = {}
+            exception_container = {}
+
+            def run_exec():
+                try:
+                    result_container['data'] = container.exec_run(**exec_config)
+                except Exception as e:
+                    exception_container['error'] = e
+            thread = threading.Thread(target=run_exec)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout=timeout)
+            execution_time = time.time() - start_time
+            if thread.is_alive():
+                logger.warning(f'⚠️ [Docker] Command timed out after {timeout}s: {command}')
+                return {'success': False, 'exit_code': -1, 'stdout': '', 'stderr': f'Command timed out after {timeout} seconds', 'execution_time': execution_time, 'command': command, 'work_dir': effective_workdir or '(container default)'}
+            if 'error' in exception_container:
+                raise exception_container['error']
+            exit_code, output = result_container['data']
+        else:
+            exit_code, output = container.exec_run(**exec_config)
+            execution_time = time.time() - start_time
+        output_str = output.decode('utf-8') if isinstance(output, bytes) else output
+        if exit_code != 0:
+            logger.debug(f'⚠️ [Docker] Command exited with code {exit_code}')
+        return {'success': exit_code == 0, 'exit_code': exit_code, 'stdout': output_str, 'stderr': '', 'execution_time': execution_time, 'command': command, 'work_dir': effective_workdir or '(container default)'}
+    except DockerException as e:
+        logger.error(f'❌ [Docker] Failed to execute command in container: {e}')
+        raise RuntimeError(f'Failed to execute command in container: {e}')
+
+def run_exec():
+    try:
+        result_container['data'] = container.exec_run(**exec_config)
+    except Exception as e:
+        exception_container['error'] = e
+
+def stop_container(self, agent_id: str, timeout: int=10) -> None:
+    """
+        Stop a container gracefully.
+
+        Args:
+            agent_id: Agent identifier
+            timeout: Seconds to wait before killing
+
+        Raises:
+            ValueError: If container not found
+        """
+    container = self.containers.get(agent_id)
+    if not container:
+        raise ValueError(f'No container found for agent {agent_id}')
+    try:
+        logger.info(f'🛑 [Docker] Stopping container {container.short_id} for agent {agent_id}')
+        container.stop(timeout=timeout)
+        logger.info('✅ [Docker] Container stopped successfully')
+    except DockerException as e:
+        logger.error(f'❌ [Docker] Failed to stop container for agent {agent_id}: {e}')
+
+def remove_container(self, agent_id: str, force: bool=False) -> None:
+    """
+        Remove a container.
+
+        Args:
+            agent_id: Agent identifier
+            force: Force removal even if running
+
+        Raises:
+            ValueError: If container not found
+        """
+    container = self.containers.get(agent_id)
+    if not container:
+        raise ValueError(f'No container found for agent {agent_id}')
+    try:
+        container_id = container.short_id
+        logger.info(f'🗑️  [Docker] Removing container {container_id} for agent {agent_id}')
+        container.remove(force=force)
+        del self.containers[agent_id]
+        logger.info('✅ [Docker] Container removed successfully')
+    except DockerException as e:
+        logger.error(f'❌ [Docker] Failed to remove container for agent {agent_id}: {e}')
+
+def cleanup(self, agent_id: Optional[str]=None) -> None:
+    """
+        Clean up containers.
+
+        Args:
+            agent_id: If provided, cleanup specific agent. Otherwise cleanup all.
+        """
+    if agent_id:
+        if agent_id in self.containers:
+            logger.info(f'🧹 [Docker] Cleaning up container for agent {agent_id}')
+            try:
+                self.stop_container(agent_id)
+                self.remove_container(agent_id, force=True)
+            except Exception as e:
+                logger.error(f'❌ [Docker] Error cleaning up container for agent {agent_id}: {e}')
+    else:
+        if self.containers:
+            logger.info(f'🧹 [Docker] Cleaning up {len(self.containers)} container(s)')
+        for aid in list(self.containers.keys()):
+            try:
+                self.stop_container(aid)
+                self.remove_container(aid, force=True)
+            except Exception as e:
+                logger.error(f'❌ [Docker] Error cleaning up container for agent {aid}: {e}')
+
+def log_container_info(self, agent_id: str) -> None:
+    """
+        Log detailed container information (useful for debugging).
+
+        Args:
+            agent_id: Agent identifier
+        """
+    container = self.containers.get(agent_id)
+    if not container:
+        logger.warning(f'⚠️ [Docker] No container found for agent {agent_id}')
+        return
+    try:
+        container.reload()
+        logger.info(f"📊 [Docker] Container information for agent '{agent_id}':")
+        logger.info(f'    ID: {container.short_id}')
+        logger.info(f'    Name: {container.name}')
+        logger.info(f'    Status: {container.status}')
+        logger.info(f'    Network: {self.network_mode}')
+        if self.memory_limit:
+            logger.info(f'    Memory limit: {self.memory_limit}')
+        if self.cpu_limit:
+            logger.info(f'    CPU limit: {self.cpu_limit} cores')
+    except Exception as e:
+        logger.warning(f'⚠️ [Docker] Could not log container info: {e}')
+
+class FileOperationTracker:
+    """
+    Track file operations to enforce read-before-delete policy.
+
+    This tracker maintains a set of files that have been read by the agent,
+    allowing the system to prevent deletion of files that haven't been
+    comprehended yet.
+    """
+    AUTO_GENERATED_PATTERNS = ['__pycache__', '.pyc', '.pyo', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.coverage', '*.egg-info', '.tox', '.nox', 'node_modules', '.next', '.nuxt', 'dist', 'build', '.DS_Store', 'Thumbs.db', '*.log', '*.swp', '*.swo', '*~']
+
+    def __init__(self, enforce_read_before_delete: bool=True):
+        """
+        Initialize the file operation tracker.
+
+        Args:
+            enforce_read_before_delete: Whether to enforce read-before-delete policy
+        """
+        self._read_files: Set[Path] = set()
+        self._created_files: Set[Path] = set()
+        self.enforce_read_before_delete = enforce_read_before_delete
+        logger.info(f'[FileOperationTracker] Initialized with enforce_read_before_delete={enforce_read_before_delete}')
+
+    def mark_as_read(self, file_path: Path) -> None:
+        """
+        Mark a file as read/understood by the agent.
+
+        This is called when the agent uses Read, read_multimodal_files,
+        compare_files, or other tools that read file contents.
+
+        Args:
+            file_path: Path to the file that was read
+        """
+        resolved_path = file_path.resolve()
+        self._read_files.add(resolved_path)
+        logger.debug(f'[FileOperationTracker] Marked as read: {resolved_path}')
+
+    def mark_as_created(self, file_path: Path) -> None:
+        """
+        Mark a file as created by the agent during this turn.
+
+        Files created by the agent are exempt from read-before-delete requirements
+        since the agent knows what it created.
+
+        Args:
+            file_path: Path to the file that was created
+        """
+        resolved_path = file_path.resolve()
+        self._created_files.add(resolved_path)
+        logger.debug(f'[FileOperationTracker] Marked as created: {resolved_path}')
+
+    def was_read(self, file_path: Path) -> bool:
+        """
+        Check if a file was read by the agent.
+
+        Args:
+            file_path: Path to check
+
+        Returns:
+            True if the file was read or created by the agent
+        """
+        resolved_path = file_path.resolve()
+        was_read = resolved_path in self._read_files
+        was_created = resolved_path in self._created_files
+        logger.debug(f'[FileOperationTracker] Checking read status for {resolved_path}: read={was_read}, created={was_created}')
+        return was_read or was_created
+
+    def _is_auto_generated(self, file_path: Path) -> bool:
+        """
+        Check if a file matches auto-generated patterns and is exempt from read-before-delete.
+
+        Args:
+            file_path: Path to check
+
+        Returns:
+            True if file is auto-generated and can be deleted without reading
+        """
+        path_str = str(file_path)
+        path_parts = file_path.parts
+        for pattern in self.AUTO_GENERATED_PATTERNS:
+            if pattern in path_parts:
+                return True
+            if pattern.startswith('.') and (not pattern.startswith('.*')):
+                if path_str.endswith(pattern):
+                    return True
+            if '*' in pattern:
+                if fnmatch.fnmatch(file_path.name, pattern):
+                    return True
+        return False
+
+    def can_delete(self, file_path: Path) -> tuple[bool, str | None]:
+        """
+        Check if a file can be deleted based on read-before-delete policy.
+
+        Auto-generated files (like __pycache__, .pyc, etc.) are exempt from
+        read-before-delete requirements.
+
+        Args:
+            file_path: Path to the file to check
+
+        Returns:
+            Tuple of (can_delete: bool, reason: Optional[str])
+            - can_delete: Whether deletion is allowed
+            - reason: Explanation if deletion is blocked (None if allowed)
+        """
+        if not self.enforce_read_before_delete:
+            return (True, None)
+        resolved_path = file_path.resolve()
+        if not resolved_path.exists():
+            return (True, None)
+        if self._is_auto_generated(resolved_path):
+            logger.debug(f'[FileOperationTracker] Allowing deletion of auto-generated file: {resolved_path}')
+            return (True, None)
+        if self.was_read(resolved_path):
+            return (True, None)
+        reason = f"Cannot delete '{resolved_path}': File must be read before deletion. Use read (including read_multimodal_files) or diff tools to view the file first."
+        logger.info(f'[FileOperationTracker] Blocking deletion: {reason}')
+        return (False, reason)
+
+    def can_delete_directory(self, dir_path: Path) -> tuple[bool, str | None]:
+        """
+        Check if a directory can be deleted based on read-before-delete policy.
+
+        For directories, we check if all files within have been read.
+        Auto-generated files are exempt from read-before-delete requirements.
+
+        Args:
+            dir_path: Path to the directory to check
+
+        Returns:
+            Tuple of (can_delete: bool, reason: Optional[str])
+            - can_delete: Whether deletion is allowed
+            - reason: Explanation if deletion is blocked (None if allowed)
+        """
+        if not self.enforce_read_before_delete:
+            return (True, None)
+        resolved_dir = dir_path.resolve()
+        if not resolved_dir.exists() or not resolved_dir.is_dir():
+            return (True, None)
+        unread_files = []
+        for file_path in resolved_dir.rglob('*'):
+            if file_path.is_file():
+                if self._is_auto_generated(file_path):
+                    continue
+                if not self.was_read(file_path):
+                    unread_files.append(str(file_path.relative_to(resolved_dir)))
+        if unread_files:
+            example_files = unread_files[:3]
+            suffix = f' (and {len(unread_files) - 3} more)' if len(unread_files) > 3 else ''
+            reason = f"Cannot delete directory '{resolved_dir}': Contains {len(unread_files)} unread file(s). Examples: {', '.join(example_files)}{suffix}. Please read files before deletion."
+            logger.info(f'[FileOperationTracker] Blocking directory deletion: {reason}')
+            return (False, reason)
+        return (True, None)
+
+    def clear(self) -> None:
+        """
+        Clear all tracked operations.
+
+        This should be called at the start of each agent's turn to reset
+        the tracker state.
+        """
+        read_count = len(self._read_files)
+        created_count = len(self._created_files)
+        self._read_files.clear()
+        self._created_files.clear()
+        logger.info(f'[FileOperationTracker] Cleared tracker (had {read_count} read files, {created_count} created files)')
+
+    def get_stats(self) -> dict[str, int]:
+        """
+        Get statistics about tracked operations.
+
+        Returns:
+            Dictionary with tracking statistics
+        """
+        return {'read_files': len(self._read_files), 'created_files': len(self._created_files), 'total_tracked': len(self._read_files) + len(self._created_files)}
+
+def can_delete(self, file_path: Path) -> tuple[bool, str | None]:
+    """
+        Check if a file can be deleted based on read-before-delete policy.
+
+        Auto-generated files (like __pycache__, .pyc, etc.) are exempt from
+        read-before-delete requirements.
+
+        Args:
+            file_path: Path to the file to check
+
+        Returns:
+            Tuple of (can_delete: bool, reason: Optional[str])
+            - can_delete: Whether deletion is allowed
+            - reason: Explanation if deletion is blocked (None if allowed)
+        """
+    if not self.enforce_read_before_delete:
+        return (True, None)
+    resolved_path = file_path.resolve()
+    if not resolved_path.exists():
+        return (True, None)
+    if self._is_auto_generated(resolved_path):
+        logger.debug(f'[FileOperationTracker] Allowing deletion of auto-generated file: {resolved_path}')
+        return (True, None)
+    if self.was_read(resolved_path):
+        return (True, None)
+    reason = f"Cannot delete '{resolved_path}': File must be read before deletion. Use read (including read_multimodal_files) or diff tools to view the file first."
+    logger.info(f'[FileOperationTracker] Blocking deletion: {reason}')
+    return (False, reason)
+
+def can_delete_directory(self, dir_path: Path) -> tuple[bool, str | None]:
+    """
+        Check if a directory can be deleted based on read-before-delete policy.
+
+        For directories, we check if all files within have been read.
+        Auto-generated files are exempt from read-before-delete requirements.
+
+        Args:
+            dir_path: Path to the directory to check
+
+        Returns:
+            Tuple of (can_delete: bool, reason: Optional[str])
+            - can_delete: Whether deletion is allowed
+            - reason: Explanation if deletion is blocked (None if allowed)
+        """
+    if not self.enforce_read_before_delete:
+        return (True, None)
+    resolved_dir = dir_path.resolve()
+    if not resolved_dir.exists() or not resolved_dir.is_dir():
+        return (True, None)
+    unread_files = []
+    for file_path in resolved_dir.rglob('*'):
+        if file_path.is_file():
+            if self._is_auto_generated(file_path):
+                continue
+            if not self.was_read(file_path):
+                unread_files.append(str(file_path.relative_to(resolved_dir)))
+    if unread_files:
+        example_files = unread_files[:3]
+        suffix = f' (and {len(unread_files) - 3} more)' if len(unread_files) > 3 else ''
+        reason = f"Cannot delete directory '{resolved_dir}': Contains {len(unread_files)} unread file(s). Examples: {', '.join(example_files)}{suffix}. Please read files before deletion."
+        logger.info(f'[FileOperationTracker] Blocking directory deletion: {reason}')
+        return (False, reason)
+    return (True, None)
+
+class RichTerminalDisplay(TerminalDisplay):
+    """Enhanced terminal display using Rich library for beautiful formatting."""
+
+    def __init__(self, agent_ids: List[str], **kwargs: Any) -> None:
+        """Initialize rich terminal display.
+
+        Args:
+            agent_ids: List of agent IDs to display
+            **kwargs: Additional configuration options
+                - theme: Color theme ('dark', 'light', 'cyberpunk') (default: 'dark')
+                - refresh_rate: Display refresh rate in Hz (default: 4)
+                - enable_syntax_highlighting: Enable code syntax highlighting (default: True)
+                - max_content_lines: Base lines per agent column before scrolling (default: 8)
+                - show_timestamps: Show timestamps for events (default: True)
+                - enable_status_jump: Enable jumping to latest status when agent status changes (default: True)
+                - truncate_web_search_on_status_change: Truncate web search content when status changes (default: True)
+                - max_web_search_lines_on_status_change: Max web search lines to keep on status changes (default: 3)
+                - enable_flush_output: Enable flush output for final answer display (default: True)
+                - flush_char_delay: Delay between characters in flush output (default: 0.03)
+                - flush_word_delay: Extra delay after punctuation in flush output (default: 0.08)
+        """
+        if not RICH_AVAILABLE:
+            raise ImportError('Rich library is required for RichTerminalDisplay. Install with: pip install rich')
+        super().__init__(agent_ids, **kwargs)
+        self._terminal_performance = self._detect_terminal_performance()
+        self.refresh_rate = self._get_adaptive_refresh_rate(kwargs.get('refresh_rate'))
+        self.theme = kwargs.get('theme', 'dark')
+        self.enable_syntax_highlighting = kwargs.get('enable_syntax_highlighting', True)
+        self.max_content_lines = kwargs.get('max_content_lines', 8)
+        self.max_line_length = kwargs.get('max_line_length', 100)
+        self.show_timestamps = kwargs.get('show_timestamps', True)
+        self.console = Console(force_terminal=True, legacy_windows=False)
+        self.terminal_size = self.console.size
+        self.num_agents = len(agent_ids)
+        self.fixed_column_width = max(20, self.terminal_size.width // self.num_agents - 1)
+        self.agent_panel_height = max(10, self.terminal_size.height - 13)
+        self.orchestrator = kwargs.get('orchestrator', None)
+        self._resize_lock = threading.Lock()
+        self._setup_resize_handler()
+        self.live = None
+        self._lock = threading.RLock()
+        self._last_update = 0
+        self._update_interval = self._get_adaptive_update_interval()
+        self._last_full_refresh = 0
+        self._full_refresh_interval = self._get_adaptive_full_refresh_interval()
+        self._refresh_times: List[float] = []
+        self._dropped_frames = 0
+        self._performance_check_interval = 5.0
+        self._refresh_executor = ThreadPoolExecutor(max_workers=min(len(agent_ids) * 2 + 8, 20))
+        self._agent_panels_cache: Dict[str, Panel] = {}
+        self._header_cache = None
+        self._footer_cache = None
+        self._layout_update_lock = threading.Lock()
+        self._pending_updates: set[str] = set()
+        self._shutdown_flag = False
+        self._priority_updates: set[str] = set()
+        self._status_update_executor = ThreadPoolExecutor(max_workers=4)
+        self._setup_theme()
+        self._keyboard_interactive_mode = kwargs.get('keyboard_interactive_mode', True)
+        self._safe_keyboard_mode = kwargs.get('safe_keyboard_mode', False)
+        self._key_handler = None
+        self._input_thread = None
+        self._stop_input_thread = False
+        self._original_settings = None
+        self._agent_selector_active = False
+        self._stored_final_presentation = None
+        self._stored_presentation_agent = None
+        self._stored_vote_results = None
+        self._final_presentation_active = False
+        self._final_presentation_content = ''
+        self._final_presentation_agent = None
+        self._final_presentation_vote_results = None
+        self.code_patterns = ['```(\\w+)?\\n(.*?)\\n```', '`([^`]+)`', 'def\\s+\\w+\\s*\\(', 'class\\s+\\w+\\s*[:(\\s]', 'import\\s+\\w+', 'from\\s+\\w+\\s+import']
+        self.agent_progress = {agent_id: 0 for agent_id in agent_ids}
+        self.agent_activity = {agent_id: 'waiting' for agent_id in agent_ids}
+        self._last_agent_status = {agent_id: 'waiting' for agent_id in agent_ids}
+        self._last_agent_activity = {agent_id: 'waiting' for agent_id in agent_ids}
+        self._last_content_hash = {agent_id: '' for agent_id in agent_ids}
+        self._debounce_timers: Dict[str, threading.Timer] = {}
+        self._debounce_delay = self._get_adaptive_debounce_delay()
+        self._critical_updates: set[str] = set()
+        self._normal_updates: set[str] = set()
+        self._decorative_updates: set[str] = set()
+        self._important_content_types = {'presentation', 'status', 'tool', 'error'}
+        self._status_change_keywords = {'completed', 'failed', 'waiting', 'error', 'voted', 'voting', 'tool', 'vote recorded'}
+        self._important_event_keywords = {'completed', 'failed', 'voting', 'voted', 'final', 'error', 'started', 'coordination', 'tool', 'vote recorded'}
+        self._status_jump_enabled = kwargs.get('enable_status_jump', True)
+        self._web_search_truncate_on_status_change = kwargs.get('truncate_web_search_on_status_change', True)
+        self._max_web_search_lines = kwargs.get('max_web_search_lines_on_status_change', 3)
+        self._enable_flush_output = kwargs.get('enable_flush_output', True)
+        self._flush_char_delay = kwargs.get('flush_char_delay', 0.03)
+        self._flush_word_delay = kwargs.get('flush_word_delay', 0.08)
+        from massgen.logger_config import get_log_session_dir
+        log_session_dir = get_log_session_dir()
+        self.output_dir = kwargs.get('output_dir', log_session_dir / 'agent_outputs')
+        self.agent_files: Dict[str, Path] = {}
+        self.system_status_file = None
+        self._selected_agent = None
+        self._setup_agent_files()
+        self._text_buffers = {agent_id: '' for agent_id in agent_ids}
+        self._max_buffer_length = self._get_adaptive_buffer_length()
+        self._buffer_timeout = self._get_adaptive_buffer_timeout()
+        self._buffer_timers = {agent_id: None for agent_id in agent_ids}
+        self._update_batch = set()
+        self._batch_timer = None
+        self._batch_timeout = self._get_adaptive_batch_timeout()
+
+    def _setup_resize_handler(self) -> None:
+        """Setup SIGWINCH signal handler for terminal resize detection."""
+        if not sys.stdin.isatty():
+            return
+        try:
+            signal.signal(signal.SIGWINCH, self._handle_resize_signal)
+        except (AttributeError, OSError):
+            pass
+
+    def _handle_resize_signal(self, signum: int, frame: Any) -> None:
+        """Handle SIGWINCH signal when terminal is resized."""
+        threading.Thread(target=self._handle_terminal_resize, daemon=True).start()
+
+    def _handle_terminal_resize(self) -> None:
+        """Handle terminal resize by recalculating layout and refreshing display."""
+        with self._resize_lock:
+            try:
+                if self._terminal_performance['type'] == 'vscode':
+                    time.sleep(0.05)
+                new_size = self.console.size
+                if new_size.width != self.terminal_size.width or new_size.height != self.terminal_size.height:
+                    self.terminal_size = new_size
+                    if self._terminal_performance['type'] == 'vscode':
+                        time.sleep(0.02)
+                    self._recalculate_layout()
+                    self._invalidate_display_cache()
+                    with self._lock:
+                        self._pending_updates.add('header')
+                        self._pending_updates.add('footer')
+                        self._pending_updates.update(self.agent_ids)
+                        self._schedule_async_update(force_update=True)
+                    time.sleep(0.1)
+            except Exception:
+                pass
+
+    def _recalculate_layout(self) -> None:
+        """Recalculate layout dimensions based on current terminal size."""
+        self.fixed_column_width = max(20, self.terminal_size.width // self.num_agents - 1)
+        self.agent_panel_height = max(10, self.terminal_size.height - 13)
+
+    def _invalidate_display_cache(self) -> None:
+        """Invalidate all cached display components to force refresh."""
+        self._agent_panels_cache.clear()
+        self._header_cache = None
+        self._footer_cache = None
+
+    def _setup_agent_files(self) -> None:
+        """Setup individual txt files for each agent and system status file."""
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        for agent_id in self.agent_ids:
+            file_path = Path(self.output_dir) / f'{agent_id}.txt'
+            self.agent_files[agent_id] = file_path
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(f'=== {agent_id.upper()} OUTPUT LOG ===\n\n')
+        self.system_status_file = Path(self.output_dir) / 'system_status.txt'
+        with open(str(self.system_status_file), 'w', encoding='utf-8') as f:
+            f.write('=== SYSTEM STATUS LOG ===\n\n')
+
+    def _detect_terminal_performance(self) -> Dict[str, Any]:
+        """Detect terminal performance characteristics for adaptive refresh rates."""
+        terminal_info = {'type': 'unknown', 'performance_tier': 'medium', 'supports_unicode': True, 'supports_color': True, 'buffer_size': 'normal'}
+        try:
+            term = os.environ.get('TERM', '').lower()
+            term_program = os.environ.get('TERM_PROGRAM', '').lower()
+            if 'iterm.app' in term_program or 'iterm' in term_program.lower():
+                terminal_info['performance_tier'] = 'high'
+                terminal_info['type'] = 'iterm'
+                terminal_info['supports_unicode'] = True
+            elif 'vscode' in term_program or 'code' in term_program or self._detect_vscode_terminal():
+                terminal_info['performance_tier'] = 'medium'
+                terminal_info['type'] = 'vscode'
+                terminal_info['supports_unicode'] = True
+                terminal_info['buffer_size'] = 'large'
+                terminal_info['needs_flush_delay'] = True
+                terminal_info['refresh_stabilization'] = True
+            elif 'apple_terminal' in term_program or term_program == 'terminal':
+                terminal_info['performance_tier'] = 'high'
+                terminal_info['type'] = 'macos_terminal'
+                terminal_info['supports_unicode'] = True
+            elif 'xterm-256color' in term or 'alacritty' in term_program:
+                terminal_info['performance_tier'] = 'high'
+                terminal_info['type'] = 'modern'
+            elif 'screen' in term or 'tmux' in term:
+                terminal_info['performance_tier'] = 'low'
+                terminal_info['type'] = 'multiplexer'
+            elif 'xterm' in term:
+                terminal_info['performance_tier'] = 'medium'
+                terminal_info['type'] = 'xterm'
+            elif term in ['dumb', 'vt100', 'vt220']:
+                terminal_info['performance_tier'] = 'low'
+                terminal_info['type'] = 'legacy'
+                terminal_info['supports_unicode'] = False
+            if os.environ.get('SSH_CONNECTION') or os.environ.get('SSH_CLIENT'):
+                if terminal_info['performance_tier'] == 'high':
+                    terminal_info['performance_tier'] = 'medium'
+                elif terminal_info['performance_tier'] == 'medium':
+                    terminal_info['performance_tier'] = 'low'
+            colorterm = os.environ.get('COLORTERM', '').lower()
+            if colorterm in ['truecolor', '24bit']:
+                terminal_info['supports_color'] = True
+            elif not self.console.is_terminal or term == 'dumb':
+                terminal_info['supports_color'] = False
+        except Exception:
+            terminal_info['performance_tier'] = 'low'
+        return terminal_info
+
+    def _detect_vscode_terminal(self) -> bool:
+        """Additional VSCode terminal detection using multiple indicators."""
+        try:
+            vscode_indicators = ['VSCODE_INJECTION', 'VSCODE_PID', 'VSCODE_IPC_HOOK', 'VSCODE_IPC_HOOK_CLI', 'TERM_PROGRAM_VERSION']
+            for indicator in vscode_indicators:
+                if os.environ.get(indicator):
+                    return True
+            try:
+                import psutil
+                current_process = psutil.Process()
+                parent = current_process.parent()
+                if parent and ('code' in parent.name().lower() or 'vscode' in parent.name().lower()):
+                    return True
+            except (ImportError, psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+            term_program = os.environ.get('TERM_PROGRAM', '').lower()
+            if term_program and any((pattern in term_program for pattern in ['code', 'vscode'])):
+                return True
+            return False
+        except Exception:
+            return False
+
+    def _get_adaptive_refresh_rate(self, user_override: Optional[int]=None) -> int:
+        """Get adaptive refresh rate based on terminal performance."""
+        if user_override is not None:
+            return user_override
+        perf_tier = self._terminal_performance['performance_tier']
+        term_type = self._terminal_performance['type']
+        if term_type == 'vscode':
+            return 2
+        refresh_rates = {'high': 10, 'medium': 5, 'low': 2}
+        return refresh_rates.get(perf_tier, 8)
+
+    def _get_adaptive_update_interval(self) -> float:
+        """Get adaptive update interval based on terminal performance."""
+        perf_tier = self._terminal_performance['performance_tier']
+        intervals = {'high': 0.02, 'medium': 0.05, 'low': 0.1}
+        return intervals.get(perf_tier, 0.05)
+
+    def _get_adaptive_full_refresh_interval(self) -> float:
+        """Get adaptive full refresh interval based on terminal performance."""
+        perf_tier = self._terminal_performance['performance_tier']
+        intervals = {'high': 0.1, 'medium': 0.2, 'low': 0.5}
+        return intervals.get(perf_tier, 0.2)
+
+    def _get_adaptive_debounce_delay(self) -> float:
+        """Get adaptive debounce delay based on terminal performance."""
+        perf_tier = self._terminal_performance['performance_tier']
+        term_type = self._terminal_performance['type']
+        delays = {'high': 0.01, 'medium': 0.03, 'low': 0.05}
+        base_delay = delays.get(perf_tier, 0.03)
+        if term_type in ['iterm', 'macos_terminal']:
+            base_delay *= 2.0
+        return base_delay
+
+    def _get_adaptive_buffer_length(self) -> int:
+        """Get adaptive buffer length based on terminal performance."""
+        perf_tier = self._terminal_performance['performance_tier']
+        term_type = self._terminal_performance['type']
+        lengths = {'high': 800, 'medium': 500, 'low': 200}
+        base_length = lengths.get(perf_tier, 500)
+        if term_type in ['iterm', 'macos_terminal']:
+            base_length = min(base_length, 400)
+        return base_length
+
+    def _get_adaptive_buffer_timeout(self) -> float:
+        """Get adaptive buffer timeout based on terminal performance."""
+        perf_tier = self._terminal_performance['performance_tier']
+        term_type = self._terminal_performance['type']
+        timeouts = {'high': 0.5, 'medium': 1.0, 'low': 2.0}
+        base_timeout = timeouts.get(perf_tier, 1.0)
+        if term_type in ['iterm', 'macos_terminal']:
+            base_timeout *= 1.5
+        return base_timeout
+
+    def _get_adaptive_batch_timeout(self) -> float:
+        """Get adaptive batch timeout for update batching."""
+        perf_tier = self._terminal_performance['performance_tier']
+        timeouts = {'high': 0.05, 'medium': 0.1, 'low': 0.2}
+        return timeouts.get(perf_tier, 0.1)
+
+    def _monitor_performance(self) -> None:
+        """Monitor refresh performance and adjust if needed."""
+        time.time()
+        if len(self._refresh_times) > 20:
+            self._refresh_times = self._refresh_times[-20:]
+        if len(self._refresh_times) >= 5:
+            avg_refresh_time = sum(self._refresh_times) / len(self._refresh_times)
+            expected_refresh_time = 1.0 / self.refresh_rate
+            if avg_refresh_time > expected_refresh_time * 2:
+                self._dropped_frames += 1
+                if self._dropped_frames >= 3:
+                    self.refresh_rate = max(2, int(self.refresh_rate * 0.7))
+                    self._dropped_frames = 0
+                    self._update_interval = 1.0 / self.refresh_rate
+                    self._full_refresh_interval *= 1.5
+                    if self.live and self.live.is_started:
+                        try:
+                            self.live.refresh_per_second = self.refresh_rate
+                        except Exception:
+                            self._fallback_to_simple_display()
+
+    def _create_live_display_with_fallback(self) -> Optional[Live]:
+        """Create Live display with terminal compatibility checks and fallback."""
+        try:
+            if not self._test_terminal_capabilities():
+                self._fallback_to_simple_display()
+                return None
+            live_settings = self._get_adaptive_live_settings()
+            live = Live(self._create_layout(), console=self.console, **live_settings)
+            try:
+                live.start()
+                live.stop()
+                return live
+            except Exception:
+                self._fallback_to_simple_display()
+                return None
+        except Exception:
+            self._fallback_to_simple_display()
+            return None
+
+    def _test_terminal_capabilities(self) -> bool:
+        """Test if terminal supports rich Live display features."""
+        try:
+            if not self.console.is_terminal:
+                return False
+            perf_tier = self._terminal_performance['performance_tier']
+            term_type = self._terminal_performance['type']
+            if term_type == 'legacy' or perf_tier == 'low':
+                term = os.environ.get('TERM', '').lower()
+                if term in ['dumb', 'vt100']:
+                    return False
+            if term_type in ['iterm', 'macos_terminal']:
+                return True
+            test_size = self.console.size
+            if test_size.width < 20 or test_size.height < 10:
+                return False
+            return True
+        except Exception:
+            return False
+
+    def _get_adaptive_live_settings(self) -> Dict[str, Any]:
+        """Get Live display settings adapted to terminal performance."""
+        perf_tier = self._terminal_performance['performance_tier']
+        settings = {'refresh_per_second': self.refresh_rate, 'vertical_overflow': 'ellipsis', 'transient': False}
+        if perf_tier == 'low':
+            current_rate = settings['refresh_per_second']
+            assert isinstance(current_rate, int)
+            settings['refresh_per_second'] = min(current_rate, 3)
+            settings['transient'] = True
+        elif perf_tier == 'medium':
+            current_rate = settings['refresh_per_second']
+            assert isinstance(current_rate, int)
+            settings['refresh_per_second'] = min(current_rate, 8)
+        if self._terminal_performance['type'] == 'multiplexer':
+            settings['auto_refresh'] = False
+        if self._terminal_performance['type'] in ['iterm', 'macos_terminal']:
+            current_rate = settings['refresh_per_second']
+            assert isinstance(current_rate, int)
+            settings['refresh_per_second'] = min(current_rate, 5)
+            settings['transient'] = False
+            settings['vertical_overflow'] = 'ellipsis'
+        if self._terminal_performance['type'] == 'vscode':
+            current_rate = settings['refresh_per_second']
+            assert isinstance(current_rate, int)
+            settings['refresh_per_second'] = min(current_rate, 6)
+            settings['transient'] = False
+            settings['vertical_overflow'] = 'ellipsis'
+            settings['auto_refresh'] = True
+        return settings
+
+    def _fallback_to_simple_display(self) -> None:
+        """Fallback to simple console output when Live display is not supported."""
+        self._simple_display_mode = True
+        try:
+            self.console.print('\n[yellow]Terminal compatibility: Using simple display mode[/yellow]')
+            self.console.print(f'[dim]Monitoring {len(self.agent_ids)} agents...[/dim]\n')
+        except Exception:
+            print('\nUsing simple display mode...')
+            print(f'Monitoring {len(self.agent_ids)} agents...\n')
+        return None
+
+    def _update_display_safe(self) -> None:
+        """Safely update display with fallback support and terminal-specific synchronization."""
+        term_type = self._terminal_performance['type']
+        use_safe_mode = term_type in ['iterm', 'macos_terminal', 'vscode']
+        if term_type == 'vscode' and self._terminal_performance.get('refresh_stabilization'):
+            time.sleep(0.01)
+        try:
+            if use_safe_mode:
+                with self._layout_update_lock:
+                    with self._lock:
+                        if hasattr(self, '_simple_display_mode') and self._simple_display_mode:
+                            self._update_simple_display()
+                        else:
+                            self._update_live_display_safe()
+            else:
+                with self._layout_update_lock:
+                    if hasattr(self, '_simple_display_mode') and self._simple_display_mode:
+                        self._update_simple_display()
+                    else:
+                        self._update_live_display()
+        except Exception:
+            self._fallback_to_simple_display()
+        if term_type == 'vscode' and self._terminal_performance.get('needs_flush_delay'):
+            time.sleep(0.005)
+
+    def _update_simple_display(self) -> None:
+        """Update display in simple mode without Live."""
+        try:
+            current_time = time.time()
+            if not hasattr(self, '_last_simple_update'):
+                self._last_simple_update = 0
+            if current_time - self._last_simple_update > 2.0:
+                status_line = f'[{time.strftime('%H:%M:%S')}] Agents: '
+                for agent_id in self.agent_ids:
+                    status = self.agent_status.get(agent_id, 'waiting')
+                    status_line += f'{agent_id}:{status} '
+                try:
+                    self.console.print(f'\r{status_line[:80]}', end='')
+                except Exception:
+                    print(f'\r{status_line[:80]}', end='')
+                self._last_simple_update = current_time
+        except Exception:
+            pass
+
+    def _update_live_display(self) -> None:
+        """Update Live display mode."""
+        try:
+            if self.live:
+                self.live.update(self._create_layout())
+        except Exception:
+            self._fallback_to_simple_display()
+
+    def _update_live_display_safe(self) -> None:
+        """Update Live display mode with extra safety for macOS terminals."""
+        try:
+            if self.live and self.live.is_started:
+                import time
+                time.sleep(0.001)
+                self.live.update(self._create_layout())
+            elif self.live:
+                try:
+                    self.live.start()
+                    self.live.update(self._create_layout())
+                except Exception:
+                    self._fallback_to_simple_display()
+        except Exception:
+            self._fallback_to_simple_display()
+
+    def _setup_theme(self) -> None:
+        """Setup color theme configuration."""
+        unified_colors = {'primary': '#0066CC', 'secondary': '#4A90E2', 'success': '#00AA44', 'warning': '#CC6600', 'error': '#CC0000', 'info': '#6633CC', 'text': 'default', 'border': '#4A90E2', 'panel_style': '#4A90E2', 'header_style': 'bold #0066CC'}
+        themes = {'dark': unified_colors.copy(), 'light': unified_colors.copy(), 'cyberpunk': {'primary': 'bright_magenta', 'secondary': 'bright_cyan', 'success': 'bright_green', 'warning': 'bright_yellow', 'error': 'bright_red', 'info': 'bright_blue', 'text': 'bright_white', 'border': 'bright_magenta', 'panel_style': 'bright_magenta', 'header_style': 'bold bright_magenta'}}
+        self.colors = themes.get(self.theme, themes['dark'])
+        if self._terminal_performance['type'] == 'vscode':
+            vscode_adjustments = {'primary': '#0066CC', 'secondary': '#4A90E2', 'border': '#4A90E2', 'panel_style': '#4A90E2'}
+            self.colors.update(vscode_adjustments)
+            self._setup_vscode_emoji_fallbacks()
+
+    def _setup_vscode_emoji_fallbacks(self) -> None:
+        """Setup emoji fallbacks for VSCode terminal compatibility."""
+        self._emoji_fallbacks = {'🚀': '>>', '🎯': '>', '💭': '...', '⚡': '!', '🎨': '*', '📝': '=', '✅': '[OK]', '❌': '[X]', '⭐': '*', '🔍': '?', '📊': '|'}
+        if not self._terminal_performance.get('supports_unicode', True):
+            self._use_emoji_fallbacks = True
+        else:
+            self._use_emoji_fallbacks = False
+
+    def _safe_emoji(self, emoji: str) -> str:
+        """Get safe emoji for current terminal, with VSCode fallbacks."""
+        if self._terminal_performance['type'] == 'vscode' and self._use_emoji_fallbacks and (emoji in self._emoji_fallbacks):
+            return self._emoji_fallbacks[emoji]
+        return emoji
+
+    def initialize(self, question: str, log_filename: Optional[str]=None) -> None:
+        """Initialize the rich display with question and optional log file."""
+        self.log_filename = log_filename
+        self.question = question
+        self.console.clear()
+        from massgen.logger_config import suppress_console_logging
+        suppress_console_logging()
+        self._create_initial_display()
+        if self._keyboard_interactive_mode:
+            self._setup_keyboard_handler()
+        self.live = self._create_live_display_with_fallback()
+        if self.live:
+            self.live.start()
+        self._write_system_status()
+
+    def _create_initial_display(self) -> None:
+        """Create the initial welcome display."""
+        welcome_text = Text()
+        welcome_text.append('🚀 MassGen Coordination Dashboard 🚀\n', style=self.colors['header_style'])
+        welcome_text.append(f'Multi-Agent System with {len(self.agent_ids)} agents\n', style=self.colors['primary'])
+        if self.log_filename:
+            welcome_text.append(f'📁 Log: {self.log_filename}\n', style=self.colors['info'])
+        welcome_text.append(f'🎨 Theme: {self.theme.title()}', style=self.colors['secondary'])
+        welcome_panel = Panel(welcome_text, box=DOUBLE, border_style=self.colors['border'], title='[bold]Welcome[/bold]', title_align='center')
+        self.console.print(welcome_panel)
+        self.console.print()
+
+    def _create_layout(self) -> Layout:
+        """Create the main layout structure with cached components."""
+        layout = Layout()
+        header = self._header_cache if self._header_cache else self._create_header()
+        agent_columns = self._create_agent_columns_from_cache()
+        footer = self._footer_cache if self._footer_cache else self._create_footer()
+        if self._final_presentation_active:
+            presentation_panel = self._create_final_presentation_panel()
+            layout.split_column(Layout(presentation_panel, name='presentation'), Layout(footer, name='footer', size=8))
+        else:
+            layout.split_column(Layout(header, name='header', size=5), Layout(agent_columns, name='main'), Layout(footer, name='footer', size=8))
+        return layout
+
+    def _create_agent_columns_from_cache(self) -> Columns:
+        """Create agent columns using cached panels with fixed widths."""
+        agent_panels = []
+        for agent_id in self.agent_ids:
+            if agent_id in self._agent_panels_cache:
+                agent_panels.append(self._agent_panels_cache[agent_id])
+            else:
+                panel = self._create_agent_panel(agent_id)
+                self._agent_panels_cache[agent_id] = panel
+                agent_panels.append(panel)
+        return Columns(agent_panels, equal=False, expand=False, width=self.fixed_column_width)
+
+    def _create_header(self) -> Panel:
+        """Create the header panel."""
+        header_text = Text()
+        header_text.append('🚀 MassGen Multi-Agent Coordination System', style=self.colors['header_style'])
+        if hasattr(self, 'question'):
+            header_text.append(f'\n💡 Question: {self.question}', style=self.colors['info'])
+        return Panel(Align.center(header_text), box=ROUNDED, border_style=self.colors['border'], height=5)
+
+    def _create_agent_columns(self) -> Columns:
+        """Create columns for each agent with fixed widths."""
+        agent_panels = []
+        for agent_id in self.agent_ids:
+            panel = self._create_agent_panel(agent_id)
+            agent_panels.append(panel)
+        return Columns(agent_panels, equal=False, expand=False, width=self.fixed_column_width)
+
+    def _setup_keyboard_handler(self) -> None:
+        """Setup keyboard handler for interactive agent selection."""
+        try:
+            self._agent_keys = {}
+            for i, agent_id in enumerate(self.agent_ids):
+                key = str(i + 1)
+                self._agent_keys[key] = agent_id
+            if self._keyboard_interactive_mode:
+                self._start_input_thread()
+        except ImportError:
+            self._keyboard_interactive_mode = False
+
+    def _start_input_thread(self) -> None:
+        """Start background thread for keyboard input during Live mode."""
+        if not sys.stdin.isatty():
+            return
+        self._stop_input_thread = False
+        term_type = self._terminal_performance['type']
+        if self._safe_keyboard_mode or term_type in ['iterm', 'macos_terminal']:
+            self._input_thread = threading.Thread(target=self._input_thread_worker_safe, daemon=True)
+            self._input_thread.start()
+        else:
+            try:
+                self._input_thread = threading.Thread(target=self._input_thread_worker_improved, daemon=True)
+                self._input_thread.start()
+            except Exception:
+                self._input_thread = threading.Thread(target=self._input_thread_worker_fallback, daemon=True)
+                self._input_thread.start()
+
+    def _input_thread_worker_improved(self) -> None:
+        """Improved background thread worker that doesn't interfere with Rich rendering."""
+        if not UNIX_TERMINAL_SUPPORT:
+            return self._input_thread_worker_fallback()
+        try:
+            if sys.stdin.isatty():
+                self._original_settings = termios.tcgetattr(sys.stdin.fileno())
+                new_settings = termios.tcgetattr(sys.stdin.fileno())
+                new_settings[3] = new_settings[3] & ~(termios.ICANON | termios.ECHO)
+                new_settings[6][termios.VMIN] = 0
+                new_settings[6][termios.VTIME] = 1
+                termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, new_settings)
+            while not self._stop_input_thread:
+                try:
+                    if select.select([sys.stdin], [], [], 0.05)[0]:
+                        char = sys.stdin.read(1)
+                        if char:
+                            self._handle_key_press(char)
+                except (BlockingIOError, OSError):
+                    continue
+        except (KeyboardInterrupt, EOFError):
+            pass
+        except Exception:
+            pass
+        finally:
+            self._restore_terminal_settings()
+
+    def _input_thread_worker_fallback(self) -> None:
+        """Fallback keyboard input method using simple polling without terminal mode changes."""
+        import time
+        self.console.print('\n[dim]Keyboard support active. Press keys during Live display:[/dim]')
+        self.console.print("[dim]1-{} to open agent files, 's' for system status, 'q' to quit[/dim]\n".format(len(self.agent_ids)))
+        try:
+            while not self._stop_input_thread:
+                time.sleep(0.1)
+        except (KeyboardInterrupt, EOFError):
+            pass
+        except Exception:
+            pass
+
+    def _input_thread_worker_safe(self) -> None:
+        """Completely safe keyboard input that never changes terminal settings."""
+        try:
+            while not self._stop_input_thread:
+                time.sleep(0.5)
+        except Exception:
+            pass
+
+    def _restore_terminal_settings(self) -> None:
+        """Restore original terminal settings."""
+        try:
+            if UNIX_TERMINAL_SUPPORT and sys.stdin.isatty():
+                if self._original_settings:
+                    termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self._original_settings)
+                    self._original_settings = None
+                else:
+                    try:
+                        current = termios.tcgetattr(sys.stdin.fileno())
+                        current[3] = current[3] | termios.ECHO | termios.ICANON
+                        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, current)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def _ensure_clean_keyboard_state(self) -> None:
+        """Ensure clean keyboard state before starting agent selector."""
+        self._stop_input_thread = True
+        if self._input_thread and self._input_thread.is_alive():
+            try:
+                self._input_thread.join(timeout=0.5)
+            except Exception:
+                pass
+        self._restore_terminal_settings()
+        try:
+            if UNIX_TERMINAL_SUPPORT and sys.stdin.isatty():
+                termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+        except Exception:
+            pass
+        import time
+        time.sleep(0.1)
+
+    def _handle_key_press(self, key: str) -> None:
+        """Handle key press events for agent selection."""
+        if key in self._agent_keys:
+            agent_id = self._agent_keys[key]
+            self._open_agent_in_default_text_editor(agent_id)
+        elif key == 's':
+            self._open_system_status_in_default_text_editor()
+        elif key == 'f':
+            self._open_final_presentation_in_default_text_editor()
+        elif key == 'q':
+            self._stop_input_thread = True
+            self._restore_terminal_settings()
+
+    def _open_agent_in_default_text_editor(self, agent_id: str) -> None:
+        """Open agent's txt file in default text editor."""
+        if agent_id not in self.agent_files:
+            return
+        file_path = self.agent_files[agent_id]
+        if not file_path.exists():
+            return
+        try:
+            if sys.platform == 'darwin':
+                subprocess.run(['open', str(file_path)], check=False)
+            elif sys.platform.startswith('linux'):
+                subprocess.run(['xdg-open', str(file_path)], check=False)
+            elif sys.platform == 'win32':
+                subprocess.run(['start', str(file_path)], check=False, shell=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self._open_agent_in_external_app(agent_id)
+
+    def _open_agent_in_vscode_new_window(self, agent_id: str) -> None:
+        """Open agent's txt file in a new VS Code window."""
+        if agent_id not in self.agent_files:
+            return
+        file_path = self.agent_files[agent_id]
+        if not file_path.exists():
+            return
+        try:
+            subprocess.run(['code', '--new-window', str(file_path)], check=False)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self._open_agent_in_external_app(agent_id)
+
+    def _open_system_status_in_default_text_editor(self) -> None:
+        """Open system status file in default text editor."""
+        if not self.system_status_file or not self.system_status_file.exists():
+            return
+        try:
+            if sys.platform == 'darwin':
+                subprocess.run(['open', str(self.system_status_file)], check=False)
+            elif sys.platform.startswith('linux'):
+                subprocess.run(['xdg-open', str(self.system_status_file)], check=False)
+            elif sys.platform == 'win32':
+                subprocess.run(['start', str(self.system_status_file)], check=False, shell=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self._open_system_status_in_external_app()
+
+    def _open_final_presentation_in_default_text_editor(self) -> None:
+        """Open final presentation file in default text editor."""
+        final_presentation_file = None
+        if hasattr(self, '_final_presentation_file_path') and self._final_presentation_file_path:
+            final_presentation_file = self._final_presentation_file_path
+        elif hasattr(self, '_stored_presentation_agent') and self._stored_presentation_agent:
+            agent_name = self._stored_presentation_agent
+            final_presentation_file = self.output_dir / f'{agent_name}_final_presentation.txt'
+        else:
+            return
+        if not final_presentation_file.exists():
+            return
+        try:
+            if sys.platform == 'darwin':
+                subprocess.run(['open', str(final_presentation_file)], check=False)
+            elif sys.platform.startswith('linux'):
+                subprocess.run(['xdg-open', str(final_presentation_file)], check=False)
+            elif sys.platform == 'win32':
+                subprocess.run(['start', str(final_presentation_file)], check=False, shell=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
+    def _open_system_status_in_vscode_new_window(self) -> None:
+        """Open system status file in a new VS Code window."""
+        if not self.system_status_file or not self.system_status_file.exists():
+            return
+        try:
+            subprocess.run(['code', '--new-window', str(self.system_status_file)], check=False)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self._open_system_status_in_external_app()
+
+    def _open_agent_in_external_app(self, agent_id: str) -> None:
+        """Open agent's txt file in external editor or terminal viewer."""
+        if agent_id not in self.agent_files:
+            return
+        file_path = self.agent_files[agent_id]
+        if not file_path.exists():
+            return
+        try:
+            if sys.platform == 'darwin':
+                editors = ['code', 'subl', 'atom', 'nano', 'vim', 'open']
+                for editor in editors:
+                    try:
+                        if editor == 'open':
+                            subprocess.run(['open', '-a', 'TextEdit', str(file_path)], check=False)
+                        else:
+                            subprocess.run([editor, str(file_path)], check=False)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+            elif sys.platform.startswith('linux'):
+                editors = ['code', 'gedit', 'kate', 'nano', 'vim', 'xdg-open']
+                for editor in editors:
+                    try:
+                        subprocess.run([editor, str(file_path)], check=False)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+            elif sys.platform == 'win32':
+                editors = ['code', 'notepad++', 'notepad']
+                for editor in editors:
+                    try:
+                        subprocess.run([editor, str(file_path)], check=False, shell=True)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+        except Exception:
+            pass
+
+    def _open_system_status_in_external_app(self) -> None:
+        """Open system status file in external editor or terminal viewer."""
+        if not self.system_status_file or not self.system_status_file.exists():
+            return
+        try:
+            if sys.platform == 'darwin':
+                editors = ['code', 'subl', 'atom', 'nano', 'vim', 'open']
+                for editor in editors:
+                    try:
+                        if editor == 'open':
+                            subprocess.run(['open', '-a', 'TextEdit', str(self.system_status_file)], check=False)
+                        else:
+                            subprocess.run([editor, str(self.system_status_file)], check=False)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+            elif sys.platform.startswith('linux'):
+                editors = ['code', 'gedit', 'kate', 'nano', 'vim', 'xdg-open']
+                for editor in editors:
+                    try:
+                        subprocess.run([editor, str(self.system_status_file)], check=False)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+            elif sys.platform == 'win32':
+                editors = ['code', 'notepad++', 'notepad']
+                for editor in editors:
+                    try:
+                        subprocess.run([editor, str(self.system_status_file)], check=False, shell=True)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+        except Exception:
+            pass
+
+    def _show_agent_full_content(self, agent_id: str) -> None:
+        """Display full content of selected agent from txt file."""
+        if agent_id not in self.agent_files:
+            return
+        try:
+            file_path = self.agent_files[agent_id]
+            if file_path.exists():
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if '[' in content:
+                        content = content.replace('[', '\\[')
+                self.console.print('\n' + '=' * 80 + '\n')
+                header_text = Text()
+                header_text.append(f'📄 {agent_id.upper()} - Full Content', style=self.colors['header_style'])
+                header_text.append('\nPress any key to return to main view', style=self.colors['info'])
+                header_panel = Panel(header_text, box=DOUBLE, border_style=self.colors['border'])
+                content_panel = Panel(content, title=f'[bold]{agent_id.upper()} Output[/bold]', border_style=self.colors['border'], box=ROUNDED)
+                self.console.print(header_panel)
+                self.console.print(content_panel)
+                input('Press Enter to return to agent selector...')
+                self.console.print('\n' + '=' * 80 + '\n')
+        except Exception:
+            pass
+
+    def show_agent_selector(self) -> None:
+        """Show agent selector and handle user input."""
+        if not self._keyboard_interactive_mode or not hasattr(self, '_agent_keys'):
+            return
+        if self._agent_selector_active:
+            return
+        self._agent_selector_active = True
+        self._ensure_clean_keyboard_state()
+        try:
+            loop_count = 0
+            while True:
+                loop_count += 1
+                options_text = Text()
+                options_text.append("This is a system inspection interface for diving into the multi-agent collaboration behind the scenes in MassGen. It lets you examine each agent's original output and compare it to the final MassGen answer in terms of quality. You can explore the detailed communication, collaboration, voting, and decision-making process.\n", style=self.colors['text'])
+                options_text.append('\n🎮 Select an agent to view full output:\n', style=self.colors['primary'])
+                for key, agent_id in self._agent_keys.items():
+                    options_text.append(f'  {key}: ', style=self.colors['warning'])
+                    options_text.append('Inspect the original answer and working log of agent ', style=self.colors['text'])
+                    options_text.append(f'{agent_id}\n', style=self.colors['warning'])
+                options_text.append('  s: Inspect the orchestrator working log including the voting process\n', style=self.colors['warning'])
+                options_text.append('  r: Display coordination table to see the full history of agent interactions and decisions\n', style=self.colors['warning'])
+                if self._stored_final_presentation and self._stored_presentation_agent:
+                    options_text.append(f'  f: Show final presentation from Selected Agent ({self._stored_presentation_agent})\n', style=self.colors['success'])
+                options_text.append('  q: Quit Inspection\n', style=self.colors['info'])
+                self.console.print(Panel(options_text, title='[bold]Agent Selector[/bold]', border_style=self.colors['border']))
+                try:
+                    choice = input('Enter your choice: ').strip().lower()
+                    if choice in self._agent_keys:
+                        self._show_agent_full_content(self._agent_keys[choice])
+                    elif choice == 's':
+                        self._show_system_status()
+                    elif choice == 'r':
+                        self.display_coordination_table()
+                    elif choice == 'f' and self._stored_final_presentation:
+                        self._redisplay_final_presentation()
+                    elif choice == 'q':
+                        break
+                    else:
+                        self.console.print(f'[{self.colors['error']}]Invalid choice. Please try again.[/{self.colors['error']}]')
+                except KeyboardInterrupt:
+                    break
+        finally:
+            self._agent_selector_active = True
+
+    def _redisplay_final_presentation(self) -> None:
+        """Redisplay the stored final presentation."""
+        if not self._stored_final_presentation or not self._stored_presentation_agent:
+            self.console.print(f'[{self.colors['error']}]No final presentation stored.[/{self.colors['error']}]')
+            return
+        self.console.print('\n' + '=' * 80 + '\n')
+        self._display_final_presentation_content(self._stored_presentation_agent, self._stored_final_presentation)
+        input('\nPress Enter to return to agent selector...')
+        self.console.print('\n' + '=' * 80 + '\n')
+
+    def _show_coordination_rounds_table(self) -> None:
+        """Display the coordination rounds table with rich formatting."""
+        self.display_coordination_table()
+
+    def _show_system_status(self) -> None:
+        """Display system status from txt file."""
+        if not self.system_status_file or not self.system_status_file.exists():
+            self.console.print(f'[{self.colors['error']}]System status file not found.[/{self.colors['error']}]')
+            return
+        try:
+            with open(self.system_status_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if '[' in content:
+                    content = content.replace('[', '\\[')
+            self.console.print('\n' + '=' * 80 + '\n')
+            header_text = Text()
+            header_text.append('📊 SYSTEM STATUS - Full Log', style=self.colors['header_style'])
+            header_text.append('\nPress any key to return to agent selector', style=self.colors['info'])
+            header_panel = Panel(header_text, box=DOUBLE, border_style=self.colors['border'])
+            content_panel = Panel(content, title='[bold]System Status Log[/bold]', border_style=self.colors['border'], box=ROUNDED)
+            self.console.print(header_panel)
+            self.console.print(content_panel)
+            input('Press Enter to return to agent selector...')
+            self.console.print('\n' + '=' * 80 + '\n')
+        except Exception as e:
+            self.console.print(f'[{self.colors['error']}]Error reading system status file: {e}[/{self.colors['error']}]')
+
+    def _create_agent_panel(self, agent_id: str) -> Panel:
+        """Create a panel for a specific agent."""
+        agent_content = self.agent_outputs.get(agent_id, [])
+        status = self.agent_status.get(agent_id, 'waiting')
+        activity = self.agent_activity.get(agent_id, 'waiting')
+        content_text = Text()
+        max_lines = max(0, self.agent_panel_height - 3)
+        if not agent_content:
+            content_text.append('No activity yet...', style=self.colors['text'])
+        else:
+            for line in agent_content[-max_lines:]:
+                formatted_line = self._format_content_line(line)
+                content_text.append(formatted_line)
+                content_text.append('\n')
+        status_emoji = self._get_status_emoji(status, activity)
+        status_color = self._get_status_color(status)
+        backend_name = self._get_backend_name(agent_id)
+        title = f'{status_emoji} {agent_id.upper()}'
+        if backend_name != 'Unknown':
+            title += f' ({backend_name})'
+        if self._keyboard_interactive_mode and hasattr(self, '_agent_keys'):
+            agent_key = next((k for k, v in self._agent_keys.items() if v == agent_id), None)
+            if agent_key:
+                title += f' [Press {agent_key}]'
+        return Panel(content_text, title=f'[{status_color}]{title}[/{status_color}]', border_style=status_color, box=ROUNDED, height=self.agent_panel_height, width=self.fixed_column_width)
+
+    def _format_content_line(self, line: str) -> Text:
+        """Format a content line with syntax highlighting and styling."""
+        formatted = Text()
+        if not line.strip():
+            return formatted
+        if self._is_web_search_content(line):
+            return self._format_web_search_line(line)
+        is_error_message = any((error_indicator in line for error_indicator in ['❌ Error:', 'Error:', 'Exception:', 'Traceback', '❌']))
+        if len(line) > self.max_line_length and (not is_error_message):
+            wrapped_lines = []
+            remaining = line
+            while len(remaining) > self.max_line_length:
+                break_point = remaining[:self.max_line_length].rfind(' ')
+                if break_point == -1:
+                    break_point = self.max_line_length
+                wrapped_lines.append(remaining[:break_point])
+                remaining = remaining[break_point:].lstrip()
+            if remaining:
+                wrapped_lines.append(remaining)
+            line = '\n'.join(wrapped_lines)
+        if line.startswith('→'):
+            formatted.append('→ ', style=self.colors['warning'])
+            formatted.append(line[2:], style=self.colors['text'])
+        elif line.startswith('🎤'):
+            formatted.append('🎤 ', style=self.colors['success'])
+            formatted.append(line[3:], style=f'bold {self.colors['success']}')
+        elif line.startswith('⚡'):
+            formatted.append('⚡ ', style=self.colors['warning'])
+            if 'jumped to latest' in line:
+                formatted.append(line[3:], style=f'bold {self.colors['info']}')
+            else:
+                formatted.append(line[3:], style=f'italic {self.colors['warning']}')
+        elif self._is_code_content(line):
+            if self.enable_syntax_highlighting:
+                formatted = self._apply_syntax_highlighting(line)
+            else:
+                formatted.append(line, style=f'bold {self.colors['info']}')
+        else:
+            formatted.append(line, style=self.colors['text'])
+        return formatted
+
+    def _create_final_presentation_panel(self) -> Panel:
+        """Create a panel for the final presentation display."""
+        if not self._final_presentation_active:
+            return None
+        content_text = Text()
+        if not self._final_presentation_content:
+            content_text.append('No activity yet...', style=self.colors['text'])
+        else:
+            lines = self._final_presentation_content.split('\n')
+            available_height = max(10, self.terminal_size.height - 16)
+            display_lines = lines[-available_height:] if len(lines) > available_height else lines
+            for line in display_lines:
+                if line.strip():
+                    formatted_line = self._format_content_line(line)
+                    content_text.append(formatted_line)
+                content_text.append('\n')
+        title = f'🎤 Final Presentation from {self._final_presentation_agent}'
+        if self._final_presentation_vote_results and self._final_presentation_vote_results.get('vote_counts'):
+            vote_count = self._final_presentation_vote_results['vote_counts'].get(self._final_presentation_agent, 0)
+            title += f' (Selected with {vote_count} votes)'
+        title += ' [Press f]'
+        return Panel(content_text, title=f'[{self.colors['success']}]{title}[/{self.colors['success']}]', border_style=self.colors['success'], box=DOUBLE, expand=True)
+
+    def _format_presentation_content(self, content: str) -> Text:
+        """Format presentation content with enhanced styling for orchestrator queries."""
+        formatted = Text()
+        lines = content.split('\n') if '\n' in content else [content]
+        for line in lines:
+            if not line.strip():
+                formatted.append('\n')
+                continue
+            if line.startswith('**') and line.endswith('**'):
+                clean_line = line.strip('*').strip()
+                formatted.append(clean_line, style=f'bold {self.colors['success']}')
+            elif line.startswith('- ') or line.startswith('• '):
+                formatted.append(line[:2], style=self.colors['primary'])
+                formatted.append(line[2:], style=self.colors['text'])
+            elif line.startswith('#'):
+                header_level = len(line) - len(line.lstrip('#'))
+                clean_header = line.lstrip('# ').strip()
+                if header_level <= 2:
+                    formatted.append(clean_header, style=f'bold {self.colors['header_style']}')
+                else:
+                    formatted.append(clean_header, style=f'bold {self.colors['primary']}')
+            elif self._is_code_content(line):
+                if self.enable_syntax_highlighting:
+                    formatted.append(self._apply_syntax_highlighting(line))
+                else:
+                    formatted.append(line, style=f'bold {self.colors['info']}')
+            else:
+                formatted.append(line, style=self.colors['text'])
+            if line != lines[-1]:
+                formatted.append('\n')
+        return formatted
+
+    def _is_web_search_content(self, line: str) -> bool:
+        """Check if content is from web search and needs special formatting."""
+        web_search_indicators = ['[Provider Tool: Web Search]', '🔍 [Search Query]', '✅ [Provider Tool: Web Search]', '🔍 [Provider Tool: Web Search]']
+        return any((indicator in line for indicator in web_search_indicators))
+
+    def _format_web_search_line(self, line: str) -> Text:
+        """Format web search content with better truncation and styling."""
+        formatted = Text()
+        if '[Provider Tool: Web Search] Starting search' in line:
+            formatted.append('🔍 ', style=self.colors['info'])
+            formatted.append('Web search starting...', style=self.colors['text'])
+        elif '[Provider Tool: Web Search] Searching' in line:
+            formatted.append('🔍 ', style=self.colors['warning'])
+            formatted.append('Searching...', style=self.colors['text'])
+        elif '[Provider Tool: Web Search] Search completed' in line:
+            formatted.append('✅ ', style=self.colors['success'])
+            formatted.append('Search completed', style=self.colors['text'])
+        elif any((pattern in line for pattern in ['🔍 [Search Query]', 'Search Query:', '[Search Query]'])):
+            query = None
+            patterns = [('🔍 [Search Query]', ''), ('[Search Query]', ''), ('Search Query:', ''), ('Query:', '')]
+            for pattern, _ in patterns:
+                if pattern in line:
+                    parts = line.split(pattern, 1)
+                    if len(parts) > 1:
+                        query = parts[1].strip().strip('\'"').strip()
+                        break
+            if query:
+                formatted.append('🔍 Search: ', style=self.colors['info'])
+                formatted.append(f'"{query}"', style=f'italic {self.colors['text']}')
+            else:
+                formatted.append('🔍 Search query', style=self.colors['info'])
+        else:
+            max_web_length = min(self.max_line_length // 2, 60)
+            if len(line) > max_web_length:
+                truncated = line[:max_web_length]
+                for break_char in ['. ', '! ', '? ', ', ', ': ']:
+                    last_break = truncated.rfind(break_char)
+                    if last_break > max_web_length // 2:
+                        truncated = truncated[:last_break + 1]
+                        break
+                line = truncated + '...'
+            formatted.append(line, style=self.colors['text'])
+        return formatted
+
+    def _should_filter_content(self, content: str, content_type: str) -> bool:
+        """Determine if content should be filtered out to reduce noise."""
+        if content_type in ['status', 'presentation', 'error']:
+            return False
+        if len(content) > 1000 and self._is_web_search_content(content):
+            url_count = content.count('http')
+            technical_indicators = content.count('[') + content.count(']') + content.count('(') + content.count(')')
+            if url_count > 5 or technical_indicators > len(content) * 0.1:
+                return True
+        return False
+
+    def _should_filter_line(self, line: str) -> bool:
+        """Determine if a specific line should be filtered out."""
+        filter_patterns = ['^\\s*\\([^)]+\\)\\s*$', '^\\s*\\[[^\\]]+\\]\\s*$', '^\\s*https?://\\S+\\s*$', '^\\s*\\.\\.\\.\\s*$']
+        for pattern in filter_patterns:
+            if re.match(pattern, line):
+                return True
+        return False
+
+    def _truncate_web_search_content(self, agent_id: str) -> None:
+        """Truncate web search content when important status updates occur."""
+        if agent_id not in self.agent_outputs or not self.agent_outputs[agent_id]:
+            return
+        content_lines = self.agent_outputs[agent_id]
+        web_search_lines = []
+        non_web_search_lines = []
+        for line in content_lines:
+            if self._is_web_search_content(line):
+                web_search_lines.append(line)
+            else:
+                non_web_search_lines.append(line)
+        if len(web_search_lines) > self._max_web_search_lines:
+            truncated_web_search = web_search_lines[:1] + ['🔍 ... (web search content truncated due to status update) ...'] + web_search_lines[-(self._max_web_search_lines - 2):]
+            recent_non_web = non_web_search_lines[-max(5, self.max_content_lines - len(truncated_web_search)):]
+            self.agent_outputs[agent_id] = recent_non_web + truncated_web_search
+        if len(web_search_lines) > self._max_web_search_lines:
+            self.agent_outputs[agent_id].append('⚡  Status updated - jumped to latest')
+
+    def _is_code_content(self, content: str) -> bool:
+        """Check if content appears to be code."""
+        for pattern in self.code_patterns:
+            if re.search(pattern, content, re.DOTALL | re.IGNORECASE):
+                return True
+        return False
+
+    def _apply_syntax_highlighting(self, content: str) -> Text:
+        """Apply syntax highlighting to content."""
+        try:
+            language = self._detect_language(content)
+            if language:
+                return Text(content, style=f'bold {self.colors['info']}')
+            else:
+                return Text(content, style=f'bold {self.colors['info']}')
+        except Exception:
+            return Text(content, style=f'bold {self.colors['info']}')
+
+    def _detect_language(self, content: str) -> Optional[str]:
+        """Detect programming language from content."""
+        content_lower = content.lower()
+        if any((keyword in content_lower for keyword in ['def ', 'import ', 'class ', 'python'])):
+            return 'python'
+        elif any((keyword in content_lower for keyword in ['function', 'var ', 'let ', 'const '])):
+            return 'javascript'
+        elif any((keyword in content_lower for keyword in ['<', '>', 'html', 'div'])):
+            return 'html'
+        elif any((keyword in content_lower for keyword in ['{', '}', 'json'])):
+            return 'json'
+        return None
+
+    def _get_status_emoji(self, status: str, activity: str) -> str:
+        """Get emoji for agent status."""
+        if status == 'working':
+            return '🔄'
+        elif status == 'completed':
+            if 'voted' in activity.lower():
+                return '🗳️'
+            elif 'failed' in activity.lower():
+                return '❌'
+            else:
+                return '✅'
+        elif status == 'waiting':
+            return '⏳'
+        else:
+            return '❓'
+
+    def _get_status_color(self, status: str) -> str:
+        """Get color for agent status."""
+        status_colors = {'working': self.colors['warning'], 'completed': self.colors['success'], 'waiting': self.colors['info'], 'failed': self.colors['error']}
+        return status_colors.get(status, self.colors['text'])
+
+    def _get_backend_name(self, agent_id: str) -> str:
+        """Get backend name for agent."""
+        try:
+            if hasattr(self, 'orchestrator') and self.orchestrator and hasattr(self.orchestrator, 'agents'):
+                agent = self.orchestrator.agents.get(agent_id)
+                if agent and hasattr(agent, 'backend') and hasattr(agent.backend, 'get_provider_name'):
+                    return agent.backend.get_provider_name()
+        except Exception:
+            pass
+        return 'Unknown'
+
+    def _create_footer(self) -> Panel:
+        """Create the footer panel with status and events."""
+        footer_content = Text()
+        footer_content.append('📊 Agent Status: ', style=self.colors['primary'])
+        status_counts = {}
+        for status in self.agent_status.values():
+            status_counts[status] = status_counts.get(status, 0) + 1
+        status_parts = []
+        for status, count in status_counts.items():
+            emoji = self._get_status_emoji(status, status)
+            status_parts.append(f'{emoji} {status.title()}: {count}')
+        if self._final_presentation_active:
+            status_parts.append('🎤 Final Presentation: Active')
+        elif hasattr(self, '_stored_final_presentation') and self._stored_final_presentation:
+            status_parts.append('🎤 Final Presentation: Complete')
+        footer_content.append(' | '.join(status_parts), style=self.colors['text'])
+        footer_content.append('\n')
+        if self.orchestrator_events:
+            footer_content.append('📋 Recent Events:\n', style=self.colors['primary'])
+            recent_events = self.orchestrator_events[-3:]
+            for event in recent_events:
+                footer_content.append(f'  • {event}\n', style=self.colors['text'])
+        if self.log_filename:
+            footer_content.append(f'📁 Log: {self.log_filename}\n', style=self.colors['info'])
+        if self._keyboard_interactive_mode and hasattr(self, '_agent_keys'):
+            if self._safe_keyboard_mode:
+                footer_content.append('📂 Safe Mode: Keyboard disabled to prevent rendering issues\n', style=self.colors['warning'])
+                footer_content.append(f'Output files saved in: {self.output_dir}/', style=self.colors['info'])
+            else:
+                footer_content.append('🎮 Live Mode Hotkeys: Press 1-', style=self.colors['primary'])
+                hotkeys = f"{len(self.agent_ids)} to open agent files in editor, 's' for system status"
+                if hasattr(self, '_stored_final_presentation') and self._stored_final_presentation:
+                    hotkeys += ", 'f' for final presentation"
+                footer_content.append(hotkeys, style=self.colors['text'])
+                footer_content.append(f'\n📂 Output files saved in: {self.output_dir}/', style=self.colors['info'])
+        return Panel(footer_content, title='[bold]System Status [Press s][/bold]', border_style=self.colors['border'], box=ROUNDED)
+
+    def update_agent_content(self, agent_id: str, content: str, content_type: str='thinking') -> None:
+        """Update content for a specific agent with rich formatting and file output."""
+        if agent_id not in self.agent_ids:
+            return
+        with self._lock:
+            if agent_id not in self.agent_outputs:
+                self.agent_outputs[agent_id] = []
+            self._write_to_agent_file(agent_id, content, content_type)
+            is_status_change = content_type in ['status', 'presentation', 'tool'] or any((keyword in content.lower() for keyword in self._status_change_keywords))
+            if self._status_jump_enabled and is_status_change and self._web_search_truncate_on_status_change and self.agent_outputs[agent_id]:
+                self._truncate_web_search_content(agent_id)
+            if self._should_filter_content(content, content_type):
+                return
+            self._process_content_with_buffering(agent_id, content, content_type)
+            self._categorize_update(agent_id, content_type, content)
+            is_critical = content_type in ['tool', 'status', 'presentation', 'error'] or any((keyword in content.lower() for keyword in self._status_change_keywords))
+            self._schedule_layered_update(agent_id, is_critical)
+
+    def _process_content_with_buffering(self, agent_id: str, content: str, content_type: str) -> None:
+        """Process content with buffering to accumulate text chunks."""
+        if self._buffer_timers.get(agent_id):
+            self._buffer_timers[agent_id].cancel()
+            self._buffer_timers[agent_id] = None
+        if content_type in ['tool', 'status', 'presentation', 'error'] or '\n' in content:
+            self._flush_buffer(agent_id)
+            if '\n' in content:
+                for line in content.splitlines():
+                    if line.strip() and (not self._should_filter_line(line)):
+                        self.agent_outputs[agent_id].append(line)
+            elif content.strip():
+                self.agent_outputs[agent_id].append(content.strip())
+            return
+        self._text_buffers[agent_id] += content
+        buffer = self._text_buffers[agent_id]
+        if len(buffer) >= self._max_buffer_length:
+            self._flush_buffer(agent_id)
+            return
+        self._set_buffer_timer(agent_id)
+
+    def _flush_buffer(self, agent_id: str) -> None:
+        """Flush the buffer for a specific agent."""
+        if agent_id in self._text_buffers and self._text_buffers[agent_id]:
+            buffer_content = self._text_buffers[agent_id].strip()
+            if buffer_content:
+                self.agent_outputs[agent_id].append(buffer_content)
+            self._text_buffers[agent_id] = ''
+        if self._buffer_timers.get(agent_id):
+            self._buffer_timers[agent_id].cancel()
+            self._buffer_timers[agent_id] = None
+
+    def _set_buffer_timer(self, agent_id: str) -> None:
+        """Set a timer to flush the buffer after a timeout."""
+        if self._shutdown_flag:
+            return
+        if self._buffer_timers.get(agent_id):
+            self._buffer_timers[agent_id].cancel()
+
+        def timeout_flush() -> None:
+            with self._lock:
+                if agent_id in self._text_buffers and self._text_buffers[agent_id]:
+                    self._flush_buffer(agent_id)
+                    self._pending_updates.add(agent_id)
+                    self._schedule_async_update(force_update=True)
+        self._buffer_timers[agent_id] = threading.Timer(self._buffer_timeout, timeout_flush)
+        self._buffer_timers[agent_id].start()
+
+    def _write_to_agent_file(self, agent_id: str, content: str, content_type: str) -> None:
+        """Write content to agent's individual txt file."""
+        if agent_id not in self.agent_files:
+            return
+        if content_type == 'debug':
+            return
+        try:
+            file_path = self.agent_files[agent_id]
+            timestamp = time.strftime('%H:%M:%S')
+            has_emoji = any((ord(char) > 127 and ord(char) in range(128512, 128591) or ord(char) in range(127744, 128511) or ord(char) in range(128640, 128767) or (ord(char) in range(9728, 9983)) or (ord(char) in range(9984, 10175)) for char in content))
+            if has_emoji:
+                formatted_content = f'\n[{timestamp}] {content}\n'
+            else:
+                formatted_content = f'{content}'
+            with open(file_path, 'a', encoding='utf-8') as f:
+                f.write(formatted_content)
+        except Exception:
+            pass
+
+    def _write_system_status(self) -> None:
+        """Write current system status to system status file - shows orchestrator events chronologically by time."""
+        if not self.system_status_file:
+            return
+        try:
+            with open(self.system_status_file, 'w', encoding='utf-8') as f:
+                f.write('=== SYSTEM STATUS LOG ===\n\n')
+                f.write('📊 Agent Status:\n')
+                status_counts = {}
+                for status in self.agent_status.values():
+                    status_counts[status] = status_counts.get(status, 0) + 1
+                for status, count in status_counts.items():
+                    emoji = self._get_status_emoji(status, status)
+                    f.write(f'  {emoji} {status.title()}: {count}\n')
+                if self._final_presentation_active:
+                    f.write('  🎤 Final Presentation: Active\n')
+                elif hasattr(self, '_stored_final_presentation') and self._stored_final_presentation:
+                    f.write('  🎤 Final Presentation: Complete\n')
+                f.write('\n')
+                f.write('📋 Orchestrator Events:\n')
+                if self.orchestrator_events:
+                    for event in self.orchestrator_events:
+                        f.write(f'  • {event}\n')
+                else:
+                    f.write('  • No orchestrator events yet\n')
+                f.write('\n')
+        except Exception:
+            pass
+
+    def update_agent_status(self, agent_id: str, status: str) -> None:
+        """Update status for a specific agent with rich indicators."""
+        if agent_id not in self.agent_ids:
+            return
+        with self._lock:
+            old_status = self.agent_status.get(agent_id, 'waiting')
+            last_tracked_status = self._last_agent_status.get(agent_id, 'waiting')
+            current_activity = self.agent_activity.get(agent_id, '')
+            is_vote_status = 'voted' in status.lower() or 'voted' in current_activity.lower()
+            should_update = old_status != status and last_tracked_status != status or is_vote_status
+            if should_update:
+                if self._status_jump_enabled and self._web_search_truncate_on_status_change and (old_status != status) and (agent_id in self.agent_outputs) and self.agent_outputs[agent_id]:
+                    self._truncate_web_search_content(agent_id)
+                super().update_agent_status(agent_id, status)
+                self._last_agent_status[agent_id] = status
+                self._priority_updates.add(agent_id)
+                self._pending_updates.add(agent_id)
+                self._pending_updates.add('footer')
+                self._schedule_priority_update(agent_id)
+                self._schedule_async_update(force_update=True)
+                self._write_system_status()
+            elif old_status != status:
+                super().update_agent_status(agent_id, status)
+
+    def add_orchestrator_event(self, event: str) -> None:
+        """Add an orchestrator coordination event with timestamp."""
+        with self._lock:
+            if self.show_timestamps:
+                timestamp = time.strftime('%H:%M:%S')
+                formatted_event = f'[{timestamp}] {event}'
+            else:
+                formatted_event = event
+            if hasattr(self, 'orchestrator_events') and self.orchestrator_events and (self.orchestrator_events[-1] == formatted_event):
+                return
+            super().add_orchestrator_event(formatted_event)
+            if any((keyword in event.lower() for keyword in self._important_event_keywords)):
+                self._pending_updates.add('footer')
+                self._schedule_async_update(force_update=True)
+                self._write_system_status()
+
+    def display_vote_results(self, vote_results: Dict[str, Any]) -> None:
+        """Display voting results in a formatted rich panel."""
+        if not vote_results or not vote_results.get('vote_counts'):
+            return
+        self.live is not None
+        if self.live:
+            self.live.stop()
+            self.live = None
+        vote_counts = vote_results.get('vote_counts', {})
+        voter_details = vote_results.get('voter_details', {})
+        winner = vote_results.get('winner')
+        is_tie = vote_results.get('is_tie', False)
+        vote_content = Text()
+        vote_content.append('📊 Vote Count:\n', style=self.colors['primary'])
+        for agent_id, count in sorted(vote_counts.items(), key=lambda x: x[1], reverse=True):
+            winner_mark = '🏆' if agent_id == winner else '  '
+            tie_mark = ' (tie-broken)' if is_tie and agent_id == winner else ''
+            vote_content.append(f'   {winner_mark} {agent_id}: {count} vote{('s' if count != 1 else '')}{tie_mark}\n', style=self.colors['success'] if agent_id == winner else self.colors['text'])
+        if voter_details:
+            vote_content.append('\n🔍 Vote Details:\n', style=self.colors['primary'])
+            for voted_for, voters in voter_details.items():
+                vote_content.append(f'   → {voted_for}:\n', style=self.colors['info'])
+                for voter_info in voters:
+                    voter = voter_info['voter']
+                    reason = voter_info['reason']
+                    vote_content.append(f'     • {voter}: "{reason}"\n', style=self.colors['text'])
+        agent_mapping = vote_results.get('agent_mapping', {})
+        if agent_mapping:
+            vote_content.append('\n🔀 Agent Mapping:\n', style=self.colors['primary'])
+            for anon_id, real_id in sorted(agent_mapping.items()):
+                vote_content.append(f'   {anon_id} → {real_id}\n', style=self.colors['info'])
+        if is_tie:
+            vote_content.append('\n⚖️  Tie broken by agent registration order\n', style=self.colors['warning'])
+        total_votes = vote_results.get('total_votes', 0)
+        agents_voted = vote_results.get('agents_voted', 0)
+        vote_content.append(f'\n📈 Summary: {agents_voted}/{total_votes} agents voted', style=self.colors['info'])
+        voting_panel = Panel(vote_content, title='[bold bright_cyan]🗳️  VOTING RESULTS[/bold bright_cyan]', border_style=self.colors['primary'], box=DOUBLE, expand=False)
+        self.console.print(voting_panel)
+
+    def display_coordination_table(self) -> None:
+        """Display the coordination table showing the full coordination flow."""
+        try:
+            self.live is not None
+            if self.live:
+                self.live.stop()
+                self.live = None
+            if not hasattr(self, 'orchestrator') or not self.orchestrator:
+                print('No orchestrator available for table generation')
+                return
+            tracker = getattr(self.orchestrator, 'coordination_tracker', None)
+            if not tracker:
+                print('No coordination tracker available')
+                return
+            events_data = [event.to_dict() for event in tracker.events]
+            session_data = {'session_metadata': {'user_prompt': tracker.user_prompt, 'agent_ids': tracker.agent_ids, 'start_time': tracker.start_time, 'end_time': tracker.end_time, 'final_winner': tracker.final_winner}, 'events': events_data}
+            from massgen.frontend.displays.create_coordination_table import CoordinationTableBuilder
+            builder = CoordinationTableBuilder(session_data)
+            result = builder.generate_rich_event_table()
+            if result:
+                legend, rich_table = result
+                from rich.console import Console
+                from rich.panel import Panel
+                from rich.text import Text
+                from massgen.frontend.displays.create_coordination_table import display_scrollable_content_macos, display_with_native_pager, get_optimal_display_method
+                temp_console = Console()
+                content = []
+                title_text = Text()
+                title_text.append('📊 COORDINATION TABLE', style='bold bright_green')
+                title_text.append('\n\nNavigation: ↑/↓ or j/k to scroll, q to quit', style='dim cyan')
+                title_panel = Panel(title_text, border_style='bright_blue', padding=(1, 2))
+                content.append(title_panel)
+                content.append('')
+                content.append(rich_table)
+                if legend:
+                    content.append('')
+                    content.append('')
+                    content.append(legend)
+                display_method = get_optimal_display_method()
+                try:
+                    if display_method == 'macos_simple':
+                        display_scrollable_content_macos(temp_console, content, '📊 COORDINATION TABLE')
+                    elif display_method == 'native_pager':
+                        display_with_native_pager(temp_console, content, '📊 COORDINATION TABLE')
+                    else:
+                        with temp_console.pager(styles=True):
+                            for item in content:
+                                temp_console.print(item)
+                except (KeyboardInterrupt, EOFError):
+                    pass
+                self.console.print('\n' + '=' * 80 + '\n')
+            else:
+                table_content = builder.generate_event_table()
+                table_panel = Panel(table_content, title='[bold bright_green]📊 COORDINATION TABLE[/bold bright_green]', border_style=self.colors['success'], box=DOUBLE, expand=False)
+                self.console.print('\n')
+                self.console.print(table_panel)
+                self.console.print()
+        except Exception as e:
+            print(f'Error displaying coordination table: {e}')
+            import traceback
+            traceback.print_exc()
+
+    async def display_final_presentation(self, selected_agent: str, presentation_stream: Any, vote_results: Optional[Dict[str, Any]]=None) -> None:
+        """Display final presentation with streaming box followed by clean final answer box."""
+        if not selected_agent:
+            return ''
+        self._final_presentation_active = True
+        self._final_presentation_content = ''
+        self._final_presentation_agent = selected_agent
+        self._final_presentation_vote_results = vote_results
+        self._final_presentation_file_path = None
+        self.console.print('\n')
+        was_live = self.live is not None and self.live.is_started
+        if not was_live:
+            self.console.clear()
+            self.live = Live(self._create_layout(), console=self.console, refresh_per_second=self.refresh_rate, vertical_overflow='ellipsis', transient=False)
+            self.live.start()
+        self._update_footer_cache()
+        self._update_final_presentation_panel()
+        presentation_content = ''
+        chunk_count = 0
+        presentation_file_path = self._initialize_final_presentation_file(selected_agent)
+        self._final_presentation_file_path = presentation_file_path
+        try:
+            async for chunk in presentation_stream:
+                chunk_count += 1
+                content = getattr(chunk, 'content', '') or ''
+                chunk_type = getattr(chunk, 'type', '')
+                source = getattr(chunk, 'source', selected_agent)
+                if chunk_type == 'debug':
+                    continue
+                if content:
+                    if isinstance(content, list):
+                        content = ' '.join((str(item) for item in content))
+                    elif not isinstance(content, str):
+                        content = str(content)
+                    processed_content = self.process_reasoning_content(chunk_type, content, source)
+                    self._final_presentation_content += processed_content
+                    presentation_content += processed_content
+                    if processed_content.strip():
+                        truncated_content = processed_content.strip()[:150]
+                        if len(processed_content.strip()) > 150:
+                            truncated_content += '...'
+                        self.add_orchestrator_event(f'🎤 {selected_agent}: {truncated_content}')
+                    self._append_to_final_presentation_file(presentation_file_path, processed_content)
+                    self._update_final_presentation_panel()
+                else:
+                    processed_content = self.process_reasoning_content(chunk_type, '', source)
+                    if processed_content:
+                        self._final_presentation_content += processed_content
+                        presentation_content += processed_content
+                        self._append_to_final_presentation_file(presentation_file_path, processed_content)
+                        self._update_final_presentation_panel()
+                if chunk_type == 'done':
+                    break
+        except Exception as e:
+            error_msg = f'\n❌ Error during final presentation: {e}\n'
+            self._final_presentation_content += error_msg
+            self._update_final_presentation_panel()
+            if hasattr(self, 'orchestrator') and self.orchestrator:
+                try:
+                    status = self.orchestrator.get_status()
+                    if selected_agent in status.get('agent_states', {}):
+                        stored_answer = status['agent_states'][selected_agent].get('answer', '')
+                        if stored_answer:
+                            fallback_msg = f'\n📋 Fallback to stored answer:\n{stored_answer}\n'
+                            self._final_presentation_content += fallback_msg
+                            presentation_content = stored_answer
+                            self._update_final_presentation_panel()
+                except Exception:
+                    pass
+        if presentation_content:
+            self._stored_final_presentation = presentation_content
+            self._stored_presentation_agent = selected_agent
+            self._stored_vote_results = vote_results
+            self._update_footer_cache()
+        self._finalize_final_presentation_file(presentation_file_path)
+        if self.live and self.live.is_started:
+            self.live.stop()
+            self.live = None
+        self._final_presentation_active = False
+        self._update_footer_cache()
+        stats_text = Text()
+        stats_text.append('✅ Presentation completed by ', style='bold green')
+        stats_text.append(selected_agent, style=f'bold {self.colors['success']}')
+        if chunk_count > 0:
+            stats_text.append(f' | 📊 {chunk_count} chunks processed', style='dim')
+        summary_panel = Panel(stats_text, border_style='green', box=ROUNDED, expand=True)
+        self.console.print(summary_panel)
+        return presentation_content
+
+    def _format_multiline_content(self, content: str) -> Text:
+        """Format multiline content for display in a panel."""
+        formatted = Text()
+        lines = content.split('\n')
+        for line in lines:
+            if line.strip():
+                formatted_line = self._format_content_line(line)
+                formatted.append(formatted_line)
+            formatted.append('\n')
+        return formatted
+
+    def show_final_answer(self, answer: str, vote_results: Dict[str, Any]=None, selected_agent: str=None):
+        """Display the final coordinated answer prominently with voting results, final presentation, and agent selector."""
+        with self._lock:
+            self._flush_all_buffers()
+        if self.live:
+            self.live.stop()
+            self.live = None
+        if vote_results is None or selected_agent is None:
+            try:
+                if hasattr(self, 'orchestrator') and self.orchestrator:
+                    status = self.orchestrator.get_status()
+                    vote_results = vote_results or status.get('vote_results', {})
+                    selected_agent = selected_agent or status.get('selected_agent')
+            except Exception:
+                pass
+        with self._lock:
+            for agent_id in self.agent_ids:
+                self._pending_updates.add(agent_id)
+            self._pending_updates.add('footer')
+            self._schedule_async_update(force_update=True)
+        time.sleep(0.5)
+        self._force_display_final_vote_statuses()
+        time.sleep(0.5)
+        if vote_results and vote_results.get('vote_counts'):
+            self.display_vote_results(vote_results)
+            time.sleep(1.0)
+        if selected_agent:
+            selected_agent_text = Text(f'🏆 Selected agent: {selected_agent}', style=self.colors['success'])
+        else:
+            is_timeout = False
+            if hasattr(self, 'orchestrator') and self.orchestrator:
+                is_timeout = getattr(self.orchestrator, 'is_orchestrator_timeout', False)
+            if is_timeout:
+                selected_agent_text = Text()
+                selected_agent_text.append('No agent selected\n', style=self.colors['warning'])
+                selected_agent_text.append('The orchestrator timed out before any agent could complete voting or provide an answer.', style=self.colors['warning'])
+            else:
+                selected_agent_text = Text('No agent selected', style=self.colors['warning'])
+        final_panel = Panel(Align.center(selected_agent_text), title='[bold bright_green]🎯 FINAL COORDINATED ANSWER[/bold bright_green]', border_style=self.colors['success'], box=DOUBLE, expand=False)
+        self.console.print(final_panel)
+        if selected_agent:
+            selection_text = Text()
+            selection_text.append(f'✅ Selected by: {selected_agent}', style=self.colors['success'])
+            if vote_results and vote_results.get('vote_counts'):
+                vote_summary = ', '.join([f'{agent}: {count}' for agent, count in vote_results['vote_counts'].items()])
+                selection_text.append(f'\n🗳️ Vote results: {vote_summary}', style=self.colors['info'])
+            selection_panel = Panel(selection_text, border_style=self.colors['info'], box=ROUNDED)
+            self.console.print(selection_panel)
+        if selected_agent and hasattr(self, 'orchestrator') and self.orchestrator:
+            try:
+                self._show_orchestrator_final_presentation(selected_agent, vote_results)
+                time.sleep(1.0)
+            except Exception as e:
+                error_text = Text(f'❌ Error getting final presentation: {e}', style=self.colors['error'])
+                self.console.print(error_text)
+        if self._keyboard_interactive_mode and hasattr(self, '_agent_keys') and (not self._safe_keyboard_mode):
+            self.show_agent_selector()
+
+    def _display_answer_with_flush(self, answer: str) -> None:
+        """Display answer with flush output effect - streaming character by character."""
+        import sys
+        import time
+        char_delay = self._flush_char_delay
+        word_delay = self._flush_word_delay
+        line_delay = 0.2
+        try:
+            lines = answer.split('\n')
+            for line_idx, line in enumerate(lines):
+                if not line.strip():
+                    self.console.print()
+                    continue
+                for i, char in enumerate(line):
+                    styled_char = Text(char, style=self.colors['text'])
+                    self.console.print(styled_char, end='', highlight=False)
+                    sys.stdout.flush()
+                    if char in [' ', ',', ';']:
+                        time.sleep(word_delay)
+                    elif char in ['.', '!', '?', ':']:
+                        time.sleep(word_delay * 2)
+                    else:
+                        time.sleep(char_delay)
+                if line_idx < len(lines) - 1:
+                    self.console.print()
+                    time.sleep(line_delay)
+            self.console.print()
+        except KeyboardInterrupt:
+            self.console.print(f'\n{Text(answer, style=self.colors['text'])}')
+        except Exception:
+            self.console.print(Text(answer, style=self.colors['text']))
+
+    def _get_selected_agent_final_answer(self, selected_agent: str) -> str:
+        """Get the final provided answer from the selected agent."""
+        if not selected_agent:
+            return ''
+        try:
+            if hasattr(self, 'orchestrator') and self.orchestrator:
+                status = self.orchestrator.get_status()
+                if hasattr(self.orchestrator, 'agent_states') and selected_agent in self.orchestrator.agent_states:
+                    stored_answer = self.orchestrator.agent_states[selected_agent].answer
+                    if stored_answer:
+                        return stored_answer.replace('\\', '\n').replace('**', '').strip()
+                if 'agent_states' in status and selected_agent in status['agent_states']:
+                    agent_state = status['agent_states'][selected_agent]
+                    if hasattr(agent_state, 'answer') and agent_state.answer:
+                        return agent_state.answer.replace('\\', '\n').replace('**', '').strip()
+                    elif isinstance(agent_state, dict) and 'answer' in agent_state:
+                        return agent_state['answer'].replace('\\', '\n').replace('**', '').strip()
+        except Exception:
+            pass
+        if selected_agent not in self.agent_outputs:
+            return ''
+        agent_output = self.agent_outputs[selected_agent]
+        if not agent_output:
+            return ''
+        answer_lines = []
+        for line in reversed(agent_output):
+            line = line.strip()
+            if not line:
+                continue
+            if any((marker in line for marker in ['⚡', '🔄', '✅', '🗳️', '❌', 'voted', '🔧', 'status'])):
+                continue
+            if any((marker in line.lower() for marker in ['final coordinated', 'coordination', 'voting'])):
+                break
+            answer_lines.insert(0, line)
+            if len(answer_lines) >= 10 or len('\n'.join(answer_lines)) > 500:
+                break
+        if answer_lines:
+            answer = '\n'.join(answer_lines).strip()
+            answer = answer.replace('**', '').replace('##', '').strip()
+            return answer
+        return ''
+
+    def _extract_presentation_content(self, selected_agent: str) -> str:
+        """Extract presentation content from the selected agent's output."""
+        if selected_agent not in self.agent_outputs:
+            return ''
+        agent_output = self.agent_outputs[selected_agent]
+        presentation_lines = []
+        collecting_presentation = False
+        for line in agent_output:
+            if '🎤' in line or 'presentation' in line.lower():
+                collecting_presentation = True
+                continue
+            if not line.strip() or line.startswith('⚡') or line.startswith('🔄'):
+                continue
+            if collecting_presentation and line.strip():
+                if any((marker in line for marker in ['✅', '🗳️', '🔄', '❌', 'voted', 'Final', 'coordination'])):
+                    break
+                presentation_lines.append(line.strip())
+        if not presentation_lines and agent_output:
+            for line in reversed(agent_output[-10:]):
+                if line.strip() and (not line.startswith('⚡')) and (not line.startswith('🔄')) and (not any((marker in line for marker in ['voted', '🗳️', '✅', 'status']))):
+                    presentation_lines.insert(0, line.strip())
+                    if len(presentation_lines) >= 5:
+                        break
+        return '\n'.join(presentation_lines) if presentation_lines else ''
+
+    def _display_final_presentation_content(self, selected_agent: str, presentation_content: str) -> None:
+        """Display the final presentation content in a formatted panel with orchestrator query enhancements."""
+        if not presentation_content.strip():
+            return
+        self._stored_final_presentation = presentation_content
+        self._stored_presentation_agent = selected_agent
+        header_text = Text()
+        header_text.append(f'🎤 Final Presentation from {selected_agent}', style=self.colors['header_style'])
+        header_panel = Panel(Align.center(header_text), border_style=self.colors['success'], box=DOUBLE, title='[bold]Final Presentation[/bold]')
+        self.console.print(header_panel)
+        self.console.print('=' * 60)
+        content_text = Text()
+        formatted_content = self._format_presentation_content(presentation_content)
+        content_text.append(formatted_content)
+        content_panel = Panel(content_text, title=f'[bold]{selected_agent.upper()} Final Presentation[/bold]', border_style=self.colors['primary'], box=ROUNDED, subtitle='[italic]Final presentation content[/italic]')
+        self.console.print(content_panel)
+        self.console.print('=' * 60)
+        completion_text = Text()
+        completion_text.append('✅ Final presentation completed successfully', style=self.colors['success'])
+        completion_panel = Panel(Align.center(completion_text), border_style=self.colors['success'], box=ROUNDED)
+        self.console.print(completion_panel)
+        self._save_final_presentation_to_file(selected_agent, presentation_content)
+
+    def _save_final_presentation_to_file(self, selected_agent: str, presentation_content: str) -> None:
+        """Save the final presentation content to a text file in agent_outputs directory."""
+        try:
+            filename = f'final_presentation_{selected_agent}.txt'
+            file_path = Path(self.output_dir) / filename
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(f'=== FINAL PRESENTATION FROM {selected_agent.upper()} ===\n')
+                f.write(f'Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n')
+                f.write('=' * 60 + '\n\n')
+                f.write(presentation_content)
+                f.write('\n\n' + '=' * 60 + '\n')
+                f.write('End of Final Presentation\n')
+            latest_link = Path(self.output_dir) / f'final_presentation_{selected_agent}_latest.txt'
+            if latest_link.exists():
+                latest_link.unlink()
+            latest_link.symlink_to(filename)
+        except Exception:
+            pass
+
+    def _initialize_final_presentation_file(self, selected_agent: str) -> Path:
+        """Initialize a new final presentation file and return the file path."""
+        try:
+            filename = f'final_presentation_{selected_agent}.txt'
+            file_path = Path(self.output_dir) / filename
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(f'=== FINAL PRESENTATION FROM {selected_agent.upper()} ===\n')
+                f.write(f'Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n')
+                f.write('=' * 60 + '\n\n')
+            latest_link = Path(self.output_dir) / f'final_presentation_{selected_agent}_latest.txt'
+            if latest_link.exists():
+                latest_link.unlink()
+            latest_link.symlink_to(filename)
+            return file_path
+        except Exception:
+            return None
+
+    def _append_to_final_presentation_file(self, file_path: Path, content: str) -> None:
+        """Append content to the final presentation file."""
+        try:
+            if file_path and file_path.exists():
+                with open(file_path, 'a', encoding='utf-8') as f:
+                    f.write(content)
+                    f.flush()
+                    import os
+                    os.fsync(f.fileno())
+        except Exception:
+            pass
+
+    def _finalize_final_presentation_file(self, file_path: Path) -> None:
+        """Add closing content to the final presentation file."""
+        try:
+            if file_path and file_path.exists():
+                with open(file_path, 'a', encoding='utf-8') as f:
+                    f.write('\n\n' + '=' * 60 + '\n')
+                    f.write('End of Final Presentation\n')
+        except Exception:
+            pass
+
+    def _show_orchestrator_final_presentation(self, selected_agent: str, vote_results: Dict[str, Any]=None) -> None:
+        """Show the final presentation from the orchestrator for the selected agent."""
+        import time
+        try:
+            if not hasattr(self, 'orchestrator') or not self.orchestrator:
+                return
+            if hasattr(self.orchestrator, 'get_final_presentation'):
+                import asyncio
+
+                async def _get_and_display_presentation() -> None:
+                    """Helper to get and display presentation asynchronously."""
+                    try:
+                        presentation_stream = self.orchestrator.get_final_presentation(selected_agent, vote_results)
+                        await self.display_final_presentation(selected_agent, presentation_stream, vote_results)
+                    except Exception:
+                        raise
+                import nest_asyncio
+                nest_asyncio.apply()
+                try:
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    loop.run_until_complete(_get_and_display_presentation())
+                    time.sleep(0.5)
+                except Exception:
+                    try:
+                        asyncio.run(_get_and_display_presentation())
+                        time.sleep(0.5)
+                    except Exception:
+                        self._display_final_presentation_content(selected_agent, 'Unable to retrieve live presentation.')
+            else:
+                status = self.orchestrator.get_status()
+                if selected_agent in status.get('agent_states', {}):
+                    stored_answer = status['agent_states'][selected_agent].get('answer', '')
+                    if stored_answer:
+                        self._display_final_presentation_content(selected_agent, stored_answer)
+                    else:
+                        print('DEBUG: No stored answer found')
+                else:
+                    print(f'DEBUG: Agent {selected_agent} not found in agent_states')
+        except Exception as e:
+            error_text = Text(f'❌ Error in final presentation: {e}', style=self.colors['error'])
+            self.console.print(error_text)
+
+    def _force_display_final_vote_statuses(self) -> None:
+        """Force display update to show all agents' final vote statuses."""
+        with self._lock:
+            for agent_id in self.agent_ids:
+                self._pending_updates.add(agent_id)
+            self._pending_updates.add('footer')
+            self._schedule_async_update(force_update=True)
+        import time
+        time.sleep(0.3)
+
+    def _flush_all_buffers(self) -> None:
+        """Flush all text buffers to ensure no content is lost."""
+        for agent_id in self.agent_ids:
+            if agent_id in self._text_buffers and self._text_buffers[agent_id]:
+                buffer_content = self._text_buffers[agent_id].strip()
+                if buffer_content:
+                    self.agent_outputs[agent_id].append(buffer_content)
+                self._text_buffers[agent_id] = ''
+
+    def cleanup(self) -> None:
+        """Clean up display resources."""
+        with self._lock:
+            self._flush_all_buffers()
+            if self.live:
+                try:
+                    self.live.stop()
+                except Exception:
+                    pass
+                finally:
+                    self.live = None
+            self._stop_input_thread = True
+            if self._input_thread and self._input_thread.is_alive():
+                try:
+                    self._input_thread.join(timeout=1.0)
+                except Exception:
+                    pass
+            try:
+                self._restore_terminal_settings()
+            except Exception:
+                pass
+            self._agent_selector_active = False
+            self._final_answer_shown = False
+            try:
+                signal.signal(signal.SIGWINCH, signal.SIG_DFL)
+            except (AttributeError, OSError):
+                pass
+            if self._key_handler:
+                try:
+                    self._key_handler.stop()
+                except Exception:
+                    pass
+            self._shutdown_flag = True
+            for timer in self._debounce_timers.values():
+                timer.cancel()
+            self._debounce_timers.clear()
+            for timer in self._buffer_timers.values():
+                if timer:
+                    timer.cancel()
+            self._buffer_timers.clear()
+            if self._batch_timer:
+                self._batch_timer.cancel()
+                self._batch_timer = None
+            if hasattr(self, '_refresh_executor'):
+                self._refresh_executor.shutdown(wait=True)
+            if hasattr(self, '_status_update_executor'):
+                self._status_update_executor.shutdown(wait=True)
+            try:
+                for agent_id, file_path in self.agent_files.items():
+                    if file_path.exists():
+                        with open(file_path, 'a', encoding='utf-8') as f:
+                            f.write(f'\n=== SESSION ENDED at {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n')
+            except Exception:
+                pass
+        from massgen.logger_config import restore_console_logging
+        restore_console_logging()
+
+    def _schedule_priority_update(self, agent_id: str) -> None:
+        """Schedule immediate priority update for critical agent status changes."""
+        if self._shutdown_flag:
+            return
+
+        def priority_update() -> None:
+            try:
+                self._update_agent_panel_cache(agent_id)
+                self._update_display_safe()
+            except Exception:
+                pass
+        self._status_update_executor.submit(priority_update)
+
+    def _categorize_update(self, agent_id: str, content_type: str, content: str) -> None:
+        """Categorize update by priority for layered refresh strategy."""
+        if content_type in ['status', 'error', 'tool'] or any((keyword in content.lower() for keyword in ['error', 'failed', 'completed', 'voted'])):
+            self._critical_updates.add(agent_id)
+            self._normal_updates.discard(agent_id)
+            self._decorative_updates.discard(agent_id)
+        elif content_type in ['thinking', 'presentation']:
+            if agent_id not in self._critical_updates:
+                self._normal_updates.add(agent_id)
+                self._decorative_updates.discard(agent_id)
+        elif agent_id not in self._critical_updates and agent_id not in self._normal_updates:
+            self._decorative_updates.add(agent_id)
+
+    def _schedule_layered_update(self, agent_id: str, is_critical: bool=False) -> None:
+        """Schedule update using layered refresh strategy with intelligent batching."""
+        if is_critical:
+            self._flush_update_batch()
+            self._pending_updates.add(agent_id)
+            self._schedule_async_update(force_update=True)
+        else:
+            perf_tier = self._terminal_performance['performance_tier']
+            if perf_tier == 'high':
+                self._pending_updates.add(agent_id)
+                self._schedule_async_update(force_update=False)
+            else:
+                self._add_to_update_batch(agent_id)
+
+    def _schedule_delayed_update(self) -> None:
+        """Schedule delayed update for non-critical content."""
+        delay = self._debounce_delay * 2
+
+        def delayed_update() -> None:
+            if self._pending_updates:
+                self._schedule_async_update(force_update=False)
+        if 'delayed' in self._debounce_timers:
+            self._debounce_timers['delayed'].cancel()
+        self._debounce_timers['delayed'] = threading.Timer(delay, delayed_update)
+        self._debounce_timers['delayed'].start()
+
+    def _add_to_update_batch(self, agent_id: str) -> None:
+        """Add update to batch for efficient processing."""
+        self._update_batch.add(agent_id)
+        if self._batch_timer:
+            self._batch_timer.cancel()
+        self._batch_timer = threading.Timer(self._batch_timeout, self._process_update_batch)
+        self._batch_timer.start()
+
+    def _process_update_batch(self) -> None:
+        """Process accumulated batch of updates."""
+        if self._update_batch:
+            self._pending_updates.update(self._update_batch)
+            self._update_batch.clear()
+            self._schedule_async_update(force_update=False)
+
+    def _flush_update_batch(self) -> None:
+        """Immediately flush any pending batch updates."""
+        if self._batch_timer:
+            self._batch_timer.cancel()
+            self._batch_timer = None
+        if self._update_batch:
+            self._pending_updates.update(self._update_batch)
+            self._update_batch.clear()
+
+    def _schedule_async_update(self, force_update: bool=False):
+        """Schedule asynchronous update with debouncing to prevent jitter."""
+        current_time = time.time()
+        if not force_update and self._should_skip_frame():
+            return
+        if current_time - self._last_full_refresh > self._full_refresh_interval:
+            with self._lock:
+                self._pending_updates.add('header')
+                self._pending_updates.add('footer')
+                self._pending_updates.update(self.agent_ids)
+            self._last_full_refresh = current_time
+        if force_update:
+            self._last_update = current_time
+            self._refresh_executor.submit(self._async_update_components)
+            return
+        if 'main' in self._debounce_timers:
+            self._debounce_timers['main'].cancel()
+
+        def debounced_update() -> None:
+            current_time = time.time()
+            time_since_last_update = current_time - self._last_update
+            if time_since_last_update >= self._update_interval:
+                self._last_update = current_time
+                self._refresh_executor.submit(self._async_update_components)
+        self._debounce_timers['main'] = threading.Timer(self._debounce_delay, debounced_update)
+        self._debounce_timers['main'].start()
+
+    def _should_skip_frame(self) -> bool:
+        """Determine if we should skip this frame update to maintain stability."""
+        term_type = self._terminal_performance['type']
+        if term_type in ['iterm', 'macos_terminal']:
+            if self._dropped_frames > 1:
+                return True
+            if hasattr(self._refresh_executor, '_work_queue') and self._refresh_executor._work_queue.qsize() > 2:
+                return True
+        return False
+
+    def _async_update_components(self) -> None:
+        """Asynchronously update only the components that have changed."""
+        start_time = time.time()
+        try:
+            updates_to_process = None
+            with self._lock:
+                if self._pending_updates:
+                    updates_to_process = self._pending_updates.copy()
+                    self._pending_updates.clear()
+            if not updates_to_process:
+                return
+            futures = []
+            for update_id in updates_to_process:
+                if update_id == 'header':
+                    future = self._refresh_executor.submit(self._update_header_cache)
+                    futures.append(future)
+                elif update_id == 'footer':
+                    future = self._refresh_executor.submit(self._update_footer_cache)
+                    futures.append(future)
+                elif update_id in self.agent_ids:
+                    future = self._refresh_executor.submit(self._update_agent_panel_cache, update_id)
+                    futures.append(future)
+            for future in futures:
+                future.result()
+            self._update_display_safe()
+        except Exception:
+            pass
+        finally:
+            refresh_time = time.time() - start_time
+            self._refresh_times.append(refresh_time)
+            self._monitor_performance()
+
+    def _update_header_cache(self) -> None:
+        """Update the cached header panel."""
+        try:
+            self._header_cache = self._create_header()
+        except Exception:
+            pass
+
+    def _update_footer_cache(self) -> None:
+        """Update the cached footer panel."""
+        try:
+            self._footer_cache = self._create_footer()
+        except Exception:
+            pass
+
+    def _update_agent_panel_cache(self, agent_id: str):
+        """Update the cached panel for a specific agent."""
+        try:
+            self._agent_panels_cache[agent_id] = self._create_agent_panel(agent_id)
+        except Exception:
+            pass
+
+    def _update_final_presentation_panel(self) -> None:
+        """Update the live display to show the latest final presentation content."""
+        try:
+            if self.live and self.live.is_started:
+                with self._lock:
+                    self.live.update(self._create_layout())
+        except Exception:
+            pass
+
+    def _refresh_display(self) -> None:
+        """Override parent's refresh method to use async updates."""
+        if self._pending_updates:
+            self._schedule_async_update()
+
+    def _is_content_important(self, content: str, content_type: str) -> bool:
+        """Determine if content is important enough to trigger a display update."""
+        if content_type in self._important_content_types:
+            return True
+        if any((keyword in content.lower() for keyword in self._status_change_keywords)):
+            return True
+        if any((keyword in content.lower() for keyword in ['error', 'exception', 'failed', 'timeout'])):
+            return True
+        return False
+
+    def set_status_jump_enabled(self, enabled: bool):
+        """Enable or disable status jumping functionality.
+
+        Args:
+            enabled: Whether to enable status jumping
+        """
+        with self._lock:
+            self._status_jump_enabled = enabled
+
+    def set_web_search_truncation(self, enabled: bool, max_lines: int=3):
+        """Configure web search content truncation on status changes.
+
+        Args:
+            enabled: Whether to enable web search truncation
+            max_lines: Maximum web search lines to keep when truncating
+        """
+        with self._lock:
+            self._web_search_truncate_on_status_change = enabled
+            self._max_web_search_lines = max_lines
+
+    def set_flush_output(self, enabled: bool, char_delay: float=0.03, word_delay: float=0.08):
+        """Configure flush output settings for final answer display.
+
+        Args:
+            enabled: Whether to enable flush output effect
+            char_delay: Delay between characters in seconds
+            word_delay: Extra delay after punctuation in seconds
+        """
+        with self._lock:
+            self._enable_flush_output = enabled
+            self._flush_char_delay = char_delay
+            self._flush_word_delay = word_delay
+
+def _schedule_priority_update(self, agent_id: str) -> None:
+    """Schedule immediate priority update for critical agent status changes."""
+    if self._shutdown_flag:
+        return
+
+    def priority_update() -> None:
+        try:
+            self._update_agent_panel_cache(agent_id)
+            self._update_display_safe()
+        except Exception:
+            pass
+    self._status_update_executor.submit(priority_update)
+
+def debounced_update() -> None:
+    current_time = time.time()
+    time_since_last_update = current_time - self._last_update
+    if time_since_last_update >= self._update_interval:
+        self._last_update = current_time
+        self._refresh_executor.submit(self._async_update_components)
+
+class TokenCostCalculator:
+    """Unified token estimation and cost calculation."""
+    PROVIDER_PRICING: Dict[str, Dict[str, ModelPricing]] = {'OpenAI': {'gpt-4o': ModelPricing(0.0025, 0.01, 128000, 16384), 'gpt-4o-mini': ModelPricing(0.00015, 0.0006, 128000, 16384), 'gpt-4-turbo': ModelPricing(0.01, 0.03, 128000, 4096), 'gpt-4': ModelPricing(0.03, 0.06, 8192, 8192), 'gpt-3.5-turbo': ModelPricing(0.0005, 0.0015, 16385, 4096), 'o1-preview': ModelPricing(0.015, 0.06, 128000, 32768), 'o1-mini': ModelPricing(0.003, 0.012, 128000, 65536), 'o3-mini': ModelPricing(0.0011, 0.0044, 200000, 100000)}, 'Anthropic': {'claude-3-5-sonnet': ModelPricing(0.003, 0.015, 200000, 8192), 'claude-3-5-haiku': ModelPricing(0.001, 0.005, 200000, 8192), 'claude-3-opus': ModelPricing(0.015, 0.075, 200000, 4096), 'claude-3-sonnet': ModelPricing(0.003, 0.015, 200000, 4096), 'claude-3-haiku': ModelPricing(0.00025, 0.00125, 200000, 4096)}, 'Google': {'gemini-2.0-flash-exp': ModelPricing(0.0, 0.0, 1048576, 8192), 'gemini-2.0-flash-thinking-exp': ModelPricing(0.0, 0.0, 32767, 8192), 'gemini-1.5-pro': ModelPricing(0.00125, 0.005, 2097152, 8192), 'gemini-1.5-flash': ModelPricing(7.5e-05, 0.0003, 1048576, 8192), 'gemini-1.5-flash-8b': ModelPricing(3.75e-05, 0.00015, 1048576, 8192), 'gemini-1.0-pro': ModelPricing(0.00025, 0.00125, 32760, 8192)}, 'Cerebras': {'llama3.3-70b': ModelPricing(0.00035, 0.00035, 128000, 8192), 'llama3.1-70b': ModelPricing(0.00035, 0.00035, 128000, 8192), 'llama3.1-8b': ModelPricing(1e-05, 1e-05, 128000, 8192)}, 'Together': {'meta-llama/Llama-3.3-70B-Instruct-Turbo': ModelPricing(0.00059, 0.00079, 128000, 32768), 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo': ModelPricing(0.00059, 0.00079, 128000, 32768), 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo': ModelPricing(0.00088, 0.00088, 130000, 4096), 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo': ModelPricing(0.00018, 0.00018, 131072, 65536), 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo': ModelPricing(6e-05, 6e-05, 131072, 16384), 'Qwen/QwQ-32B-Preview': ModelPricing(0.00015, 0.00015, 32768, 32768), 'Qwen/Qwen2.5-72B-Instruct-Turbo': ModelPricing(0.00012, 0.00012, 32768, 8192), 'mistralai/Mixtral-8x22B-Instruct-v0.1': ModelPricing(0.0009, 0.0009, 65536, 65536), 'deepseek-ai/deepseek-r1-distill-llama-70b': ModelPricing(0.00015, 0.00015, 65536, 8192)}, 'Fireworks': {'llama-3.3-70b': ModelPricing(0.0002, 0.0002, 128000, 16384), 'llama-3.1-405b': ModelPricing(0.0009, 0.0009, 131072, 16384), 'llama-3.1-70b': ModelPricing(0.0002, 0.0002, 131072, 16384), 'llama-3.1-8b': ModelPricing(2e-05, 2e-05, 131072, 16384), 'qwen2.5-72b': ModelPricing(0.0002, 0.0002, 32768, 16384)}, 'Groq': {'llama-3.3-70b-versatile': ModelPricing(0.00059, 0.00079, 128000, 32768), 'llama-3.1-70b-versatile': ModelPricing(0.00059, 0.00079, 131072, 8000), 'llama-3.1-8b-instant': ModelPricing(5e-05, 8e-05, 131072, 8000), 'mixtral-8x7b-32768': ModelPricing(0.00024, 0.00024, 32768, 32768)}, 'xAI': {'grok-2-latest': ModelPricing(0.005, 0.015, 131072, 131072), 'grok-2': ModelPricing(0.005, 0.015, 131072, 131072), 'grok-2-mini': ModelPricing(0.001, 0.003, 131072, 65536)}, 'DeepSeek': {'deepseek-reasoner': ModelPricing(0.00014, 0.0028, 163840, 8192), 'deepseek-chat': ModelPricing(0.00014, 0.00028, 64000, 8192)}}
+
+    def __init__(self):
+        """Initialize the calculator with optional tiktoken for accurate estimation."""
+        self.tiktoken_encoder = None
+        self._try_init_tiktoken()
+
+    def _try_init_tiktoken(self):
+        """Try to initialize tiktoken encoder for more accurate token counting."""
+        try:
+            import tiktoken
+            self.tiktoken_encoder = tiktoken.get_encoding('cl100k_base')
+            logger.debug('Tiktoken encoder initialized for accurate token counting')
+        except ImportError:
+            logger.debug('Tiktoken not available, using simple estimation')
+        except Exception as e:
+            logger.warning(f'Failed to initialize tiktoken: {e}')
+
+    def estimate_tokens(self, text: Union[str, List[Dict[str, Any]]], method: str='auto') -> int:
+        """
+        Estimate token count for text or messages.
+
+        Args:
+            text: Text string or list of message dictionaries
+            method: Estimation method ("tiktoken", "simple", "auto")
+
+        Returns:
+            Estimated token count
+        """
+        if isinstance(text, list):
+            text = self._messages_to_text(text)
+        if method == 'auto':
+            if self.tiktoken_encoder:
+                return self.estimate_tokens_tiktoken(text)
+            else:
+                return self.estimate_tokens_simple(text)
+        elif method == 'tiktoken':
+            return self.estimate_tokens_tiktoken(text)
+        else:
+            return self.estimate_tokens_simple(text)
+
+    def estimate_tokens_tiktoken(self, text: str) -> int:
+        """
+        Estimate tokens using tiktoken (OpenAI's tokenizer).
+        Most accurate for OpenAI models.
+
+        Args:
+            text: Text to estimate
+
+        Returns:
+            Token count
+        """
+        if not self.tiktoken_encoder:
+            logger.warning('Tiktoken not available, falling back to simple estimation')
+            return self.estimate_tokens_simple(text)
+        try:
+            tokens = self.tiktoken_encoder.encode(text)
+            return len(tokens)
+        except Exception as e:
+            logger.warning(f'Tiktoken encoding failed: {e}, using simple estimation')
+            return self.estimate_tokens_simple(text)
+
+    def estimate_tokens_simple(self, text: str) -> int:
+        """
+        Simple token estimation based on character/word count.
+        Roughly 1 token ≈ 4 characters or 0.75 words.
+
+        Args:
+            text: Text to estimate
+
+        Returns:
+            Estimated token count
+        """
+        char_estimate = len(text) / 4
+        words = text.split()
+        word_estimate = len(words) / 0.75
+        estimate = (char_estimate + word_estimate) / 2
+        return int(estimate)
+
+    def _messages_to_text(self, messages: List[Dict[str, Any]]) -> str:
+        """Convert message list to text for token estimation."""
+        text_parts = []
+        for msg in messages:
+            role = msg.get('role', '')
+            content = msg.get('content', '')
+            if isinstance(content, str):
+                text_parts.append(f'{role}: {content}')
+            elif isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict):
+                        if item.get('type') == 'text':
+                            text_parts.append(f'{role}: {item.get('text', '')}')
+                        elif item.get('type') == 'tool_result':
+                            text_parts.append(f'tool_result: {item.get('content', '')}')
+                    else:
+                        text_parts.append(f'{role}: {str(item)}')
+            else:
+                text_parts.append(f'{role}: {str(content)}')
+            if 'tool_calls' in msg:
+                tool_calls = msg['tool_calls']
+                if isinstance(tool_calls, list):
+                    for call in tool_calls:
+                        text_parts.append(f'tool_call: {str(call)}')
+        return '\n'.join(text_parts)
+
+    def get_model_pricing(self, provider: str, model: str) -> Optional[ModelPricing]:
+        """
+        Get pricing information for a specific model.
+
+        Args:
+            provider: Provider name (e.g., "OpenAI", "Anthropic")
+            model: Model name or identifier
+
+        Returns:
+            ModelPricing object or None if not found
+        """
+        provider = self._normalize_provider(provider)
+        provider_models = self.PROVIDER_PRICING.get(provider, {})
+        if model in provider_models:
+            return provider_models[model]
+        for model_key, pricing in provider_models.items():
+            if model_key.lower() in model.lower() or model.lower() in model_key.lower():
+                return pricing
+        model_lower = model.lower()
+        if 'gpt-4o' in model_lower and 'mini' in model_lower:
+            return provider_models.get('gpt-4o-mini')
+        elif 'gpt-4o' in model_lower:
+            return provider_models.get('gpt-4o')
+        elif 'gpt-4' in model_lower and 'turbo' in model_lower:
+            return provider_models.get('gpt-4-turbo')
+        elif 'gpt-4' in model_lower:
+            return provider_models.get('gpt-4')
+        elif 'gpt-3.5' in model_lower:
+            return provider_models.get('gpt-3.5-turbo')
+        elif 'claude-3-5-sonnet' in model_lower or 'claude-3.5-sonnet' in model_lower:
+            return provider_models.get('claude-3-5-sonnet')
+        elif 'claude-3-5-haiku' in model_lower or 'claude-3.5-haiku' in model_lower:
+            return provider_models.get('claude-3-5-haiku')
+        elif 'claude-3-opus' in model_lower:
+            return provider_models.get('claude-3-opus')
+        elif 'claude-3-sonnet' in model_lower:
+            return provider_models.get('claude-3-sonnet')
+        elif 'claude-3-haiku' in model_lower:
+            return provider_models.get('claude-3-haiku')
+        elif 'gemini-2' in model_lower and 'flash' in model_lower:
+            return provider_models.get('gemini-2.0-flash-exp')
+        elif 'gemini-1.5-pro' in model_lower:
+            return provider_models.get('gemini-1.5-pro')
+        elif 'gemini-1.5-flash' in model_lower:
+            return provider_models.get('gemini-1.5-flash')
+        logger.debug(f'No pricing found for {provider}/{model}')
+        return None
+
+    def _normalize_provider(self, provider: str) -> str:
+        """Normalize provider name for lookup."""
+        provider_map = {'openai': 'OpenAI', 'anthropic': 'Anthropic', 'claude': 'Anthropic', 'google': 'Google', 'gemini': 'Google', 'vertex': 'Google', 'cerebras': 'Cerebras', 'cerebras ai': 'Cerebras', 'together': 'Together', 'together ai': 'Together', 'fireworks': 'Fireworks', 'fireworks ai': 'Fireworks', 'groq': 'Groq', 'xai': 'xAI', 'x.ai': 'xAI', 'grok': 'xAI', 'deepseek': 'DeepSeek'}
+        provider_lower = provider.lower()
+        return provider_map.get(provider_lower, provider)
+
+    def calculate_cost(self, input_tokens: int, output_tokens: int, provider: str, model: str) -> float:
+        """
+        Calculate cost for token usage.
+
+        Args:
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            provider: Provider name
+            model: Model name
+
+        Returns:
+            Estimated cost in USD
+        """
+        pricing = self.get_model_pricing(provider, model)
+        if not pricing:
+            logger.debug(f'No pricing for {provider}/{model}, returning 0')
+            return 0.0
+        input_cost = input_tokens / 1000 * pricing.input_cost_per_1k
+        output_cost = output_tokens / 1000 * pricing.output_cost_per_1k
+        total_cost = input_cost + output_cost
+        logger.debug(f'Cost calculation for {provider}/{model}: {input_tokens} input @ ${pricing.input_cost_per_1k}/1k = ${input_cost:.4f}, {output_tokens} output @ ${pricing.output_cost_per_1k}/1k = ${output_cost:.4f}, total = ${total_cost:.4f}')
+        return total_cost
+
+    def update_token_usage(self, usage: TokenUsage, messages: List[Dict[str, Any]], response_content: str, provider: str, model: str) -> TokenUsage:
+        """
+        Update token usage with new conversation turn.
+
+        Args:
+            usage: Existing TokenUsage to update
+            messages: Input messages
+            response_content: Response content
+            provider: Provider name
+            model: Model name
+
+        Returns:
+            Updated TokenUsage object
+        """
+        input_tokens = self.estimate_tokens(messages)
+        output_tokens = self.estimate_tokens(response_content)
+        cost = self.calculate_cost(input_tokens, output_tokens, provider, model)
+        usage.input_tokens += input_tokens
+        usage.output_tokens += output_tokens
+        usage.estimated_cost += cost
+        return usage
+
+    def format_cost(self, cost: float) -> str:
+        """Format cost for display."""
+        if cost < 0.01:
+            return f'${cost:.4f}'
+        elif cost < 1.0:
+            return f'${cost:.3f}'
+        else:
+            return f'${cost:.2f}'
+
+    def format_usage_summary(self, usage: TokenUsage) -> str:
+        """Format token usage summary for display."""
+        return f'Tokens: {usage.input_tokens:,} input, {usage.output_tokens:,} output, Cost: {self.format_cost(usage.estimated_cost)}'
+
+def _try_init_tiktoken(self):
+    """Try to initialize tiktoken encoder for more accurate token counting."""
+    try:
+        import tiktoken
+        self.tiktoken_encoder = tiktoken.get_encoding('cl100k_base')
+        logger.debug('Tiktoken encoder initialized for accurate token counting')
+    except ImportError:
+        logger.debug('Tiktoken not available, using simple estimation')
+    except Exception as e:
+        logger.warning(f'Failed to initialize tiktoken: {e}')
+
+def calculate_cost(self, input_tokens: int, output_tokens: int, provider: str, model: str) -> float:
+    """
+        Calculate cost for token usage.
+
+        Args:
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            provider: Provider name
+            model: Model name
+
+        Returns:
+            Estimated cost in USD
+        """
+    pricing = self.get_model_pricing(provider, model)
+    if not pricing:
+        logger.debug(f'No pricing for {provider}/{model}, returning 0')
+        return 0.0
+    input_cost = input_tokens / 1000 * pricing.input_cost_per_1k
+    output_cost = output_tokens / 1000 * pricing.output_cost_per_1k
+    total_cost = input_cost + output_cost
+    logger.debug(f'Cost calculation for {provider}/{model}: {input_tokens} input @ ${pricing.input_cost_per_1k}/1k = ${input_cost:.4f}, {output_tokens} output @ ${pricing.output_cost_per_1k}/1k = ${output_cost:.4f}, total = ${total_cost:.4f}')
+    return total_cost
+
+def get_all_backend_types() -> List[str]:
+    """Get list of all registered backend types.
+
+    Returns:
+        List of backend type strings
+    """
+    return list(BACKEND_CAPABILITIES.keys())
+
+class GeminiBackend(LLMBackend):
+    """Google Gemini backend using structured output for coordination and MCP tool integration."""
+
+    def __init__(self, api_key: Optional[str]=None, **kwargs):
+        super().__init__(api_key, **kwargs)
+        self.api_key = api_key or os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY')
+        self.search_count = 0
+        self.code_execution_count = 0
+        self.mcp_servers = self.config.get('mcp_servers', [])
+        self.allowed_tools = kwargs.pop('allowed_tools', None)
+        self.exclude_tools = kwargs.pop('exclude_tools', None)
+        self._mcp_client: Optional[MCPClient] = None
+        self._mcp_initialized = False
+        self._mcp_tool_calls_count = 0
+        self._mcp_tool_failures = 0
+        self._mcp_tool_successes = 0
+        self.mcp_extractor = MCPResponseExtractor()
+        self._max_mcp_message_history = kwargs.pop('max_mcp_message_history', 200)
+        self._mcp_connection_retries = 0
+        self._circuit_breakers_enabled = kwargs.pop('circuit_breaker_enabled', True)
+        self._mcp_tools_circuit_breaker = None
+        self.agent_id = kwargs.get('agent_id', None)
+        if self._circuit_breakers_enabled:
+            if MCPCircuitBreakerManager is None:
+                raise RuntimeError('Circuit breakers enabled but MCPCircuitBreakerManager is not available')
+            try:
+                from ..mcp_tools.circuit_breaker import MCPCircuitBreaker
+                if MCPConfigHelper is not None:
+                    mcp_tools_config = MCPConfigHelper.build_circuit_breaker_config('mcp_tools', backend_name='gemini')
+                else:
+                    mcp_tools_config = None
+                if mcp_tools_config:
+                    self._mcp_tools_circuit_breaker = MCPCircuitBreaker(mcp_tools_config, backend_name='gemini', agent_id=self.agent_id)
+                    log_backend_activity('gemini', 'Circuit breaker initialized for MCP tools', {'enabled': True}, agent_id=self.agent_id)
+                else:
+                    log_backend_activity('gemini', 'Circuit breaker config unavailable', {'fallback': 'disabled'}, agent_id=self.agent_id)
+                    self._circuit_breakers_enabled = False
+            except ImportError:
+                log_backend_activity('gemini', 'Circuit breaker import failed', {'fallback': 'disabled'}, agent_id=self.agent_id)
+                self._circuit_breakers_enabled = False
+
+    def _setup_permission_hooks(self):
+        """Override base class - Gemini uses session-based permissions, not function hooks."""
+        logger.debug('[Gemini] Using session-based permissions, skipping function hook setup')
+
+    async def _setup_mcp_with_status_stream(self, agent_id: Optional[str]=None) -> AsyncGenerator[StreamChunk, None]:
+        """Initialize MCP client with status streaming."""
+        status_queue: asyncio.Queue[StreamChunk] = asyncio.Queue()
+
+        async def status_callback(status: str, details: Dict[str, Any]) -> None:
+            """Callback to queue status updates as StreamChunks."""
+            chunk = StreamChunk(type='mcp_status', status=status, content=details.get('message', ''), source='mcp_tools')
+            await status_queue.put(chunk)
+        setup_task = asyncio.create_task(self._setup_mcp_tools_internal(agent_id, status_callback))
+        while not setup_task.done():
+            try:
+                chunk = await asyncio.wait_for(status_queue.get(), timeout=0.1)
+                yield chunk
+            except asyncio.TimeoutError:
+                continue
+        try:
+            await setup_task
+        except Exception as e:
+            yield StreamChunk(type='mcp_status', status='error', content=f'MCP setup failed: {e}', source='mcp_tools')
+
+    async def _setup_mcp_tools(self, agent_id: Optional[str]=None) -> None:
+        """Initialize MCP client (sessions only) - backward compatibility."""
+        if not self.mcp_servers or self._mcp_initialized:
+            return
+        async for _ in self._setup_mcp_with_status_stream(agent_id):
+            pass
+
+    async def _setup_mcp_tools_internal(self, agent_id: Optional[str]=None, status_callback: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]]=None) -> None:
+        """Internal MCP setup logic."""
+        if not self.mcp_servers or self._mcp_initialized:
+            return
+        if MCPClient is None:
+            reason = 'MCP import failed - MCPClient not available'
+            log_backend_activity('gemini', 'MCP import failed', {'reason': reason, 'fallback': 'workflow_tools'}, agent_id=agent_id)
+            if status_callback:
+                await status_callback('error', {'message': 'MCP import failed - falling back to workflow tools'})
+            self.mcp_servers = []
+            return
+        try:
+            validated_config = {'mcp_servers': self.mcp_servers, 'allowed_tools': self.allowed_tools, 'exclude_tools': self.exclude_tools}
+            if MCPConfigValidator is not None:
+                try:
+                    backend_config = {'mcp_servers': self.mcp_servers, 'allowed_tools': self.allowed_tools, 'exclude_tools': self.exclude_tools}
+                    validator = MCPConfigValidator()
+                    validated_config = validator.validate_backend_mcp_config(backend_config)
+                    self.mcp_servers = validated_config.get('mcp_servers', self.mcp_servers)
+                    log_backend_activity('gemini', 'MCP configuration validated', {'server_count': len(self.mcp_servers)}, agent_id=agent_id)
+                    if status_callback:
+                        await status_callback('info', {'message': f'MCP configuration validated: {len(self.mcp_servers)} servers'})
+                    if True:
+                        server_names = [server.get('name', 'unnamed') for server in self.mcp_servers]
+                        log_backend_activity('gemini', 'MCP servers validated', {'servers': server_names}, agent_id=agent_id)
+                except MCPConfigurationError as e:
+                    log_backend_activity('gemini', 'MCP configuration validation failed', {'error': e.original_message}, agent_id=agent_id)
+                    if status_callback:
+                        await status_callback('error', {'message': f'Invalid MCP configuration: {e.original_message}'})
+                    self._mcp_client = None
+                    raise RuntimeError(f'Invalid MCP configuration: {e.original_message}') from e
+                except MCPValidationError as e:
+                    log_backend_activity('gemini', 'MCP validation failed', {'error': e.original_message}, agent_id=agent_id)
+                    if status_callback:
+                        await status_callback('error', {'message': f'MCP validation error: {e.original_message}'})
+                    self._mcp_client = None
+                    raise RuntimeError(f'MCP validation error: {e.original_message}') from e
+                except Exception as e:
+                    if isinstance(e, (ImportError, AttributeError)):
+                        log_backend_activity('gemini', 'MCP validation unavailable', {'reason': str(e)}, agent_id=agent_id)
+                    else:
+                        log_backend_activity('gemini', 'MCP validation error', {'error': str(e)}, agent_id=agent_id)
+                        self._mcp_client = None
+                        raise RuntimeError(f'MCP configuration validation failed: {e}') from e
+            else:
+                log_backend_activity('gemini', 'MCP validation skipped', {'reason': 'validator_unavailable'}, agent_id=agent_id)
+            normalized_servers = MCPSetupManager.normalize_mcp_servers(self.mcp_servers)
+            log_backend_activity('gemini', 'Setting up MCP sessions', {'server_count': len(normalized_servers)}, agent_id=agent_id)
+            if status_callback:
+                await status_callback('info', {'message': f'Setting up MCP sessions for {len(normalized_servers)} servers'})
+            if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                filtered_servers = MCPCircuitBreakerManager.apply_circuit_breaker_filtering(normalized_servers, self._mcp_tools_circuit_breaker, backend_name='gemini', agent_id=agent_id)
+            else:
+                filtered_servers = normalized_servers
+            if not filtered_servers:
+                log_backend_activity('gemini', 'All MCP servers blocked by circuit breaker', {}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('warning', {'message': 'All MCP servers blocked by circuit breaker'})
+                return
+            if len(filtered_servers) < len(normalized_servers):
+                log_backend_activity('gemini', 'Circuit breaker filtered servers', {'filtered_count': len(normalized_servers) - len(filtered_servers)}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('warning', {'message': f'Circuit breaker filtered {len(normalized_servers) - len(filtered_servers)} servers'})
+            allowed_tools = validated_config.get('allowed_tools')
+            exclude_tools = validated_config.get('exclude_tools')
+            if allowed_tools:
+                log_backend_activity('gemini', 'MCP tool filtering configured', {'allowed_tools': allowed_tools}, agent_id=agent_id)
+            if exclude_tools:
+                log_backend_activity('gemini', 'MCP tool filtering configured', {'exclude_tools': exclude_tools}, agent_id=agent_id)
+            self._mcp_client = MCPClient(filtered_servers, timeout_seconds=30, allowed_tools=allowed_tools, exclude_tools=exclude_tools, status_callback=status_callback, hooks=self.filesystem_manager.get_pre_tool_hooks() if self.filesystem_manager else {})
+            await self._mcp_client.connect()
+            try:
+                connected_server_names = self._mcp_client.get_server_names()
+            except Exception:
+                connected_server_names = []
+            if not connected_server_names:
+                if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                    await MCPCircuitBreakerManager.record_event(filtered_servers, self._mcp_tools_circuit_breaker, 'failure', error_message='No servers connected', backend_name='gemini', agent_id=agent_id)
+                log_backend_activity('gemini', 'MCP connection failed: no servers connected', {}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('error', {'message': 'MCP connection failed: no servers connected'})
+                self._mcp_client = None
+                return
+            connected_server_configs = [server for server in filtered_servers if server.get('name') in connected_server_names]
+            if connected_server_configs:
+                if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                    await MCPCircuitBreakerManager.record_event(connected_server_configs, self._mcp_tools_circuit_breaker, 'success', backend_name='gemini', agent_id=agent_id)
+            self._mcp_initialized = True
+            log_backend_activity('gemini', 'MCP sessions initialized successfully', {}, agent_id=agent_id)
+            if status_callback:
+                await status_callback('success', {'message': f'MCP sessions initialized successfully with {len(connected_server_names)} servers'})
+        except Exception as e:
+            if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                servers = MCPSetupManager.normalize_mcp_servers(self.mcp_servers)
+                await MCPCircuitBreakerManager.record_event(servers, self._mcp_tools_circuit_breaker, 'failure', error_message=str(e), backend_name='gemini', agent_id=agent_id)
+            if isinstance(e, RuntimeError) and 'MCP configuration' in str(e):
+                raise
+            elif isinstance(e, MCPConnectionError):
+                log_backend_activity('gemini', 'MCP connection failed during setup', {'error': str(e)}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('error', {'message': f'Failed to establish MCP connections: {e}'})
+                self._mcp_client = None
+                raise RuntimeError(f'Failed to establish MCP connections: {e}') from e
+            elif isinstance(e, MCPTimeoutError):
+                log_backend_activity('gemini', 'MCP connection timeout during setup', {'error': str(e)}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('error', {'message': f'MCP connection timeout: {e}'})
+                self._mcp_client = None
+                raise RuntimeError(f'MCP connection timeout: {e}') from e
+            elif isinstance(e, MCPServerError):
+                log_backend_activity('gemini', 'MCP server error during setup', {'error': str(e)}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('error', {'message': f'MCP server error: {e}'})
+                self._mcp_client = None
+                raise RuntimeError(f'MCP server error: {e}') from e
+            elif isinstance(e, MCPError):
+                log_backend_activity('gemini', 'MCP error during setup', {'error': str(e)}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('error', {'message': f'MCP error during setup: {e}'})
+                self._mcp_client = None
+                return
+            else:
+                log_backend_activity('gemini', 'MCP session setup failed', {'error': str(e)}, agent_id=agent_id)
+                if status_callback:
+                    await status_callback('error', {'message': f'MCP session setup failed: {e}'})
+                self._mcp_client = None
+
+    def detect_coordination_tools(self, tools: List[Dict[str, Any]]) -> bool:
+        """Detect if tools contain vote/new_answer coordination tools."""
+        if not tools:
+            return False
+        tool_names = set()
+        for tool in tools:
+            if tool.get('type') == 'function':
+                if 'function' in tool:
+                    tool_names.add(tool['function'].get('name', ''))
+                elif 'name' in tool:
+                    tool_names.add(tool.get('name', ''))
+        return 'vote' in tool_names and 'new_answer' in tool_names
+
+    def build_structured_output_prompt(self, base_content: str, valid_agent_ids: Optional[List[str]]=None) -> str:
+        """Build prompt that encourages structured output for coordination."""
+        agent_list = ''
+        if valid_agent_ids:
+            agent_list = f'Valid agents: {', '.join(valid_agent_ids)}'
+        return f"""{base_content}\n\nIMPORTANT: You must respond with a structured JSON decision at the end of your response.\n\nIf you want to VOTE for an existing agent's answer:\n{{\n  "action_type": "vote",\n  "vote_data": {{\n    "action": "vote",\n    "agent_id": "agent1",  // Choose from: {agent_list or 'agent1, agent2, agent3, etc.'}\n    "reason": "Brief reason for your vote"\n  }}\n}}\n\nIf you want to provide a NEW ANSWER:\n{{\n  "action_type": "new_answer",\n  "answer_data": {{\n    "action": "new_answer",\n    "content": "Your complete improved answer here"\n  }}\n}}\n\nMake your decision and include the JSON at the very end of your response."""
+
+    def extract_structured_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """Extract structured JSON response from model output."""
+        try:
+            markdown_json_pattern = '```json\\s*(\\{.*?\\})\\s*```'
+            markdown_matches = re.findall(markdown_json_pattern, response_text, re.DOTALL)
+            for match in reversed(markdown_matches):
+                try:
+                    parsed = json.loads(match.strip())
+                    if isinstance(parsed, dict) and 'action_type' in parsed:
+                        return parsed
+                except json.JSONDecodeError:
+                    continue
+            json_pattern = '\\{[^{}]*(?:\\{[^{}]*\\}[^{}]*)*\\}'
+            json_matches = re.findall(json_pattern, response_text, re.DOTALL)
+            for match in reversed(json_matches):
+                try:
+                    cleaned_match = match.strip()
+                    parsed = json.loads(cleaned_match)
+                    if isinstance(parsed, dict) and 'action_type' in parsed:
+                        return parsed
+                except json.JSONDecodeError:
+                    continue
+            brace_count = 0
+            json_start = -1
+            for i, char in enumerate(response_text):
+                if char == '{':
+                    if brace_count == 0:
+                        json_start = i
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0 and json_start >= 0:
+                        json_block = response_text[json_start:i + 1]
+                        try:
+                            parsed = json.loads(json_block)
+                            if isinstance(parsed, dict) and 'action_type' in parsed:
+                                return parsed
+                        except json.JSONDecodeError:
+                            pass
+                        json_start = -1
+            lines = response_text.strip().split('\n')
+            json_candidates = []
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith('{') and stripped.endswith('}'):
+                    json_candidates.append(stripped)
+                elif stripped.startswith('{'):
+                    json_text = stripped
+                    for j in range(i + 1, len(lines)):
+                        json_text += '\n' + lines[j].strip()
+                        if lines[j].strip().endswith('}'):
+                            json_candidates.append(json_text)
+                            break
+            for candidate in reversed(json_candidates):
+                try:
+                    parsed = json.loads(candidate)
+                    if isinstance(parsed, dict) and 'action_type' in parsed:
+                        return parsed
+                except json.JSONDecodeError:
+                    continue
+            return None
+        except Exception:
+            return None
+
+    def convert_structured_to_tool_calls(self, structured_response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Convert structured response to tool call format."""
+        action_type = structured_response.get('action_type')
+        if action_type == 'vote':
+            vote_data = structured_response.get('vote_data', {})
+            return [{'id': f'vote_{abs(hash(str(vote_data))) % 10000 + 1}', 'type': 'function', 'function': {'name': 'vote', 'arguments': {'agent_id': vote_data.get('agent_id', ''), 'reason': vote_data.get('reason', '')}}}]
+        elif action_type == 'new_answer':
+            answer_data = structured_response.get('answer_data', {})
+            return [{'id': f'new_answer_{abs(hash(str(answer_data))) % 10000 + 1}', 'type': 'function', 'function': {'name': 'new_answer', 'arguments': {'content': answer_data.get('content', '')}}}]
+        return []
+
+    async def _handle_mcp_retry_error(self, error: Exception, retry_count: int, max_retries: int) -> tuple[bool, AsyncGenerator[StreamChunk, None]]:
+        """Handle MCP retry errors with specific messaging and fallback logic.
+
+        Returns:
+            tuple: (should_continue_retrying, error_chunks_generator)
+        """
+        log_type, user_message, _ = MCPErrorHandler.get_error_details(error, None, log=False)
+        log_backend_activity('gemini', f'MCP {log_type} on retry', {'attempt': retry_count, 'error': str(error)}, agent_id=self.agent_id)
+        if retry_count >= max_retries:
+
+            async def error_chunks():
+                yield StreamChunk(type='content', content=f'\n⚠️  {user_message} after {max_retries} attempts; falling back to workflow tools\n')
+            return (False, error_chunks())
+
+        async def empty_chunks():
+            if False:
+                yield
+        return (True, empty_chunks())
+
+    async def _handle_mcp_error_and_fallback(self, error: Exception) -> AsyncGenerator[StreamChunk, None]:
+        """Handle MCP errors with specific messaging"""
+        self._mcp_tool_failures += 1
+        log_type, user_message, _ = MCPErrorHandler.get_error_details(error, None, log=False)
+        log_backend_activity('gemini', 'MCP tool call failed', {'call_number': self._mcp_tool_calls_count, 'error_type': log_type, 'error': str(error)}, agent_id=self.agent_id)
+        yield StreamChunk(type='content', content=f'\n⚠️  {user_message} ({error}); continuing without MCP tools\n')
+
+    async def _execute_mcp_function_with_retry(self, function_name: str, args: Dict[str, Any], agent_id: Optional[str]=None) -> Any:
+        """Execute MCP function with exponential backoff retry logic."""
+        if MCPExecutionManager is None:
+            raise RuntimeError('MCPExecutionManager is not available - MCP backend utilities are missing')
+
+        async def stats_callback(action: str) -> int:
+            if action == 'increment_calls':
+                self._mcp_tool_calls_count += 1
+                return self._mcp_tool_calls_count
+            elif action == 'increment_failures':
+                self._mcp_tool_failures += 1
+                return self._mcp_tool_failures
+            return 0
+
+        async def circuit_breaker_callback(event: str, error_msg: str) -> None:
+            if event == 'failure':
+                if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                    servers = MCPSetupManager.normalize_mcp_servers(self.mcp_servers)
+                    await MCPCircuitBreakerManager.record_event(servers, self._mcp_tools_circuit_breaker, 'failure', error_message=error_msg, backend_name='gemini', agent_id=agent_id)
+            else:
+                connected_names: List[str] = []
+                try:
+                    if self._mcp_client:
+                        connected_names = self._mcp_client.get_server_names()
+                except Exception:
+                    connected_names = []
+                if connected_names:
+                    servers_to_record = [{'name': name} for name in connected_names]
+                    if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                        await MCPCircuitBreakerManager.record_event(servers_to_record, self._mcp_tools_circuit_breaker, 'success', backend_name='gemini', agent_id=agent_id)
+        return await MCPExecutionManager.execute_function_with_retry(function_name=function_name, args=args, functions=self.functions, max_retries=3, stats_callback=stats_callback, circuit_breaker_callback=circuit_breaker_callback, logger_instance=logger)
+
+    async def stream_with_tools(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], **kwargs) -> AsyncGenerator[StreamChunk, None]:
+        """Stream response using Gemini API with structured output for coordination and MCP tool support."""
+        agent_id = self.agent_id or kwargs.get('agent_id', None)
+        client = None
+        stream = None
+        log_backend_activity('gemini', 'Starting stream_with_tools', {'num_messages': len(messages), 'num_tools': len(tools) if tools else 0}, agent_id=agent_id)
+        if self.mcp_servers and MCPMessageManager is not None and hasattr(self, '_max_mcp_message_history') and (self._max_mcp_message_history > 0):
+            original_count = len(messages)
+            messages = MCPMessageManager.trim_message_history(messages, self._max_mcp_message_history)
+            if len(messages) < original_count:
+                log_backend_activity('gemini', 'Trimmed MCP message history', {'original': original_count, 'trimmed': len(messages), 'limit': self._max_mcp_message_history}, agent_id=agent_id)
+        try:
+            from google import genai
+            if not self._mcp_initialized and self.mcp_servers:
+                async for chunk in self._setup_mcp_with_status_stream(agent_id):
+                    yield chunk
+            elif not self._mcp_initialized:
+                await self._setup_mcp_tools(agent_id)
+            all_params = {**self.config, **kwargs}
+            enable_web_search = all_params.get('enable_web_search', False)
+            enable_code_execution = all_params.get('enable_code_execution', False)
+            using_sdk_mcp = bool(self.mcp_servers)
+            is_coordination = self.detect_coordination_tools(tools)
+            valid_agent_ids = None
+            if is_coordination:
+                for tool in tools:
+                    if tool.get('type') == 'function':
+                        func_def = tool.get('function', {})
+                        if func_def.get('name') == 'vote':
+                            agent_id_param = func_def.get('parameters', {}).get('properties', {}).get('agent_id', {})
+                            if 'enum' in agent_id_param:
+                                valid_agent_ids = agent_id_param['enum']
+                            break
+            conversation_content = ''
+            system_message = ''
+            for msg in messages:
+                role = msg.get('role')
+                if role == 'system':
+                    system_message = msg.get('content', '')
+                elif role == 'user':
+                    conversation_content += f'User: {msg.get('content', '')}\n'
+                elif role == 'assistant':
+                    conversation_content += f'Assistant: {msg.get('content', '')}\n'
+                elif role == 'tool':
+                    tool_output = msg.get('content', '')
+                    conversation_content += f'Tool Result: {tool_output}\n'
+            if is_coordination:
+                conversation_content = self.build_structured_output_prompt(conversation_content, valid_agent_ids)
+            full_content = ''
+            if system_message:
+                full_content += f'{system_message}\n\n'
+            full_content += conversation_content
+            client = genai.Client(api_key=self.api_key)
+            builtin_tools = []
+            if enable_web_search:
+                try:
+                    from google.genai import types
+                    grounding_tool = types.Tool(google_search=types.GoogleSearch())
+                    builtin_tools.append(grounding_tool)
+                except ImportError:
+                    yield StreamChunk(type='content', content='\n⚠️  Web search requires google.genai.types\n')
+            if enable_code_execution:
+                try:
+                    from google.genai import types
+                    code_tool = types.Tool(code_execution=types.ToolCodeExecution())
+                    builtin_tools.append(code_tool)
+                except ImportError:
+                    yield StreamChunk(type='content', content='\n⚠️  Code execution requires google.genai.types\n')
+            config = {}
+            excluded_params = self.get_base_excluded_config_params() | {'enable_web_search', 'enable_code_execution', 'use_multi_mcp', 'mcp_sdk_auto', 'allowed_tools', 'exclude_tools'}
+            for key, value in all_params.items():
+                if key not in excluded_params and value is not None:
+                    if key == 'max_tokens':
+                        config['max_output_tokens'] = value
+                    elif key == 'model':
+                        model_name = value
+                    else:
+                        config[key] = value
+            all_tools = []
+            if using_sdk_mcp and self.mcp_servers:
+                if not self._mcp_client or not getattr(self._mcp_client, 'is_connected', lambda: False)():
+                    max_mcp_retries = 5
+                    mcp_connected = False
+                    for retry_count in range(1, max_mcp_retries + 1):
+                        try:
+                            self._mcp_connection_retries = retry_count
+                            if retry_count > 1:
+                                log_backend_activity('gemini', 'MCP connection retry', {'attempt': retry_count, 'max_retries': max_mcp_retries}, agent_id=agent_id)
+                                yield StreamChunk(type='mcp_status', status='mcp_retry', content=f'Retrying MCP connection (attempt {retry_count}/{max_mcp_retries})', source='mcp_tools')
+                                await asyncio.sleep(0.5 * retry_count)
+                            if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                                filtered_retry_servers = MCPCircuitBreakerManager.apply_circuit_breaker_filtering(self.mcp_servers, self._mcp_tools_circuit_breaker, backend_name='gemini', agent_id=agent_id)
+                            else:
+                                filtered_retry_servers = self.mcp_servers
+                            if not filtered_retry_servers:
+                                log_backend_activity('gemini', 'All MCP servers blocked during retry', {}, agent_id=agent_id)
+                                yield StreamChunk(type='mcp_status', status='mcp_blocked', content='All MCP servers blocked by circuit breaker', source='mcp_tools')
+                                using_sdk_mcp = False
+                                break
+                            backend_config = {'mcp_servers': self.mcp_servers}
+                            if MCPConfigValidator is not None:
+                                try:
+                                    validator = MCPConfigValidator()
+                                    validated_config_retry = validator.validate_backend_mcp_config(backend_config)
+                                    allowed_tools_retry = validated_config_retry.get('allowed_tools')
+                                    exclude_tools_retry = validated_config_retry.get('exclude_tools')
+                                except Exception:
+                                    allowed_tools_retry = None
+                                    exclude_tools_retry = None
+                            else:
+                                allowed_tools_retry = None
+                                exclude_tools_retry = None
+                            self._mcp_client = await MCPClient.create_and_connect(filtered_retry_servers, timeout_seconds=30, allowed_tools=allowed_tools_retry, exclude_tools=exclude_tools_retry)
+                            if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                                await MCPCircuitBreakerManager.record_event(filtered_retry_servers, self._mcp_tools_circuit_breaker, 'success', backend_name='gemini', agent_id=agent_id)
+                            mcp_connected = True
+                            log_backend_activity('gemini', 'MCP connection successful on retry', {'attempt': retry_count}, agent_id=agent_id)
+                            yield StreamChunk(type='mcp_status', status='mcp_connected', content=f'MCP connection successful on attempt {retry_count}', source='mcp_tools')
+                            break
+                        except (MCPConnectionError, MCPTimeoutError, MCPServerError, MCPError, Exception) as e:
+                            if self._circuit_breakers_enabled and self._mcp_tools_circuit_breaker:
+                                servers = MCPSetupManager.normalize_mcp_servers(self.mcp_servers)
+                                await MCPCircuitBreakerManager.record_event(servers, self._mcp_tools_circuit_breaker, 'failure', error_message=str(e), backend_name='gemini', agent_id=agent_id)
+                            should_continue, error_chunks = await self._handle_mcp_retry_error(e, retry_count, max_mcp_retries)
+                            if not should_continue:
+                                async for chunk in error_chunks:
+                                    yield chunk
+                                using_sdk_mcp = False
+                    if not mcp_connected:
+                        using_sdk_mcp = False
+                        self._mcp_client = None
+            if not using_sdk_mcp:
+                all_tools.extend(builtin_tools)
+                if all_tools:
+                    config['tools'] = all_tools
+            if is_coordination:
+                if not using_sdk_mcp and (not all_tools):
+                    config['response_mime_type'] = 'application/json'
+                    config['response_schema'] = CoordinationResponse.model_json_schema()
+                else:
+                    pass
+            log_backend_agent_message(agent_id or 'default', 'SEND', {'content': full_content, 'builtin_tools': len(builtin_tools) if builtin_tools else 0}, backend_name='gemini')
+            full_content_text = ''
+            final_response = None
+            if using_sdk_mcp and self.mcp_servers:
+                try:
+                    if not self._mcp_client:
+                        raise RuntimeError('MCP client not initialized')
+                    mcp_sessions = self._mcp_client.get_active_sessions()
+                    if not mcp_sessions:
+                        raise RuntimeError('No active MCP sessions available')
+                    if self.filesystem_manager:
+                        logger.info(f'[Gemini] Converting {len(mcp_sessions)} MCP sessions to permission sessions')
+                        try:
+                            from ..mcp_tools.hooks import convert_sessions_to_permission_sessions
+                            mcp_sessions = convert_sessions_to_permission_sessions(mcp_sessions, self.filesystem_manager.path_permission_manager)
+                        except Exception as e:
+                            logger.error(f'[Gemini] Failed to convert sessions to permission sessions: {e}')
+                    else:
+                        logger.debug('[Gemini] No filesystem manager found, using standard sessions')
+                    session_config = dict(config)
+                    available_tools = []
+                    if self._mcp_client:
+                        available_tools = list(self._mcp_client.tools.keys())
+                    if self.is_planning_mode_enabled():
+                        logger.info('[Gemini] Planning mode enabled - blocking MCP tools during coordination')
+                        log_backend_activity('gemini', 'MCP tools blocked in planning mode', {'blocked_tools': len(available_tools), 'session_count': len(mcp_sessions)}, agent_id=agent_id)
+                    else:
+                        logger.debug(f'[Gemini] Passing {len(mcp_sessions)} sessions to SDK: {[type(s).__name__ for s in mcp_sessions]}')
+                        session_config['tools'] = mcp_sessions
+                    self._mcp_tool_calls_count += 1
+                    log_backend_activity('gemini', 'MCP tool call initiated', {'call_number': self._mcp_tool_calls_count, 'session_count': len(mcp_sessions), 'available_tools': available_tools[:], 'total_tools': len(available_tools)}, agent_id=agent_id)
+                    log_tool_call(agent_id, 'mcp_session_tools', {'session_count': len(mcp_sessions), 'call_number': self._mcp_tool_calls_count, 'available_tools': available_tools}, backend_name='gemini')
+                    tools_info = f' ({len(available_tools)} tools available)' if available_tools else ''
+                    yield StreamChunk(type='mcp_status', status='mcp_tools_initiated', content=f'MCP tool call initiated (call #{self._mcp_tool_calls_count}){tools_info}: {', '.join(available_tools[:5])}{('...' if len(available_tools) > 5 else '')}', source='mcp_tools')
+                    stream = await client.aio.models.generate_content_stream(model=model_name, contents=full_content, config=session_config)
+                    mcp_tracker = MCPCallTracker()
+                    mcp_response_tracker = MCPResponseTracker()
+                    mcp_tools_used = []
+                    async for chunk in stream:
+                        if hasattr(chunk, 'automatic_function_calling_history') and chunk.automatic_function_calling_history:
+                            for history_item in chunk.automatic_function_calling_history:
+                                if hasattr(history_item, 'parts') and history_item.parts is not None:
+                                    for part in history_item.parts:
+                                        if hasattr(part, 'function_call') and part.function_call:
+                                            call_data = self.mcp_extractor.extract_function_call(part.function_call)
+                                            if call_data:
+                                                tool_name = call_data['name']
+                                                tool_args = call_data['arguments']
+                                                if mcp_tracker.is_new_call(tool_name, tool_args):
+                                                    call_record = mcp_tracker.add_call(tool_name, tool_args)
+                                                    mcp_tools_used.append({'name': tool_name, 'arguments': tool_args, 'timestamp': call_record['timestamp']})
+                                                    timestamp_str = time.strftime('%H:%M:%S', time.localtime(call_record['timestamp']))
+                                                    yield StreamChunk(type='mcp_status', status='mcp_tool_called', content=f'🔧 MCP Tool Called: {tool_name} at {timestamp_str} with args: {json.dumps(tool_args, indent=2)}', source='mcp_tools')
+                                                    log_tool_call(agent_id, tool_name, tool_args, backend_name='gemini')
+                                        elif hasattr(part, 'function_response') and part.function_response:
+                                            response_data = self.mcp_extractor.extract_function_response(part.function_response)
+                                            if response_data:
+                                                tool_name = response_data['name']
+                                                tool_response = response_data['response']
+                                                if mcp_response_tracker.is_new_response(tool_name, tool_response):
+                                                    response_record = mcp_response_tracker.add_response(tool_name, tool_response)
+                                                    response_text = None
+                                                    if isinstance(tool_response, dict) and 'result' in tool_response:
+                                                        result = tool_response['result']
+                                                        if hasattr(result, 'content') and result.content:
+                                                            first_content = result.content[0]
+                                                            if hasattr(first_content, 'text'):
+                                                                response_text = first_content.text
+                                                    if response_text is None:
+                                                        response_text = str(tool_response)
+                                                    timestamp_str = time.strftime('%H:%M:%S', time.localtime(response_record['timestamp']))
+                                                    yield StreamChunk(type='mcp_status', status='mcp_tool_response', content=f'✅ MCP Tool Response from {tool_name} at {timestamp_str}: {response_text}', source='mcp_tools')
+                                                    log_backend_activity('gemini', 'MCP tool response received', {'tool_name': tool_name, 'response_preview': str(tool_response)[:]}, agent_id=agent_id)
+                            if not hasattr(self, '_mcp_stream_started'):
+                                self._mcp_tool_successes += 1
+                                self._mcp_stream_started = True
+                                log_backend_activity('gemini', 'MCP tool call succeeded', {'call_number': self._mcp_tool_calls_count}, agent_id=agent_id)
+                                log_tool_call(agent_id, 'mcp_session_tools', {'session_count': len(mcp_sessions), 'call_number': self._mcp_tool_calls_count}, result='success', backend_name='gemini')
+                                yield StreamChunk(type='mcp_status', status='mcp_tools_success', content=f'MCP tool call succeeded (call #{self._mcp_tool_calls_count})', source='mcp_tools')
+                        if hasattr(chunk, 'text') and chunk.text:
+                            chunk_text = chunk.text
+                            full_content_text += chunk_text
+                            log_backend_agent_message(agent_id, 'RECV', {'content': chunk_text}, backend_name='gemini')
+                            log_stream_chunk('backend.gemini', 'content', chunk_text, agent_id)
+                            yield StreamChunk(type='content', content=chunk_text)
+                    if hasattr(self, '_mcp_stream_started'):
+                        delattr(self, '_mcp_stream_started')
+                    tools_summary = mcp_tracker.get_summary()
+                    if not tools_summary or tools_summary == 'No MCP tools called':
+                        tools_summary = 'MCP session completed (no tools explicitly called)'
+                    else:
+                        tools_summary = f'MCP session complete - {tools_summary}'
+                    log_stream_chunk('backend.gemini', 'mcp_indicator', tools_summary, agent_id)
+                    yield StreamChunk(type='mcp_status', status='mcp_session_complete', content=f'MCP session complete - {tools_summary}', source='mcp_tools')
+                except (MCPConnectionError, MCPTimeoutError, MCPServerError, MCPError, Exception) as e:
+                    log_stream_chunk('backend.gemini', 'mcp_error', str(e), agent_id)
+                    async for chunk in self._handle_mcp_error_and_fallback(e):
+                        yield chunk
+                    manual_config = dict(config)
+                    if all_tools:
+                        manual_config['tools'] = all_tools
+                    stream = await client.aio.models.generate_content_stream(model=model_name, contents=full_content, config=manual_config)
+                    async for chunk in stream:
+                        if hasattr(chunk, 'text') and chunk.text:
+                            chunk_text = chunk.text
+                            full_content_text += chunk_text
+                            log_stream_chunk('backend.gemini', 'fallback_content', chunk_text, agent_id)
+                            yield StreamChunk(type='content', content=chunk_text)
+            else:
+                stream = await client.aio.models.generate_content_stream(model=model_name, contents=full_content, config=config)
+                async for chunk in stream:
+                    if hasattr(chunk, 'text') and chunk.text:
+                        chunk_text = chunk.text
+                        full_content_text += chunk_text
+                        log_stream_chunk('backend.gemini', 'content', chunk_text, agent_id)
+                        log_backend_agent_message(agent_id, 'RECV', {'content': chunk_text}, backend_name='gemini')
+                        yield StreamChunk(type='content', content=chunk_text)
+            content = full_content_text
+            tool_calls_detected: List[Dict[str, Any]] = []
+            if is_coordination and content.strip() and (not tool_calls_detected):
+                structured_response = None
+                try:
+                    structured_response = json.loads(content.strip())
+                except json.JSONDecodeError:
+                    structured_response = self.extract_structured_response(content)
+                if structured_response and isinstance(structured_response, dict) and ('action_type' in structured_response):
+                    tool_calls = self.convert_structured_to_tool_calls(structured_response)
+                    if tool_calls:
+                        tool_calls_detected = tool_calls
+                        log_stream_chunk('backend.gemini', 'tool_calls', tool_calls, agent_id)
+                        try:
+                            for tool_call in tool_calls:
+                                log_tool_call(agent_id, tool_call.get('function', {}).get('name', 'unknown_coordination_tool'), tool_call.get('function', {}).get('arguments', {}), result='coordination_tool_called', backend_name='gemini')
+                        except Exception:
+                            pass
+            if builtin_tools and final_response and hasattr(final_response, 'candidates') and final_response.candidates:
+                candidate = final_response.candidates[0]
+                if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                    search_actually_used = False
+                    search_queries = []
+                    if hasattr(candidate.grounding_metadata, 'web_search_queries') and candidate.grounding_metadata.web_search_queries:
+                        try:
+                            for query in candidate.grounding_metadata.web_search_queries:
+                                if query and query.strip():
+                                    search_queries.append(query.strip())
+                                    search_actually_used = True
+                        except (TypeError, AttributeError):
+                            pass
+                    if hasattr(candidate.grounding_metadata, 'grounding_chunks') and candidate.grounding_metadata.grounding_chunks:
+                        try:
+                            if len(candidate.grounding_metadata.grounding_chunks) > 0:
+                                search_actually_used = True
+                        except (TypeError, AttributeError):
+                            pass
+                    if search_actually_used:
+                        log_stream_chunk('backend.gemini', 'web_search_result', {'queries': search_queries, 'results_integrated': True}, agent_id)
+                        log_tool_call(agent_id, 'google_search_retrieval', {'queries': search_queries, 'chunks_found': len(candidate.grounding_metadata.grounding_chunks) if hasattr(candidate.grounding_metadata, 'grounding_chunks') else 0}, result='search_completed', backend_name='gemini')
+                        yield StreamChunk(type='content', content='🔍 [Builtin Tool: Web Search] Results integrated\n')
+                        for query in search_queries:
+                            log_stream_chunk('backend.gemini', 'web_search_result', {'queries': search_queries, 'results_integrated': True}, agent_id)
+                            yield StreamChunk(type='content', content=f"🔍 [Search Query] '{query}'\n")
+                        self.search_count += 1
+                if enable_code_execution and hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                    code_parts = []
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'executable_code') and part.executable_code:
+                            code_content = getattr(part.executable_code, 'code', str(part.executable_code))
+                            code_parts.append(f'Code: {code_content}')
+                        elif hasattr(part, 'code_execution_result') and part.code_execution_result:
+                            result_content = getattr(part.code_execution_result, 'output', str(part.code_execution_result))
+                            code_parts.append(f'Result: {result_content}')
+                    if code_parts:
+                        log_stream_chunk('backend.gemini', 'code_execution', 'Code executed', agent_id)
+                        try:
+                            log_tool_call(agent_id, 'code_execution', {'code_parts_count': len(code_parts)}, result='code_executed', backend_name='gemini')
+                        except Exception:
+                            pass
+                        yield StreamChunk(type='content', content='💻 [Builtin Tool: Code Execution] Code executed\n')
+                        for part in code_parts:
+                            if part.startswith('Code: '):
+                                code_content = part[6:]
+                                log_stream_chunk('backend.gemini', 'code_execution_result', {'code_parts': len(code_parts), 'execution_successful': True, 'snippet': code_content}, agent_id)
+                                yield StreamChunk(type='content', content=f'💻 [Code Executed]\n```python\n{code_content}\n```\n')
+                            elif part.startswith('Result: '):
+                                result_content = part[8:]
+                                log_stream_chunk('backend.gemini', 'code_execution_result', {'code_parts': len(code_parts), 'execution_successful': True, 'result': result_content}, agent_id)
+                                yield StreamChunk(type='content', content=f'📊 [Result] {result_content}\n')
+                        self.code_execution_count += 1
+            if tool_calls_detected:
+                log_stream_chunk('backend.gemini', 'tool_calls_yielded', {'tool_count': len(tool_calls_detected), 'tool_names': [tc.get('function', {}).get('name') for tc in tool_calls_detected]}, agent_id)
+                yield StreamChunk(type='tool_calls', tool_calls=tool_calls_detected)
+            complete_message = {'role': 'assistant', 'content': content.strip()}
+            if tool_calls_detected:
+                complete_message['tool_calls'] = tool_calls_detected
+            log_stream_chunk('backend.gemini', 'complete_message', {'content_length': len(content.strip()), 'has_tool_calls': bool(tool_calls_detected)}, agent_id)
+            yield StreamChunk(type='complete_message', complete_message=complete_message)
+            log_stream_chunk('backend.gemini', 'done', None, agent_id)
+            yield StreamChunk(type='done')
+        except Exception as e:
+            error_msg = f'Gemini API error: {e}'
+            log_stream_chunk('backend.gemini', 'stream_error', {'error_type': type(e).__name__, 'error_message': str(e)}, agent_id)
+            yield StreamChunk(type='error', error=error_msg)
+        finally:
+            await self._cleanup_resources(stream, client)
+            try:
+                await self.__aexit__(None, None, None)
+            except Exception as e:
+                log_backend_activity('gemini', 'MCP cleanup failed', {'error': str(e)}, agent_id=self.agent_id)
+
+    def get_provider_name(self) -> str:
+        """Get the provider name."""
+        return 'Gemini'
+
+    def get_filesystem_support(self) -> FilesystemSupport:
+        """Gemini supports filesystem through MCP servers."""
+        return FilesystemSupport.MCP
+
+    def get_supported_builtin_tools(self) -> List[str]:
+        """Get list of builtin tools supported by Gemini."""
+        return ['google_search_retrieval', 'code_execution']
+
+    def get_mcp_results(self) -> Dict[str, Any]:
+        """
+        Get all captured MCP tool calls and responses.
+
+        Returns:
+            Dict containing:
+            - calls: List of all MCP tool calls
+            - responses: List of all MCP tool responses
+            - pairs: List of matched call-response pairs
+            - summary: Statistical summary of interactions
+        """
+        return {'calls': self.mcp_extractor.mcp_calls, 'responses': self.mcp_extractor.mcp_responses, 'pairs': self.mcp_extractor.call_response_pairs, 'summary': self.mcp_extractor.get_summary()}
+
+    def get_mcp_paired_results(self) -> List[Dict[str, Any]]:
+        """
+        Get only the paired MCP tool calls and responses.
+
+        Returns:
+            List of dictionaries containing matched call-response pairs
+        """
+        return self.mcp_extractor.call_response_pairs
+
+    def get_mcp_summary(self) -> Dict[str, Any]:
+        """
+        Get a summary of MCP tool interactions.
+
+        Returns:
+            Dictionary with statistics about MCP tool usage
+        """
+        return self.mcp_extractor.get_summary()
+
+    def clear_mcp_results(self):
+        """Clear all stored MCP interaction data."""
+        self.mcp_extractor.clear()
+
+    def reset_tool_usage(self):
+        """Reset tool usage tracking."""
+        self.search_count = 0
+        self.code_execution_count = 0
+        self._mcp_tool_calls_count = 0
+        self._mcp_tool_failures = 0
+        self._mcp_tool_successes = 0
+        self._mcp_connection_retries = 0
+        self.mcp_extractor.clear()
+        super().reset_token_usage()
+
+    async def cleanup_mcp(self):
+        """Cleanup MCP connections."""
+        if self._mcp_client:
+            try:
+                await self._mcp_client.disconnect()
+                log_backend_activity('gemini', 'MCP client disconnected', {}, agent_id=self.agent_id)
+            except (MCPConnectionError, MCPTimeoutError, MCPServerError, MCPError, Exception) as e:
+                MCPErrorHandler.get_error_details(e, 'disconnect', log=True)
+            finally:
+                self._mcp_client = None
+                self._mcp_initialized = False
+
+    async def _cleanup_resources(self, stream, client):
+        """Cleanup google-genai resources to avoid unclosed aiohttp sessions."""
+        try:
+            if stream is not None:
+                close_fn = getattr(stream, 'aclose', None) or getattr(stream, 'close', None)
+                if close_fn is not None:
+                    maybe = close_fn()
+                    if hasattr(maybe, '__await__'):
+                        await maybe
+        except Exception as e:
+            log_backend_activity('gemini', 'Stream cleanup failed', {'error': str(e)}, agent_id=self.agent_id)
+        try:
+            if client is not None:
+                base_client = getattr(client, '_api_client', None)
+                if base_client is not None:
+                    session = getattr(base_client, '_aiohttp_session', None)
+                    if session is not None and hasattr(session, 'close'):
+                        if not session.closed:
+                            await session.close()
+                            log_backend_activity('gemini', 'Closed google-genai aiohttp session', {}, agent_id=self.agent_id)
+                        base_client._aiohttp_session = None
+                        await asyncio.sleep(0)
+        except Exception as e:
+            log_backend_activity('gemini', 'Failed to close google-genai aiohttp session', {'error': str(e)}, agent_id=self.agent_id)
+        try:
+            if client is not None and hasattr(client, 'aio') and (client.aio is not None):
+                aio_obj = client.aio
+                for method_name in ('close', 'stop'):
+                    method = getattr(aio_obj, method_name, None)
+                    if method:
+                        maybe = method()
+                        if hasattr(maybe, '__await__'):
+                            await maybe
+                        break
+        except Exception as e:
+            log_backend_activity('gemini', 'Client AIO cleanup failed', {'error': str(e)}, agent_id=self.agent_id)
+        try:
+            if client is not None:
+                for method_name in ('aclose', 'close'):
+                    method = getattr(client, method_name, None)
+                    if method:
+                        maybe = method()
+                        if hasattr(maybe, '__await__'):
+                            await maybe
+                        break
+        except Exception as e:
+            log_backend_activity('gemini', 'Client cleanup failed', {'error': str(e)}, agent_id=self.agent_id)
+
+    async def __aenter__(self) -> 'GeminiBackend':
+        """Async context manager entry."""
+        try:
+            await self._setup_mcp_tools(agent_id=self.agent_id)
+        except Exception as e:
+            log_backend_activity('gemini', 'MCP setup failed during context entry', {'error': str(e)}, agent_id=self.agent_id)
+        return self
+
+    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Optional[object]) -> None:
+        """Async context manager exit with automatic resource cleanup."""
+        _ = (exc_type, exc_val, exc_tb)
+        try:
+            await self.cleanup_mcp()
+        except Exception as e:
+            log_backend_activity('gemini', 'Backend cleanup error', {'error': str(e)}, agent_id=self.agent_id)
+
+def _setup_permission_hooks(self):
+    """Override base class - Gemini uses session-based permissions, not function hooks."""
+    logger.debug('[Gemini] Using session-based permissions, skipping function hook setup')
+
+@dataclass
+class AnswerRecord:
+    """Represents a single answer record in an agent's update history."""
+    timestamp: float
+    answer: str
+    status: str
+
+    def __post_init__(self):
+        """Ensure timestamp is set if not provided."""
+        if not self.timestamp:
+            self.timestamp = time.time()
+
+def __post_init__(self):
+    """Ensure timestamp is set if not provided."""
+    if not self.timestamp:
+        self.timestamp = time.time()
+
+@dataclass
+class VoteRecord:
+    """Records a vote cast by an agent."""
+    voter_id: int
+    target_id: int
+    reason: str = ''
+    timestamp: float = 0.0
+
+    def __post_init__(self):
+        """Ensure timestamp is set if not provided."""
+        if not self.timestamp:
+            import time
+            self.timestamp = time.time()
+
+def __post_init__(self):
+    """Ensure timestamp is set if not provided."""
+    if not self.timestamp:
+        import time
+        self.timestamp = time.time()
+
+@dataclass
+class AgentState:
+    """Represents the current state of an agent in the MassGen system."""
+    agent_id: int
+    status: str = 'working'
+    curr_answer: str = ''
+    updated_answers: List[AnswerRecord] = field(default_factory=list)
+    curr_vote: Optional[VoteRecord] = None
+    cast_votes: List[VoteRecord] = field(default_factory=list)
+    seen_updates_timestamps: Dict[int, float] = field(default_factory=dict)
+    chat_history: List[Dict[str, Any]] = field(default_factory=list)
+    chat_round: int = 0
+    execution_start_time: Optional[float] = None
+    execution_end_time: Optional[float] = None
+
+    @property
+    def execution_time(self) -> Optional[float]:
+        """Calculate execution time if both start and end times are available."""
+        if self.execution_start_time and self.execution_end_time:
+            return self.execution_end_time - self.execution_start_time
+        return None
+
+    def add_update(self, answer: str, timestamp: Optional[float]=None):
+        """Add an update to the agent's history."""
+        if timestamp is None:
+            timestamp = time.time()
+        record = AnswerRecord(timestamp=timestamp, answer=answer, status=self.status)
+        self.updated_answers.append(record)
+        self.curr_answer = answer
+
+    def mark_updates_seen(self, agent_updates: Dict[int, float]):
+        """Mark updates from other agents as seen."""
+        for agent_id, timestamp in agent_updates.items():
+            if agent_id != self.agent_id:
+                self.seen_updates_timestamps[agent_id] = timestamp
+
+    def has_unseen_updates(self, other_agent_updates: Dict[int, float]) -> bool:
+        """Check if there are unseen updates from other agents."""
+        for agent_id, timestamp in other_agent_updates.items():
+            if agent_id != self.agent_id:
+                last_seen = self.seen_updates_timestamps.get(agent_id, 0)
+                if timestamp > last_seen:
+                    return True
+        return False
+
+def add_update(self, answer: str, timestamp: Optional[float]=None):
+    """Add an update to the agent's history."""
+    if timestamp is None:
+        timestamp = time.time()
+    record = AnswerRecord(timestamp=timestamp, answer=answer, status=self.status)
+    self.updated_answers.append(record)
+    self.curr_answer = answer
+
+class MassLogManager:
+    """
+    Comprehensive logging system for the MassGen framework.
+
+    Records all significant events including:
+    - Agent state changes (working, voted, failed)
+    - Answer updates and notifications
+    - Voting events and consensus decisions
+    - Phase transitions (collaboration, debate, consensus)
+    - System metrics and performance data
+
+    New organized structure:
+    logs/
+    └── YYYYMMDD_HHMMSS/
+        ├── display/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Real-time display logs
+        │   └── system.txt                     # System messages
+        ├── answers/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Agent answer histories
+        ├── votes/
+        │   ├── agent_0.txt, agent_1.txt, ...  # Agent voting records
+        ├── events.jsonl                       # Structured event log
+        └── console.log                        # Python logging output
+    """
+
+    def __init__(self, log_dir: str='logs', session_id: Optional[str]=None, non_blocking: bool=False):
+        """
+        Initialize the logging system.
+
+        Args:
+            log_dir: Directory to save log files
+            session_id: Unique identifier for this session
+            non_blocking: If True, disable file logging to prevent hanging issues
+        """
+        self.base_log_dir = Path(log_dir)
+        self.session_id = session_id or self._generate_session_id()
+        self.non_blocking = non_blocking
+        if self.non_blocking:
+            print('⚠️  LOGGING: Non-blocking mode enabled - file logging disabled')
+        self.session_dir = self.base_log_dir / self.session_id
+        if not self.non_blocking:
+            try:
+                self.session_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                print(f'Warning: Failed to create session directory, enabling non-blocking mode: {e}')
+                self.non_blocking = True
+        self.display_dir = self.session_dir / 'display'
+        self.answers_dir = self.session_dir / 'answers'
+        self.votes_dir = self.session_dir / 'votes'
+        if not self.non_blocking:
+            try:
+                self.display_dir.mkdir(exist_ok=True)
+                self.answers_dir.mkdir(exist_ok=True)
+                self.votes_dir.mkdir(exist_ok=True)
+            except Exception as e:
+                print(f'Warning: Failed to create subdirectories, enabling non-blocking mode: {e}')
+                self.non_blocking = True
+        self.events_log_file = self.session_dir / 'events.jsonl'
+        self.console_log_file = self.session_dir / 'console.log'
+        self.system_log_file = self.display_dir / 'system.txt'
+        self.log_entries: List[LogEntry] = []
+        self.agent_logs: Dict[int, List[LogEntry]] = {}
+        self.event_counters = {'answer_updates': 0, 'votes_cast': 0, 'consensus_reached': 0, 'debates_started': 0, 'agent_restarts': 0, 'notifications_sent': 0}
+        self._lock = threading.Lock()
+        self._setup_logging()
+        if not self.non_blocking:
+            self._initialize_system_log()
+        self.log_event('session_started', data={'session_id': self.session_id, 'timestamp': time.time(), 'session_dir': str(self.session_dir), 'non_blocking_mode': self.non_blocking})
+
+    def _generate_session_id(self) -> str:
+        """Generate a unique session ID."""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        return f'{timestamp}'
+
+    def _initialize_system_log(self):
+        """Initialize the system log file with header."""
+        if self.non_blocking:
+            return
+        try:
+            with open(self.system_log_file, 'w', encoding='utf-8') as f:
+                f.write('MassGen System Messages Log\n')
+                f.write(f'Session ID: {self.session_id}\n')
+                f.write(f'Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n')
+                f.write('=' * 80 + '\n\n')
+        except Exception as e:
+            print(f'Warning: Failed to initialize system log: {e}')
+
+    def _setup_logging(self):
+        """Set up file logging configuration."""
+        if self.non_blocking:
+            return
+        log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        try:
+            self.session_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f'Warning: Failed to create session directory {self.session_dir}, skipping file logging: {e}')
+            return
+        console_log_handler = logging.FileHandler(self.console_log_file)
+        console_log_handler.setFormatter(log_formatter)
+        console_log_handler.setLevel(logging.DEBUG)
+        mass_logger = logging.getLogger('massgen')
+        mass_logger.addHandler(console_log_handler)
+        mass_logger.setLevel(logging.DEBUG)
+        mass_logger.propagate = False
+        if not any((isinstance(h, logging.StreamHandler) for h in mass_logger.handlers)):
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(log_formatter)
+            console_handler.setLevel(logging.INFO)
+            mass_logger.addHandler(console_handler)
+
+    def _format_timestamp(self, timestamp: float) -> str:
+        """Format timestamp to human-readable format."""
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+    def _format_answer_record(self, record: AnswerRecord, agent_id: int) -> str:
+        """Format an AnswerRecord into human-readable text."""
+        timestamp_str = self._format_timestamp(record.timestamp)
+        status_emoji = {'working': '🔄', 'voted': '✅', 'failed': '❌', 'unknown': '❓'}
+        emoji = status_emoji.get(record.status, '��')
+        return f'\n{emoji} UPDATE DETAILS\n🕒 Time: {timestamp_str}\n📊 Status: {record.status.upper()}\n📏 Length: {len(record.answer)} characters\n\n📄 Content:\n{record.answer}\n\n{'=' * 80}\n'
+
+    def _format_vote_record(self, record: VoteRecord, agent_id: int) -> str:
+        """Format a VoteRecord into human-readable text."""
+        timestamp_str = self._format_timestamp(record.timestamp)
+        reason_text = record.reason if record.reason else 'No reason provided'
+        return f'\n🗳️ VOTE CAST\n🕒 Time: {timestamp_str}\n👤 Voter: Agent {record.voter_id}\n🎯 Target: Agent {record.target_id}\n\n📝 Reasoning:\n{reason_text}\n\n{'=' * 80}\n'
+
+    def _write_agent_answers(self, agent_id: int, answer_records: List[AnswerRecord]):
+        """Write agent's answer history to the answers folder."""
+        if self.non_blocking:
+            return
+        try:
+            answers_file = self.answers_dir / f'agent_{agent_id}.txt'
+            with open(answers_file, 'w', encoding='utf-8') as f:
+                f.write('=' * 80 + '\n')
+                f.write(f'📝 MASSGEN AGENT {agent_id} - ANSWER HISTORY\n')
+                f.write('=' * 80 + '\n')
+                f.write(f'🆔 Session: {self.session_id}\n')
+                f.write(f'📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n')
+                if answer_records:
+                    total_chars = sum((len(record.answer) for record in answer_records))
+                    avg_chars = total_chars / len(answer_records) if answer_records else 0
+                    first_update = answer_records[0].timestamp if answer_records else 0
+                    last_update = answer_records[-1].timestamp if answer_records else 0
+                    duration = last_update - first_update if len(answer_records) > 1 else 0
+                    f.write(f'📊 Total Updates: {len(answer_records)}\n')
+                    f.write(f'📏 Total Characters: {total_chars:,}\n')
+                    f.write(f'📈 Average Length: {avg_chars:.0f} chars\n')
+                    if duration > 0:
+                        duration_str = f'{duration / 60:.1f} minutes' if duration > 60 else f'{duration:.1f} seconds'
+                        f.write(f'⏱️ Time Span: {duration_str}\n')
+                else:
+                    f.write('❌ No answer records found for this agent.\n')
+                f.write('=' * 80 + '\n\n')
+                if answer_records:
+                    for i, record in enumerate(answer_records, 1):
+                        elapsed = record.timestamp - (answer_records[0].timestamp if answer_records else record.timestamp)
+                        elapsed_str = f'[+{elapsed / 60:.1f}m]' if elapsed > 60 else f'[+{elapsed:.1f}s]'
+                        f.write(f'🔢 UPDATE #{i} {elapsed_str}\n')
+                        f.write(self._format_answer_record(record, agent_id))
+                        f.write('\n')
+        except Exception as e:
+            print(f'Warning: Failed to write answers for agent {agent_id}: {e}')
+
+    def _write_agent_votes(self, agent_id: int, vote_records: List[VoteRecord]):
+        """Write agent's vote history to the votes folder."""
+        if self.non_blocking:
+            return
+        try:
+            votes_file = self.votes_dir / f'agent_{agent_id}.txt'
+            with open(votes_file, 'w', encoding='utf-8') as f:
+                f.write('=' * 80 + '\n')
+                f.write(f'🗳️ MASSGEN AGENT {agent_id} - VOTE HISTORY\n')
+                f.write('=' * 80 + '\n')
+                f.write(f'🆔 Session: {self.session_id}\n')
+                f.write(f'📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n')
+                if vote_records:
+                    vote_targets = {}
+                    total_reason_chars = 0
+                    for vote in vote_records:
+                        vote_targets[vote.target_id] = vote_targets.get(vote.target_id, 0) + 1
+                        total_reason_chars += len(vote.reason) if vote.reason else 0
+                    most_voted_target = max(vote_targets.items(), key=lambda x: x[1]) if vote_targets else None
+                    avg_reason_length = total_reason_chars / len(vote_records) if vote_records else 0
+                    first_vote = vote_records[0].timestamp if vote_records else 0
+                    last_vote = vote_records[-1].timestamp if vote_records else 0
+                    voting_duration = last_vote - first_vote if len(vote_records) > 1 else 0
+                    f.write(f'📊 Total Votes Cast: {len(vote_records)}\n')
+                    f.write(f'🎯 Unique Targets: {len(vote_targets)}\n')
+                    if most_voted_target:
+                        f.write(f'👑 Most Voted For: Agent {most_voted_target[0]} ({most_voted_target[1]} votes)\n')
+                    f.write(f'📝 Avg Reason Length: {avg_reason_length:.0f} chars\n')
+                    if voting_duration > 0:
+                        duration_str = f'{voting_duration / 60:.1f} minutes' if voting_duration > 60 else f'{voting_duration:.1f} seconds'
+                        f.write(f'⏱️ Voting Duration: {duration_str}\n')
+                else:
+                    f.write('❌ No vote records found for this agent.\n')
+                f.write('=' * 80 + '\n\n')
+                if vote_records:
+                    for i, record in enumerate(vote_records, 1):
+                        elapsed = record.timestamp - (vote_records[0].timestamp if vote_records else record.timestamp)
+                        elapsed_str = f'[+{elapsed / 60:.1f}m]' if elapsed > 60 else f'[+{elapsed:.1f}s]'
+                        f.write(f'🗳️ VOTE #{i} {elapsed_str}\n')
+                        f.write(self._format_vote_record(record, agent_id))
+                        f.write('\n')
+        except Exception as e:
+            print(f'Warning: Failed to write votes for agent {agent_id}: {e}')
+
+    def log_event(self, event_type: str, agent_id: Optional[int]=None, phase: str='unknown', data: Optional[Dict[str, Any]]=None):
+        """
+        Log a general system event.
+
+        Args:
+            event_type: Type of event (e.g., "session_started", "phase_change")
+            agent_id: Agent ID if event is agent-specific
+            phase: Current system phase
+            data: Additional event data
+        """
+        with self._lock:
+            entry = LogEntry(timestamp=time.time(), event_type=event_type, agent_id=agent_id, phase=phase, data=data or {}, session_id=self.session_id)
+            self.log_entries.append(entry)
+            if agent_id is not None:
+                if agent_id not in self.agent_logs:
+                    self.agent_logs[agent_id] = []
+                self.agent_logs[agent_id].append(entry)
+            self._write_log_entry(entry)
+
+    def log_agent_answer_update(self, agent_id: int, answer: str, phase: str='unknown', orchestrator=None):
+        """
+        Log agent answer update with detailed information and immediately save to file.
+
+        Args:
+            agent_id: Agent ID
+            answer: Updated answer content
+            phase: Current workflow phase
+            orchestrator: MassOrchestrator instance to get agent state data
+        """
+        data = {'answer': answer, 'answer_length': len(answer)}
+        self.log_event('agent_answer_update', agent_id, phase, data)
+        if orchestrator and agent_id in orchestrator.agent_states:
+            agent_state = orchestrator.agent_states[agent_id]
+            self._write_agent_answers(agent_id, agent_state.updated_answers)
+
+    def log_agent_status_change(self, agent_id: int, old_status: str, new_status: str, phase: str='unknown'):
+        """
+        Log agent status change.
+
+        Args:
+            agent_id: Agent ID
+            old_status: Previous status
+            new_status: New status
+            phase: Current workflow phase
+        """
+        data = {'old_status': old_status, 'new_status': new_status, 'status_change': f'{old_status} {new_status}'}
+        self.log_event('agent_status_change', agent_id, phase, data)
+
+    def log_system_state_snapshot(self, orchestrator, phase: str='unknown'):
+        """
+        Log a complete system state snapshot including all agent answers and voting status.
+
+        Args:
+            orchestrator: The MassOrchestrator instance
+            phase: Current workflow phase
+        """
+        agent_states = {}
+        all_agent_answers = {}
+        vote_records = []
+        for agent_id, agent_state in orchestrator.agent_states.items():
+            agent_states[agent_id] = {'status': agent_state.status, 'curr_answer': agent_state.curr_answer, 'vote_target': agent_state.curr_vote.target_id if agent_state.curr_vote else None, 'execution_time': agent_state.execution_time, 'update_count': len(agent_state.updated_answers), 'seen_updates_timestamps': agent_state.seen_updates_timestamps}
+            all_agent_answers[agent_id] = {'current_answer': agent_state.curr_answer, 'answer_history': [{'timestamp': update.timestamp, 'answer': update.answer, 'status': update.status} for update in agent_state.updated_answers]}
+        for vote in orchestrator.votes:
+            vote_records.append({'voter_id': vote.voter_id, 'target_id': vote.target_id, 'timestamp': vote.timestamp})
+        vote_counts = Counter((vote.target_id for vote in orchestrator.votes))
+        voting_status = {'vote_distribution': dict(vote_counts), 'total_votes_cast': len(orchestrator.votes), 'total_agents': len(orchestrator.agents), 'consensus_reached': orchestrator.system_state.consensus_reached, 'winning_agent_id': orchestrator.system_state.representative_agent_id, 'votes_needed_for_consensus': max(1, int(len(orchestrator.agents) * orchestrator.consensus_threshold))}
+        system_snapshot = {'agent_states': agent_states, 'agent_answers': all_agent_answers, 'voting_records': vote_records, 'voting_status': voting_status, 'system_phase': phase, 'system_runtime': time.time() - orchestrator.system_state.start_time if orchestrator.system_state.start_time else 0}
+        self.log_event('system_state_snapshot', phase=phase, data=system_snapshot)
+        system_state_entry = {'timestamp': time.time(), 'event': 'system_state_snapshot', 'phase': phase, 'system_state': system_snapshot}
+        for agent_id, agent_state in orchestrator.agent_states.items():
+            self._write_agent_answers(agent_id, agent_state.updated_answers)
+            self._write_agent_votes(agent_id, agent_state.cast_votes)
+        for agent_id in orchestrator.agents.keys():
+            self._write_agent_display_log(agent_id, system_state_entry)
+        return system_snapshot
+
+    def log_voting_event(self, voter_id: int, target_id: int, phase: str='unknown', reason: str='', orchestrator=None):
+        """
+        Log a voting event with detailed information and immediately save to file.
+
+        Args:
+            voter_id: ID of the agent casting the vote
+            target_id: ID of the agent being voted for
+            phase: Current workflow phase
+            reason: Reason for the vote
+            orchestrator: MassOrchestrator instance to get agent state data
+        """
+        with self._lock:
+            self.event_counters['votes_cast'] += 1
+        data = {'voter_id': voter_id, 'target_id': target_id, 'reason': reason, 'total_votes_cast': self.event_counters['votes_cast']}
+        self.log_event('voting_event', voter_id, phase, data)
+        if orchestrator and voter_id in orchestrator.agent_states:
+            agent_state = orchestrator.agent_states[voter_id]
+            self._write_agent_votes(voter_id, agent_state.cast_votes)
+
+    def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int], is_fallback: bool=False, phase: str='unknown'):
+        """
+        Log when consensus is reached.
+
+        Args:
+            winning_agent_id: ID of the winning agent
+            vote_distribution: Dictionary of agent_id -> vote_count
+            is_fallback: Whether this was a fallback consensus (timeout)
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters['consensus_reached'] += 1
+        data = {'winning_agent_id': winning_agent_id, 'vote_distribution': vote_distribution, 'is_fallback': is_fallback, 'total_consensus_events': self.event_counters['consensus_reached']}
+        self.log_event('consensus_reached', winning_agent_id, phase, data)
+        consensus_entry = {'timestamp': time.time(), 'event': 'consensus_reached', 'phase': phase, 'winning_agent_id': winning_agent_id, 'vote_distribution': vote_distribution, 'is_fallback': is_fallback}
+        for agent_id in vote_distribution.keys():
+            self._write_agent_display_log(agent_id, consensus_entry)
+
+    def log_phase_transition(self, old_phase: str, new_phase: str, additional_data: Dict[str, Any]=None):
+        """
+        Log system phase transitions.
+
+        Args:
+            old_phase: Previous phase
+            new_phase: New phase
+            additional_data: Additional context data
+        """
+        data = {'old_phase': old_phase, 'new_phase': new_phase, 'phase_transition': f'{old_phase} -> {new_phase}', **(additional_data or {})}
+        self.log_event('phase_transition', phase=new_phase, data=data)
+
+    def log_notification_sent(self, agent_id: int, notification_type: str, content_preview: str, phase: str='unknown'):
+        """
+        Log when a notification is sent to an agent.
+
+        Args:
+            agent_id: Target agent ID
+            notification_type: Type of notification (update, debate, presentation, prompt)
+            content_preview: Preview of notification content
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters['notifications_sent'] += 1
+        data = {'notification_type': notification_type, 'content_preview': content_preview[:200] + '...' if len(content_preview) > 200 else content_preview, 'content_length': len(content_preview), 'total_notifications_sent': self.event_counters['notifications_sent']}
+        self.log_event('notification_sent', agent_id, phase, data)
+        notification_entry = {'timestamp': time.time(), 'event': 'notification_received', 'phase': phase, 'notification_type': notification_type, 'content': content_preview}
+        self._write_agent_display_log(agent_id, notification_entry)
+
+    def log_agent_restart(self, agent_id: int, reason: str, phase: str='unknown'):
+        """
+        Log when an agent is restarted.
+
+        Args:
+            agent_id: ID of the restarted agent
+            reason: Reason for restart
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters['agent_restarts'] += 1
+        data = {'restart_reason': reason, 'total_restarts': self.event_counters['agent_restarts']}
+        self.log_event('agent_restart', agent_id, phase, data)
+        restart_entry = {'timestamp': time.time(), 'event': 'agent_restarted', 'phase': phase, 'reason': reason}
+        self._write_agent_display_log(agent_id, restart_entry)
+
+    def log_debate_started(self, phase: str='unknown'):
+        """
+        Log when a debate phase starts.
+
+        Args:
+            phase: Current workflow phase
+        """
+        with self._lock:
+            self.event_counters['debates_started'] += 1
+        data = {'total_debates': self.event_counters['debates_started']}
+        self.log_event('debate_started', phase=phase, data=data)
+
+    def log_task_completion(self, final_solution: Dict[str, Any]):
+        """
+        Log task completion with final results.
+
+        Args:
+            final_solution: Complete final solution data
+        """
+        data = {'final_solution': final_solution, 'completion_timestamp': time.time()}
+        self.log_event('task_completed', phase='completed', data=data)
+
+    def _write_log_entry(self, entry: LogEntry):
+        """Write a single log entry to the session JSONL file."""
+        if self.non_blocking:
+            return
+        try:
+            self.events_log_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.events_log_file, 'a', buffering=1) as f:
+                json_line = json.dumps(entry.to_dict(), default=str, ensure_ascii=False)
+                f.write(json_line + '\n')
+                f.flush()
+        except Exception as e:
+            print(f'Warning: Failed to write log entry: {e}')
+
+    def _write_agent_display_log(self, agent_id: int, data: Dict[str, Any]):
+        """Write agent-specific display log entry."""
+        if self.non_blocking:
+            return
+        try:
+            agent_log_file = self.display_dir / f'agent_{agent_id}.txt'
+            agent_log_file.parent.mkdir(parents=True, exist_ok=True)
+            if not agent_log_file.exists():
+                with open(agent_log_file, 'w', encoding='utf-8') as f:
+                    f.write(f'MassGen Agent {agent_id} Display Log\n')
+                    f.write(f'Session: {self.session_id}\n')
+                    f.write(f'Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n')
+                    f.write('=' * 80 + '\n\n')
+            with open(agent_log_file, 'a', encoding='utf-8') as f:
+                timestamp_str = self._format_timestamp(data.get('timestamp', time.time()))
+                f.write(f'[{timestamp_str}] {data.get('event', 'unknown_event')}\n')
+                for key, value in data.items():
+                    if key not in ['timestamp', 'event']:
+                        f.write(f'  {key}: {value}\n')
+                f.write('\n')
+                f.flush()
+        except Exception as e:
+            print(f'Warning: Failed to write agent display log: {e}')
+
+    def _write_system_log(self, message: str):
+        """Write a system message to the system log file."""
+        if self.non_blocking:
+            return
+        try:
+            with open(self.system_log_file, 'a', encoding='utf-8') as f:
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                f.write(f'[{timestamp}] {message}\n')
+                f.flush()
+        except Exception as e:
+            print(f'Error writing to system log: {e}')
+
+    def get_agent_history(self, agent_id: int) -> List[LogEntry]:
+        """Get complete history for a specific agent."""
+        with self._lock:
+            return self.agent_logs.get(agent_id, []).copy()
+
+    def get_session_summary(self) -> Dict[str, Any]:
+        """Get comprehensive session summary."""
+        with self._lock:
+            event_counts = {}
+            agent_activities = {}
+            for entry in self.log_entries:
+                event_counts[entry.event_type] = event_counts.get(entry.event_type, 0) + 1
+                if entry.agent_id is not None:
+                    agent_id = entry.agent_id
+                    if agent_id not in agent_activities:
+                        agent_activities[agent_id] = []
+                    agent_activities[agent_id].append({'timestamp': entry.timestamp, 'event_type': entry.event_type, 'phase': entry.phase})
+            return {'session_id': self.session_id, 'total_events': len(self.log_entries), 'event_counts': event_counts, 'agents_involved': list(agent_activities.keys()), 'agent_activities': agent_activities, 'session_duration': self._calculate_session_duration(), 'log_files': {'session_dir': str(self.session_dir), 'events_log': str(self.events_log_file), 'console_log': str(self.console_log_file), 'display_dir': str(self.display_dir), 'answers_dir': str(self.answers_dir), 'votes_dir': str(self.votes_dir)}}
+
+    def _calculate_session_duration(self) -> float:
+        """Calculate total session duration."""
+        if not self.log_entries:
+            return 0.0
+        start_time = min((entry.timestamp for entry in self.log_entries))
+        end_time = max((entry.timestamp for entry in self.log_entries))
+        return end_time - start_time
+
+    def save_agent_states(self, orchestrator):
+        """Save current agent states to answers and votes folders."""
+        if self.non_blocking:
+            return
+        try:
+            for agent_id, agent_state in orchestrator.agent_states.items():
+                self._write_agent_answers(agent_id, agent_state.updated_answers)
+                self._write_agent_votes(agent_id, agent_state.cast_votes)
+        except Exception as e:
+            print(f'Warning: Failed to save agent states: {e}')
+
+    def cleanup(self):
+        """Clean up and finalize the logging session."""
+        self.log_event('session_ended', data={'end_timestamp': time.time(), 'total_events_logged': len(self.log_entries)})
+
+    def get_session_statistics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive session statistics.
+
+        Returns:
+            Dictionary containing session metrics and statistics
+        """
+        with self._lock:
+            total_events = len(self.log_entries)
+            agent_event_counts = {}
+            for agent_id, logs in self.agent_logs.items():
+                agent_event_counts[agent_id] = len(logs)
+            return {'session_id': self.session_id, 'total_events': total_events, 'event_counters': self.event_counters.copy(), 'agent_event_counts': agent_event_counts, 'total_agents': len(self.agent_logs), 'session_duration': time.time() - (self.log_entries[0].timestamp if self.log_entries else time.time())}
+
+def log_event(self, event_type: str, agent_id: Optional[int]=None, phase: str='unknown', data: Optional[Dict[str, Any]]=None):
+    """
+        Log a general system event.
+
+        Args:
+            event_type: Type of event (e.g., "session_started", "phase_change")
+            agent_id: Agent ID if event is agent-specific
+            phase: Current system phase
+            data: Additional event data
+        """
+    with self._lock:
+        entry = LogEntry(timestamp=time.time(), event_type=event_type, agent_id=agent_id, phase=phase, data=data or {}, session_id=self.session_id)
+        self.log_entries.append(entry)
+        if agent_id is not None:
+            if agent_id not in self.agent_logs:
+                self.agent_logs[agent_id] = []
+            self.agent_logs[agent_id].append(entry)
+        self._write_log_entry(entry)
+
+def log_agent_status_change(self, agent_id: int, old_status: str, new_status: str, phase: str='unknown'):
+    """
+        Log agent status change.
+
+        Args:
+            agent_id: Agent ID
+            old_status: Previous status
+            new_status: New status
+            phase: Current workflow phase
+        """
+    data = {'old_status': old_status, 'new_status': new_status, 'status_change': f'{old_status} {new_status}'}
+    self.log_event('agent_status_change', agent_id, phase, data)
+
+def log_consensus_reached(self, winning_agent_id: int, vote_distribution: Dict[int, int], is_fallback: bool=False, phase: str='unknown'):
+    """
+        Log when consensus is reached.
+
+        Args:
+            winning_agent_id: ID of the winning agent
+            vote_distribution: Dictionary of agent_id -> vote_count
+            is_fallback: Whether this was a fallback consensus (timeout)
+            phase: Current workflow phase
+        """
+    with self._lock:
+        self.event_counters['consensus_reached'] += 1
+    data = {'winning_agent_id': winning_agent_id, 'vote_distribution': vote_distribution, 'is_fallback': is_fallback, 'total_consensus_events': self.event_counters['consensus_reached']}
+    self.log_event('consensus_reached', winning_agent_id, phase, data)
+    consensus_entry = {'timestamp': time.time(), 'event': 'consensus_reached', 'phase': phase, 'winning_agent_id': winning_agent_id, 'vote_distribution': vote_distribution, 'is_fallback': is_fallback}
+    for agent_id in vote_distribution.keys():
+        self._write_agent_display_log(agent_id, consensus_entry)
+
+def log_phase_transition(self, old_phase: str, new_phase: str, additional_data: Dict[str, Any]=None):
+    """
+        Log system phase transitions.
+
+        Args:
+            old_phase: Previous phase
+            new_phase: New phase
+            additional_data: Additional context data
+        """
+    data = {'old_phase': old_phase, 'new_phase': new_phase, 'phase_transition': f'{old_phase} -> {new_phase}', **(additional_data or {})}
+    self.log_event('phase_transition', phase=new_phase, data=data)
+
+def log_notification_sent(self, agent_id: int, notification_type: str, content_preview: str, phase: str='unknown'):
+    """
+        Log when a notification is sent to an agent.
+
+        Args:
+            agent_id: Target agent ID
+            notification_type: Type of notification (update, debate, presentation, prompt)
+            content_preview: Preview of notification content
+            phase: Current workflow phase
+        """
+    with self._lock:
+        self.event_counters['notifications_sent'] += 1
+    data = {'notification_type': notification_type, 'content_preview': content_preview[:200] + '...' if len(content_preview) > 200 else content_preview, 'content_length': len(content_preview), 'total_notifications_sent': self.event_counters['notifications_sent']}
+    self.log_event('notification_sent', agent_id, phase, data)
+    notification_entry = {'timestamp': time.time(), 'event': 'notification_received', 'phase': phase, 'notification_type': notification_type, 'content': content_preview}
+    self._write_agent_display_log(agent_id, notification_entry)
+
+def log_agent_restart(self, agent_id: int, reason: str, phase: str='unknown'):
+    """
+        Log when an agent is restarted.
+
+        Args:
+            agent_id: ID of the restarted agent
+            reason: Reason for restart
+            phase: Current workflow phase
+        """
+    with self._lock:
+        self.event_counters['agent_restarts'] += 1
+    data = {'restart_reason': reason, 'total_restarts': self.event_counters['agent_restarts']}
+    self.log_event('agent_restart', agent_id, phase, data)
+    restart_entry = {'timestamp': time.time(), 'event': 'agent_restarted', 'phase': phase, 'reason': reason}
+    self._write_agent_display_log(agent_id, restart_entry)
+
+def log_debate_started(self, phase: str='unknown'):
+    """
+        Log when a debate phase starts.
+
+        Args:
+            phase: Current workflow phase
+        """
+    with self._lock:
+        self.event_counters['debates_started'] += 1
+    data = {'total_debates': self.event_counters['debates_started']}
+    self.log_event('debate_started', phase=phase, data=data)
+
+def log_task_completion(self, final_solution: Dict[str, Any]):
+    """
+        Log task completion with final results.
+
+        Args:
+            final_solution: Complete final solution data
+        """
+    data = {'final_solution': final_solution, 'completion_timestamp': time.time()}
+    self.log_event('task_completed', phase='completed', data=data)
+
+def cleanup(self):
+    """Clean up and finalize the logging session."""
+    self.log_event('session_ended', data={'end_timestamp': time.time(), 'total_events_logged': len(self.log_entries)})
+
+class MultiRegionDisplay:
+
+    def __init__(self, display_enabled: bool=True, max_lines: int=10, save_logs: bool=True, answers_dir: Optional[str]=None):
+        self.display_enabled = display_enabled
+        self.max_lines = max_lines
+        self.save_logs = save_logs
+        self.answers_dir = answers_dir
+        self.agent_outputs: Dict[int, str] = {}
+        self.agent_models: Dict[int, str] = {}
+        self.agent_statuses: Dict[int, str] = {}
+        self.system_messages: List[str] = []
+        self.start_time = time.time()
+        self._lock = threading.RLock()
+        self.current_phase = 'collaboration'
+        self.vote_distribution: Dict[int, int] = {}
+        self.consensus_reached = False
+        self.representative_agent_id: Optional[int] = None
+        self.debate_rounds: int = 0
+        self._agent_vote_targets: Dict[int, Optional[int]] = {}
+        self._agent_chat_rounds: Dict[int, int] = {}
+        self._agent_update_counts: Dict[int, int] = {}
+        self._agent_votes_cast: Dict[int, int] = {}
+        self._display_cache = None
+        self._last_agent_count = 0
+        self._update_timer = None
+        self._update_delay = 0.1
+        self._display_updating = False
+        self._pending_update = False
+        self._ansi_pattern = re.compile('\\x1B(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~]|\\][^\\x07]*(?:\\x07|\\x1B\\\\)|[PX^_][^\\x1B]*\\x1B\\\\)')
+        if self.save_logs:
+            self._setup_logging()
+
+    def _get_terminal_width(self):
+        """Get terminal width with conservative fallback."""
+        try:
+            return os.get_terminal_size().columns
+        except OSError:
+            return 120
+
+    def _calculate_layout(self, num_agents: int):
+        """
+        Calculate all layout dimensions in one place for consistency.
+        Returns: (col_width, total_width, terminal_width)
+        """
+        if self._display_cache is None or self._last_agent_count != num_agents:
+            terminal_width = self._get_terminal_width()
+            border_chars = num_agents + 1
+            safety_margin = 10
+            available_width = terminal_width - border_chars - safety_margin
+            col_width = max(25, available_width // num_agents)
+            total_width = col_width * num_agents + border_chars
+            if total_width > terminal_width - 2:
+                col_width = max(20, (terminal_width - border_chars - 4) // num_agents)
+                total_width = col_width * num_agents + border_chars
+            self._display_cache = {'col_width': col_width, 'total_width': total_width, 'terminal_width': terminal_width, 'num_agents': num_agents, 'border_chars': border_chars}
+            self._last_agent_count = num_agents
+        cache = self._display_cache
+        return (cache['col_width'], cache['total_width'], cache['terminal_width'])
+
+    def _get_display_width(self, text: str) -> int:
+        """
+        ROBUST: Calculate the actual display width of text with proper ANSI and Unicode handling.
+        """
+        if not text:
+            return 0
+        clean_text = self._ansi_pattern.sub('', text)
+        width = 0
+        i = 0
+        while i < len(clean_text):
+            char = clean_text[i]
+            char_code = ord(char)
+            if char_code < 32 or char_code == 127:
+                i += 1
+                continue
+            if unicodedata.combining(char):
+                i += 1
+                continue
+            char_width = self._get_char_width(char)
+            width += char_width
+            i += 1
+        return width
+
+    def _get_char_width(self, char: str) -> int:
+        """
+        ROBUST: Get the display width of a single character.
+        """
+        char_code = ord(char)
+        if 32 <= char_code <= 126:
+            return 1
+        if 128512 <= char_code <= 128591 or 127744 <= char_code <= 128511 or 128640 <= char_code <= 128767 or (128768 <= char_code <= 128895) or (128896 <= char_code <= 129023) or (129024 <= char_code <= 129279) or (129280 <= char_code <= 129535) or (129536 <= char_code <= 129647) or (129648 <= char_code <= 129791) or (127462 <= char_code <= 127487) or (9728 <= char_code <= 9983) or (9984 <= char_code <= 10175) or (127136 <= char_code <= 127231) or (127232 <= char_code <= 127487):
+            return 2
+        east_asian_width = unicodedata.east_asian_width(char)
+        if east_asian_width in ('F', 'W'):
+            return 2
+        elif east_asian_width in ('N', 'Na', 'H'):
+            return 1
+        elif east_asian_width == 'A':
+            return 1
+        return 1
+
+    def _preserve_ansi_truncate(self, text: str, max_width: int) -> str:
+        """
+        ROBUST: Truncate text while preserving ANSI color codes and handling wide characters.
+        """
+        if max_width <= 0:
+            return ''
+        if max_width <= 1:
+            return '…'
+        segments = self._ansi_pattern.split(text)
+        ansi_codes = self._ansi_pattern.findall(text)
+        result = ''
+        current_width = 0
+        ansi_index = 0
+        for i, segment in enumerate(segments):
+            if i > 0 and ansi_index < len(ansi_codes):
+                result += ansi_codes[ansi_index]
+                ansi_index += 1
+            for char in segment:
+                char_width = self._get_char_width(char)
+                if current_width + char_width > max_width - 1:
+                    if current_width < max_width:
+                        result += '…'
+                    return result
+                result += char
+                current_width += char_width
+        return result
+
+    def _pad_to_width(self, text: str, target_width: int, align: str='left') -> str:
+        """
+        ROBUST: Pad text to exact target width with proper ANSI and Unicode handling.
+        """
+        if target_width <= 0:
+            return ''
+        current_width = self._get_display_width(text)
+        if current_width > target_width:
+            text = self._preserve_ansi_truncate(text, target_width)
+            current_width = self._get_display_width(text)
+        padding = target_width - current_width
+        if padding <= 0:
+            return text
+        if align == 'center':
+            left_pad = padding // 2
+            right_pad = padding - left_pad
+            return ' ' * left_pad + text + ' ' * right_pad
+        elif align == 'right':
+            return ' ' * padding + text
+        else:
+            return text + ' ' * padding
+
+    def _create_bordered_line(self, content_parts: List[str], total_width: int) -> str:
+        """
+        ROBUST: Create a single bordered line with guaranteed correct width.
+        """
+        validated_parts = []
+        for part in content_parts:
+            if self._get_display_width(part) != self._display_cache['col_width']:
+                part = self._pad_to_width(part, self._display_cache['col_width'], 'left')
+            validated_parts.append(part)
+        line = '│' + '│'.join(validated_parts) + '│'
+        actual_width = self._get_display_width(line)
+        expected_width = total_width
+        if actual_width != expected_width:
+            if actual_width > expected_width:
+                clean_line = self._ansi_pattern.sub('', line)
+                if len(clean_line) > expected_width:
+                    clean_line = clean_line[:expected_width - 1] + '│'
+                line = clean_line
+            else:
+                line += ' ' * (expected_width - actual_width)
+        return line
+
+    def _create_system_bordered_line(self, content: str, total_width: int) -> str:
+        """
+        ROBUST: Create a system section line with borders.
+        """
+        content_width = total_width - 2
+        if content_width <= 0:
+            return '│' + ' ' * max(0, total_width - 2) + '│'
+        padded_content = self._pad_to_width(content, content_width, 'left')
+        line = f'│{padded_content}│'
+        actual_width = self._get_display_width(line)
+        if actual_width != total_width:
+            if actual_width < total_width:
+                line += ' ' * (total_width - actual_width)
+            elif actual_width > total_width:
+                clean_line = self._ansi_pattern.sub('', line)
+                if len(clean_line) > total_width:
+                    clean_line = clean_line[:total_width - 1] + '│'
+                line = clean_line
+        return line
+
+    def _invalidate_display_cache(self):
+        """Reset display cache when terminal is resized."""
+        self._display_cache = None
+
+    def cleanup(self):
+        """Clean up resources when display is no longer needed."""
+        with self._lock:
+            if self._update_timer:
+                self._update_timer.cancel()
+                self._update_timer = None
+            self._pending_update = False
+            self._display_updating = False
+
+    def _clear_terminal_atomic(self):
+        """Atomically clear terminal using proper ANSI sequences."""
+        try:
+            sys.stdout.write('\x1b[2J')
+            sys.stdout.write('\x1b[H')
+            sys.stdout.flush()
+        except Exception:
+            try:
+                os.system('clear' if os.name == 'posix' else 'cls')
+            except Exception:
+                pass
+
+    def _schedule_display_update(self):
+        """Schedule a debounced display update to prevent rapid refreshes."""
+        with self._lock:
+            if self._update_timer:
+                self._update_timer.cancel()
+            self._pending_update = True
+            self._update_timer = threading.Timer(self._update_delay, self._execute_display_update)
+            self._update_timer.start()
+
+    def _execute_display_update(self):
+        """Execute the actual display update."""
+        with self._lock:
+            if not self._pending_update:
+                return
+            if self._display_updating:
+                self._update_timer = threading.Timer(self._update_delay, self._execute_display_update)
+                self._update_timer.start()
+                return
+            self._display_updating = True
+            self._pending_update = False
+        try:
+            self._update_display_immediate()
+        finally:
+            with self._lock:
+                self._display_updating = False
+
+    def set_agent_model(self, agent_id: int, model_name: str):
+        """Set the model name for a specific agent."""
+        with self._lock:
+            self.agent_models[agent_id] = model_name
+            if agent_id not in self.agent_outputs:
+                self.agent_outputs[agent_id] = ''
+
+    def update_agent_status(self, agent_id: int, status: str):
+        """Update agent status (working, voted, failed)."""
+        with self._lock:
+            old_status = self.agent_statuses.get(agent_id, 'unknown')
+            self.agent_statuses[agent_id] = status
+            if agent_id not in self.agent_outputs:
+                self.agent_outputs[agent_id] = ''
+            status_change_emoji = {'working': '🔄', 'voted': '✅', 'failed': '❌', 'unknown': '❓'}
+            old_emoji = status_change_emoji.get(old_status, '❓')
+            new_emoji = status_change_emoji.get(status, '❓')
+            status_msg = f'{old_emoji}→{new_emoji} Agent {agent_id}: {old_status} → {status}'
+            self.add_system_message(status_msg)
+
+    def update_phase(self, old_phase: str, new_phase: str):
+        """Update system phase."""
+        with self._lock:
+            self.current_phase = new_phase
+            phase_msg = f'Phase: {old_phase} → {new_phase}'
+            self.add_system_message(phase_msg)
+
+    def update_vote_distribution(self, vote_dist: Dict[int, int]):
+        """Update vote distribution."""
+        with self._lock:
+            self.vote_distribution = vote_dist.copy()
+
+    def update_consensus_status(self, representative_id: int, vote_dist: Dict[int, int]):
+        """Update when consensus is reached."""
+        with self._lock:
+            self.consensus_reached = True
+            self.representative_agent_id = representative_id
+            self.vote_distribution = vote_dist.copy()
+            consensus_msg = f'🎉 CONSENSUS REACHED! Agent {representative_id} selected as representative'
+            self.add_system_message(consensus_msg)
+
+    def reset_consensus(self):
+        """Reset consensus state for new debate round."""
+        with self._lock:
+            self.consensus_reached = False
+            self.representative_agent_id = None
+            self.vote_distribution.clear()
+
+    def update_agent_vote_target(self, agent_id: int, target_id: Optional[int]):
+        """Update which agent this agent voted for."""
+        with self._lock:
+            self._agent_vote_targets[agent_id] = target_id
+
+    def update_agent_chat_round(self, agent_id: int, round_num: int):
+        """Update the chat round for an agent."""
+        with self._lock:
+            self._agent_chat_rounds[agent_id] = round_num
+
+    def update_agent_update_count(self, agent_id: int, count: int):
+        """Update the update count for an agent."""
+        with self._lock:
+            self._agent_update_counts[agent_id] = count
+
+    def update_agent_votes_cast(self, agent_id: int, votes_cast: int):
+        """Update the number of votes cast by an agent."""
+        with self._lock:
+            self._agent_votes_cast[agent_id] = votes_cast
+
+    def update_debate_rounds(self, rounds: int):
+        """Update the debate rounds count."""
+        with self._lock:
+            self.debate_rounds = rounds
+
+    def _setup_logging(self):
+        """Set up the logging directory and initialize log files."""
+        base_logs_dir = 'logs'
+        os.makedirs(base_logs_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.session_logs_dir = os.path.join(base_logs_dir, timestamp, 'display')
+        os.makedirs(self.session_logs_dir, exist_ok=True)
+        self.agent_log_files = {}
+        self.system_log_file = os.path.join(self.session_logs_dir, 'system.txt')
+        with open(self.system_log_file, 'w', encoding='utf-8') as f:
+            f.write('MassGen System Messages Log\n')
+            f.write(f'Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n')
+            f.write('=' * 80 + '\n\n')
+
+    def _get_agent_log_file(self, agent_id: int) -> str:
+        """Get or create the log file path for a specific agent."""
+        if agent_id not in self.agent_log_files:
+            self.agent_log_files[agent_id] = os.path.join(self.session_logs_dir, f'agent_{agent_id}.txt')
+            with open(self.agent_log_files[agent_id], 'w', encoding='utf-8') as f:
+                f.write(f'MassGen Agent {agent_id} Output Log\n')
+                f.write(f'Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n')
+                f.write('=' * 80 + '\n\n')
+        return self.agent_log_files[agent_id]
+
+    def get_agent_log_path_for_display(self, agent_id: int) -> str:
+        """Get the log file path for display purposes (clickable link)."""
+        if not self.save_logs:
+            return ''
+        log_path = self._get_agent_log_file(agent_id)
+        return log_path
+
+    def get_agent_answer_path_for_display(self, agent_id: int) -> str:
+        """Get the answer file path for display purposes (clickable link)."""
+        if not self.save_logs or not self.answers_dir:
+            return ''
+        answer_file_path = os.path.join(self.answers_dir, f'agent_{agent_id}.txt')
+        return answer_file_path
+
+    def get_system_log_path_for_display(self) -> str:
+        """Get the system log file path for display purposes (clickable link)."""
+        if not self.save_logs:
+            return ''
+        return self.system_log_file
+
+    def _write_agent_log(self, agent_id: int, content: str):
+        """Write content to the agent's log file."""
+        if not self.save_logs:
+            return
+        try:
+            log_file = self._get_agent_log_file(agent_id)
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(content)
+                f.flush()
+        except Exception as e:
+            print(f'Error writing to agent {agent_id} log: {e}')
+
+    def _write_system_log(self, message: str):
+        """Write a system message to the system log file."""
+        if not self.save_logs:
+            return
+        try:
+            with open(self.system_log_file, 'a', encoding='utf-8') as f:
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                f.write(f'[{timestamp}] {message}\n')
+                f.flush()
+        except Exception as e:
+            print(f'Error writing to system log: {e}')
+
+    def stream_output_sync(self, agent_id: int, content: str):
+        """FIXED: Buffered streaming with debounced display updates."""
+        if not self.display_enabled:
+            return
+        with self._lock:
+            if agent_id not in self.agent_outputs:
+                self.agent_outputs[agent_id] = ''
+            display_content = content
+            log_content = content
+            if content.startswith('[CODE_DISPLAY_ONLY]'):
+                display_content = content[len('[CODE_DISPLAY_ONLY]'):]
+                log_content = ''
+            elif content.startswith('[CODE_LOG_ONLY]'):
+                display_content = ''
+                log_content = content[len('[CODE_LOG_ONLY]'):]
+            if display_content:
+                self.agent_outputs[agent_id] += display_content
+            if log_content:
+                self._write_agent_log(agent_id, log_content)
+            if display_content:
+                self._schedule_display_update()
+
+    def _handle_terminal_resize(self):
+        """Handle terminal resize by resetting cached dimensions."""
+        try:
+            current_width = os.get_terminal_size().columns
+            if self._display_cache and abs(current_width - self._display_cache['terminal_width']) > 2:
+                self._invalidate_display_cache()
+                return True
+        except OSError:
+            self._invalidate_display_cache()
+            return True
+        return False
+
+    def add_system_message(self, message: str):
+        """Add a system message with timestamp."""
+        with self._lock:
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            formatted_message = f'[{timestamp}] {message}'
+            self.system_messages.append(formatted_message)
+            if len(self.system_messages) > 20:
+                self.system_messages = self.system_messages[-20:]
+            self._write_system_log(formatted_message + '\n')
+
+    def format_agent_notification(self, agent_id: int, notification_type: str, content: str):
+        """Format agent notifications for display."""
+        notification_emoji = {'update': '📢', 'debate': '🗣️', 'presentation': '🎯', 'prompt': '💡'}
+        emoji = notification_emoji.get(notification_type, '📨')
+        notification_msg = f'{emoji} Agent {agent_id} received {notification_type} notification'
+        self.add_system_message(notification_msg)
+
+    def _update_display_immediate(self):
+        """Immediate display update - called by the debounced scheduler."""
+        if not self.display_enabled:
+            return
+        try:
+            self._handle_terminal_resize()
+            self._clear_terminal_atomic()
+            agent_ids = sorted(self.agent_outputs.keys())
+            if not agent_ids:
+                return
+            num_agents = len(agent_ids)
+            col_width, total_width, terminal_width = self._calculate_layout(num_agents)
+        except Exception as e:
+            print(f'Display error: {e}')
+            for agent_id in sorted(self.agent_outputs.keys()):
+                print(f'Agent {agent_id}: {self.agent_outputs[agent_id][-100:]}')
+            return
+        agent_lines = {}
+        max_lines = 0
+        for agent_id in agent_ids:
+            lines = self.agent_outputs[agent_id].split('\n')
+            if len(lines) > self.max_lines:
+                lines = lines[-self.max_lines:]
+            agent_lines[agent_id] = lines
+            max_lines = max(max_lines, len(lines))
+        border_line = '─' * total_width
+        print('')
+        BRIGHT_CYAN = '\x1b[96m'
+        BRIGHT_GREEN = '\x1b[92m'
+        BRIGHT_YELLOW = '\x1b[93m'
+        BRIGHT_MAGENTA = '\x1b[95m'
+        BRIGHT_RED = '\x1b[91m'
+        BRIGHT_WHITE = '\x1b[97m'
+        BOLD = '\x1b[1m'
+        RESET = '\x1b[0m'
+        header_top = f'{BRIGHT_CYAN}{BOLD}╔{'═' * (total_width - 2)}╗{RESET}'
+        print(header_top)
+        header_empty = f'{BRIGHT_CYAN}║{' ' * (total_width - 2)}║{RESET}'
+        print(header_empty)
+        title_text = '🚀 MassGen - Multi-Agent Scaling System 🚀'
+        title_line_content = self._pad_to_width(title_text, total_width - 2, 'center')
+        title_line = f'{BRIGHT_CYAN}║{BRIGHT_YELLOW}{BOLD}{title_line_content}{RESET}{BRIGHT_CYAN}║{RESET}'
+        print(title_line)
+        subtitle_text = '🔬 Advanced Agent Collaboration Framework'
+        subtitle_line_content = self._pad_to_width(subtitle_text, total_width - 2, 'center')
+        subtitle_line = f'{BRIGHT_CYAN}║{BRIGHT_GREEN}{subtitle_line_content}{RESET}{BRIGHT_CYAN}║{RESET}'
+        print(subtitle_line)
+        print(header_empty)
+        header_bottom = f'{BRIGHT_CYAN}{BOLD}╚{'═' * (total_width - 2)}╝{RESET}'
+        print(header_bottom)
+        print(f'\n{border_line}')
+        header_parts = []
+        for agent_id in agent_ids:
+            model_name = self.agent_models.get(agent_id, '')
+            status = self.agent_statuses.get(agent_id, 'unknown')
+            status_config = {'working': {'emoji': '🔄', 'color': BRIGHT_YELLOW}, 'voted': {'emoji': '✅', 'color': BRIGHT_GREEN}, 'failed': {'emoji': '❌', 'color': BRIGHT_RED}, 'unknown': {'emoji': '❓', 'color': BRIGHT_WHITE}}
+            config = status_config.get(status, status_config['unknown'])
+            emoji = config['emoji']
+            status_color = config['color']
+            if model_name:
+                agent_header = f'{emoji} {BRIGHT_CYAN}Agent {agent_id}{RESET} {BRIGHT_MAGENTA}({model_name}){RESET} {status_color}[{status}]{RESET}'
+            else:
+                agent_header = f'{emoji} {BRIGHT_CYAN}Agent {agent_id}{RESET} {status_color}[{status}]{RESET}'
+            header_content = self._pad_to_width(agent_header, col_width, 'center')
+            if self._get_display_width(header_content) != col_width:
+                simple_header = f'Agent {agent_id} [{status}]'
+                header_content = self._pad_to_width(simple_header, col_width, 'center')
+            header_parts.append(header_content)
+        try:
+            header_line = self._create_bordered_line(header_parts, total_width)
+            print(header_line)
+        except Exception:
+            print('─' * total_width)
+        state_parts = []
+        for agent_id in agent_ids:
+            chat_round = getattr(self, '_agent_chat_rounds', {}).get(agent_id, 0)
+            vote_target = getattr(self, '_agent_vote_targets', {}).get(agent_id)
+            update_count = getattr(self, '_agent_update_counts', {}).get(agent_id, 0)
+            votes_cast = getattr(self, '_agent_votes_cast', {}).get(agent_id, 0)
+            state_info = []
+            state_info.append(f'{BRIGHT_WHITE}Round:{RESET} {BRIGHT_GREEN}{chat_round}{RESET}')
+            state_info.append(f'{BRIGHT_WHITE}#Updates:{RESET} {BRIGHT_MAGENTA}{update_count}{RESET}')
+            state_info.append(f'{BRIGHT_WHITE}#Votes:{RESET} {BRIGHT_CYAN}{votes_cast}{RESET}')
+            if vote_target:
+                state_info.append(f'{BRIGHT_WHITE}Vote →{RESET} {BRIGHT_GREEN}{vote_target}{RESET}')
+            else:
+                state_info.append(f'{BRIGHT_WHITE}Vote →{RESET} None')
+            state_text = f'📊 {' | '.join(state_info)}'
+            state_content = self._pad_to_width(state_text, col_width, 'center')
+            state_parts.append(state_content)
+        try:
+            state_line = self._create_bordered_line(state_parts, total_width)
+            print(state_line)
+        except Exception:
+            print('─' * total_width)
+        if self.save_logs and (hasattr(self, 'session_logs_dir') or self.answers_dir):
+            UNDERLINE = '\x1b[4m'
+            link_parts = []
+            for agent_id in agent_ids:
+                answer_path = self.get_agent_answer_path_for_display(agent_id)
+                if answer_path:
+                    display_path = answer_path.replace(os.getcwd() + '/', '') if answer_path.startswith(os.getcwd()) else answer_path
+                    prefix = '📄 Answers: '
+                    max_path_len = max(10, col_width - self._get_display_width(prefix) - 8)
+                    if len(display_path) > max_path_len:
+                        display_path = '...' + display_path[-(max_path_len - 3):]
+                    link_text = f'{prefix}{UNDERLINE}{display_path}{RESET}'
+                    link_content = self._pad_to_width(link_text, col_width, 'center')
+                else:
+                    log_path = self.get_agent_log_path_for_display(agent_id)
+                    if log_path:
+                        display_path = log_path.replace(os.getcwd() + '/', '') if log_path.startswith(os.getcwd()) else log_path
+                        prefix = '📁 Log: '
+                        max_path_len = max(10, col_width - self._get_display_width(prefix) - 8)
+                        if len(display_path) > max_path_len:
+                            display_path = '...' + display_path[-(max_path_len - 3):]
+                        link_text = f'{prefix}{UNDERLINE}{display_path}{RESET}'
+                        link_content = self._pad_to_width(link_text, col_width, 'center')
+                    else:
+                        link_content = self._pad_to_width('', col_width, 'center')
+                link_parts.append(link_content)
+            try:
+                log_line = self._create_bordered_line(link_parts, total_width)
+                print(log_line)
+            except Exception:
+                print('─' * total_width)
+        print(border_line)
+        for line_idx in range(max_lines):
+            content_parts = []
+            for agent_id in agent_ids:
+                lines = agent_lines[agent_id]
+                content = lines[line_idx] if line_idx < len(lines) else ''
+                padded_content = self._pad_to_width(content, col_width, 'left')
+                content_parts.append(padded_content)
+            try:
+                content_line = self._create_bordered_line(content_parts, total_width)
+                print(content_line)
+            except Exception:
+                simple_line = ' | '.join(content_parts)[:total_width - 4]
+                simple_line = simple_line + ' ' * max(0, total_width - 4 - len(simple_line))
+                print(f'│ {simple_line} │')
+        if self.system_messages or self.current_phase or self.vote_distribution:
+            print(f'\n{border_line}')
+            phase_color = BRIGHT_YELLOW if self.current_phase == 'collaboration' else BRIGHT_GREEN
+            consensus_color = BRIGHT_GREEN if self.consensus_reached else BRIGHT_RED
+            consensus_text = '✅ YES' if self.consensus_reached else '❌ NO'
+            system_state_info = []
+            system_state_info.append(f'{BRIGHT_WHITE}Phase:{RESET} {phase_color}{self.current_phase.upper()}{RESET}')
+            system_state_info.append(f'{BRIGHT_WHITE}Consensus:{RESET} {consensus_color}{consensus_text}{RESET}')
+            system_state_info.append(f'{BRIGHT_WHITE}Debate Rounds:{RESET} {BRIGHT_CYAN}{self.debate_rounds}{RESET}')
+            if self.representative_agent_id:
+                system_state_info.append(f'{BRIGHT_WHITE}Representative Agent:{RESET} {BRIGHT_GREEN}{self.representative_agent_id}{RESET}')
+            else:
+                system_state_info.append(f'{BRIGHT_WHITE}Representative Agent:{RESET} None')
+            system_header_text = f'{BRIGHT_CYAN}📋 SYSTEM STATE{RESET} - {' | '.join(system_state_info)}'
+            system_header_line = self._create_system_bordered_line(system_header_text, total_width)
+            print(system_header_line)
+            if self.save_logs and hasattr(self, 'system_log_file'):
+                system_log_path = self.get_system_log_path_for_display()
+                if system_log_path:
+                    UNDERLINE = '\x1b[4m'
+                    display_path = system_log_path.replace(os.getcwd() + '/', '') if system_log_path.startswith(os.getcwd()) else system_log_path
+                    prefix = '📁 Log: '
+                    max_path_len = max(10, total_width - self._get_display_width(prefix) - 15)
+                    if len(display_path) > max_path_len:
+                        display_path = '...' + display_path[-(max_path_len - 3):]
+                    system_link_text = f'{prefix}{UNDERLINE}{display_path}{RESET}'
+                    system_link_line = self._create_system_bordered_line(system_link_text, total_width)
+                    print(system_link_line)
+            print(border_line)
+            if self.consensus_reached and self.representative_agent_id is not None:
+                consensus_msg = f'🎉 CONSENSUS REACHED! Representative: Agent {self.representative_agent_id}'
+                consensus_line = self._create_system_bordered_line(consensus_msg, total_width)
+                print(consensus_line)
+            if self.vote_distribution:
+                vote_msg = '📊  Vote Distribution: ' + ', '.join([f'Agent {k}→{v} votes' for k, v in self.vote_distribution.items()])
+                max_content_width = total_width - 2
+                if self._get_display_width(vote_msg) <= max_content_width:
+                    vote_line = self._create_system_bordered_line(vote_msg, total_width)
+                    print(vote_line)
+                else:
+                    vote_header = '📊  Vote Distribution:'
+                    header_line = self._create_system_bordered_line(vote_header, total_width)
+                    print(header_line)
+                    for agent_id, votes in self.vote_distribution.items():
+                        vote_detail = f'   Agent {agent_id}: {votes} votes'
+                        detail_line = self._create_system_bordered_line(vote_detail, total_width)
+                        print(detail_line)
+            for message in self.system_messages:
+                max_content_width = total_width - 2
+                if self._get_display_width(message) <= max_content_width:
+                    line = self._create_system_bordered_line(message, total_width)
+                    print(line)
+                else:
+                    words = message.split()
+                    current_line = ''
+                    for word in words:
+                        test_line = f'{current_line} {word}'.strip()
+                        if self._get_display_width(test_line) > max_content_width:
+                            if current_line.strip():
+                                line = self._create_system_bordered_line(current_line.strip(), total_width)
+                                print(line)
+                            current_line = word
+                        else:
+                            current_line = test_line
+                    if current_line.strip():
+                        line = self._create_system_bordered_line(current_line.strip(), total_width)
+                        print(line)
+        print(border_line)
+        sys.stdout.flush()
+
+    def force_update_display(self):
+        """Force an immediate display update (for status changes)."""
+        with self._lock:
+            if self._update_timer:
+                self._update_timer.cancel()
+            self._pending_update = True
+        self._execute_display_update()
+
+def update_agent_status(self, agent_id: int, status: str):
+    """Update agent status (working, voted, failed)."""
+    with self._lock:
+        old_status = self.agent_statuses.get(agent_id, 'unknown')
+        self.agent_statuses[agent_id] = status
+        if agent_id not in self.agent_outputs:
+            self.agent_outputs[agent_id] = ''
+        status_change_emoji = {'working': '🔄', 'voted': '✅', 'failed': '❌', 'unknown': '❓'}
+        old_emoji = status_change_emoji.get(old_status, '❓')
+        new_emoji = status_change_emoji.get(status, '❓')
+        status_msg = f'{old_emoji}→{new_emoji} Agent {agent_id}: {old_status} → {status}'
+        self.add_system_message(status_msg)
+
+def update_phase(self, old_phase: str, new_phase: str):
+    """Update system phase."""
+    with self._lock:
+        self.current_phase = new_phase
+        phase_msg = f'Phase: {old_phase} → {new_phase}'
+        self.add_system_message(phase_msg)
+
+def update_consensus_status(self, representative_id: int, vote_dist: Dict[int, int]):
+    """Update when consensus is reached."""
+    with self._lock:
+        self.consensus_reached = True
+        self.representative_agent_id = representative_id
+        self.vote_distribution = vote_dist.copy()
+        consensus_msg = f'🎉 CONSENSUS REACHED! Agent {representative_id} selected as representative'
+        self.add_system_message(consensus_msg)
+
+def format_agent_notification(self, agent_id: int, notification_type: str, content: str):
+    """Format agent notifications for display."""
+    notification_emoji = {'update': '📢', 'debate': '🗣️', 'presentation': '🎯', 'prompt': '💡'}
+    emoji = notification_emoji.get(notification_type, '📨')
+    notification_msg = f'{emoji} Agent {agent_id} received {notification_type} notification'
+    self.add_system_message(notification_msg)
+
+class StreamingOrchestrator:
+
+    def __init__(self, display_enabled: bool=True, stream_callback: Optional[Callable]=None, max_lines: int=10, save_logs: bool=True, answers_dir: Optional[str]=None):
+        self.display = MultiRegionDisplay(display_enabled, max_lines, save_logs, answers_dir)
+        self.stream_callback = stream_callback
+
+    def stream_output(self, agent_id: int, content: str):
+        """Streaming content - uses debounced updates."""
+        self.display.stream_output_sync(agent_id, content)
+        if self.stream_callback:
+            try:
+                self.stream_callback(agent_id, content)
+            except Exception:
+                pass
+
+    def set_agent_model(self, agent_id: int, model_name: str):
+        """Set agent model - immediate update."""
+        self.display.set_agent_model(agent_id, model_name)
+        self.display.force_update_display()
+
+    def update_agent_status(self, agent_id: int, status: str):
+        """Update agent status - immediate update for critical state changes."""
+        self.display.update_agent_status(agent_id, status)
+        self.display.force_update_display()
+
+    def update_phase(self, old_phase: str, new_phase: str):
+        """Update phase - immediate update for critical state changes."""
+        self.display.update_phase(old_phase, new_phase)
+        self.display.force_update_display()
+
+    def update_vote_distribution(self, vote_dist: Dict[int, int]):
+        """Update vote distribution - immediate update for critical state changes."""
+        self.display.update_vote_distribution(vote_dist)
+        self.display.force_update_display()
+
+    def update_consensus_status(self, representative_id: int, vote_dist: Dict[int, int]):
+        """Update consensus status - immediate update for critical state changes."""
+        self.display.update_consensus_status(representative_id, vote_dist)
+        self.display.force_update_display()
+
+    def reset_consensus(self):
+        """Reset consensus - immediate update for critical state changes."""
+        self.display.reset_consensus()
+        self.display.force_update_display()
+
+    def add_system_message(self, message: str):
+        """Add system message - immediate update for important messages."""
+        self.display.add_system_message(message)
+        self.display.force_update_display()
+
+    def update_agent_vote_target(self, agent_id: int, target_id: Optional[int]):
+        """Update agent vote target - immediate update for critical state changes."""
+        self.display.update_agent_vote_target(agent_id, target_id)
+        self.display.force_update_display()
+
+    def update_agent_chat_round(self, agent_id: int, round_num: int):
+        """Update agent chat round - debounced update."""
+        self.display.update_agent_chat_round(agent_id, round_num)
+
+    def update_agent_update_count(self, agent_id: int, count: int):
+        """Update agent update count - debounced update."""
+        self.display.update_agent_update_count(agent_id, count)
+
+    def update_agent_votes_cast(self, agent_id: int, votes_cast: int):
+        """Update agent votes cast - immediate update for vote-related changes."""
+        self.display.update_agent_votes_cast(agent_id, votes_cast)
+        self.display.force_update_display()
+
+    def update_debate_rounds(self, rounds: int):
+        """Update debate rounds - immediate update for critical state changes."""
+        self.display.update_debate_rounds(rounds)
+        self.display.force_update_display()
+
+    def format_agent_notification(self, agent_id: int, notification_type: str, content: str):
+        """Format agent notifications - immediate update for notifications."""
+        self.display.format_agent_notification(agent_id, notification_type, content)
+        self.display.force_update_display()
+
+    def get_agent_log_path(self, agent_id: int) -> str:
+        """Get the log file path for a specific agent."""
+        return self.display.get_agent_log_path_for_display(agent_id)
+
+    def get_agent_answer_path(self, agent_id: int) -> str:
+        """Get the answer file path for a specific agent."""
+        return self.display.get_agent_answer_path_for_display(agent_id)
+
+    def get_system_log_path(self) -> str:
+        """Get the system log file path."""
+        return self.display.get_system_log_path_for_display()
+
+    def cleanup(self):
+        """Clean up resources when orchestrator is no longer needed."""
+        self.display.cleanup()
+
+def set_agent_model(self, agent_id: int, model_name: str):
+    """Set agent model - immediate update."""
+    self.display.set_agent_model(agent_id, model_name)
+    self.display.force_update_display()
+
+def update_agent_status(self, agent_id: int, status: str):
+    """Update agent status - immediate update for critical state changes."""
+    self.display.update_agent_status(agent_id, status)
+    self.display.force_update_display()
+
+def update_phase(self, old_phase: str, new_phase: str):
+    """Update phase - immediate update for critical state changes."""
+    self.display.update_phase(old_phase, new_phase)
+    self.display.force_update_display()
+
+def update_vote_distribution(self, vote_dist: Dict[int, int]):
+    """Update vote distribution - immediate update for critical state changes."""
+    self.display.update_vote_distribution(vote_dist)
+    self.display.force_update_display()
+
+def update_consensus_status(self, representative_id: int, vote_dist: Dict[int, int]):
+    """Update consensus status - immediate update for critical state changes."""
+    self.display.update_consensus_status(representative_id, vote_dist)
+    self.display.force_update_display()
+
+def reset_consensus(self):
+    """Reset consensus - immediate update for critical state changes."""
+    self.display.reset_consensus()
+    self.display.force_update_display()
+
+def add_system_message(self, message: str):
+    """Add system message - immediate update for important messages."""
+    self.display.add_system_message(message)
+    self.display.force_update_display()
+
+def update_agent_vote_target(self, agent_id: int, target_id: Optional[int]):
+    """Update agent vote target - immediate update for critical state changes."""
+    self.display.update_agent_vote_target(agent_id, target_id)
+    self.display.force_update_display()
+
+def update_agent_chat_round(self, agent_id: int, round_num: int):
+    """Update agent chat round - debounced update."""
+    self.display.update_agent_chat_round(agent_id, round_num)
+
+def update_agent_update_count(self, agent_id: int, count: int):
+    """Update agent update count - debounced update."""
+    self.display.update_agent_update_count(agent_id, count)
+
+def update_agent_votes_cast(self, agent_id: int, votes_cast: int):
+    """Update agent votes cast - immediate update for vote-related changes."""
+    self.display.update_agent_votes_cast(agent_id, votes_cast)
+    self.display.force_update_display()
+
+def update_debate_rounds(self, rounds: int):
+    """Update debate rounds - immediate update for critical state changes."""
+    self.display.update_debate_rounds(rounds)
+    self.display.force_update_display()
+
+def format_agent_notification(self, agent_id: int, notification_type: str, content: str):
+    """Format agent notifications - immediate update for notifications."""
+    self.display.format_agent_notification(agent_id, notification_type, content)
+    self.display.force_update_display()
+
+class MassOrchestrator:
+    """
+    Central orchestrator for managing multiple agents in the MassGen framework, and logging for all events.
+
+    Simplified workflow:
+    1. Agents work on task (status: "working")
+    2. When agents vote, they become "voted"
+    3. When all votable agents have voted:
+       - Check consensus
+       - If consensus reached: select representative to present final answer
+       - If no consensus: restart all agents for debate
+    4. Representative presents final answer and system completes
+    """
+
+    def __init__(self, max_duration: int=600, consensus_threshold: float=0.0, max_debate_rounds: int=1, status_check_interval: float=2.0, thread_pool_timeout: int=5, streaming_orchestrator=None):
+        """
+        Initialize the orchestrator.
+
+        Args:
+            max_duration: Maximum duration for the entire task in seconds
+            consensus_threshold: Fraction of agents that must agree for consensus (1.0 = unanimous)
+            max_debate_rounds: Maximum number of debate rounds before fallback
+            status_check_interval: Interval for checking agent status (seconds)
+            thread_pool_timeout: Timeout for shutting down thread pool executor (seconds)
+            streaming_orchestrator: Optional streaming orchestrator for real-time display
+        """
+        self.agents: Dict[int, Any] = {}
+        self.agent_states: Dict[int, AgentState] = {}
+        self.votes: List[VoteRecord] = []
+        self.system_state = SystemState()
+        self.max_duration = max_duration
+        self.consensus_threshold = consensus_threshold
+        self.max_debate_rounds = max_debate_rounds
+        self.status_check_interval = status_check_interval
+        self.thread_pool_timeout = thread_pool_timeout
+        self.streaming_orchestrator = streaming_orchestrator
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self.communication_log: List[Dict[str, Any]] = []
+        self.final_response: Optional[str] = None
+        self.log_manager = get_log_manager()
+
+    def register_agent(self, agent):
+        """
+        Register an agent with the orchestrator.
+
+        Args:
+            agent: MassAgent instance to register
+        """
+        with self._lock:
+            self.agents[agent.agent_id] = agent
+            self.agent_states[agent.agent_id] = agent.state
+            agent.orchestrator = self
+
+    def _log_event(self, event_type: str, data: Dict[str, Any]):
+        """Log an orchestrator event."""
+        self.communication_log.append({'timestamp': time.time(), 'event_type': event_type, 'data': data})
+
+    def update_agent_answer(self, agent_id: int, answer: str):
+        """
+        Update an agent's running answer.
+
+        Args:
+            agent_id: ID of the agent updating their answer
+            answer: New answer content
+        """
+        with self._lock:
+            if agent_id not in self.agent_states:
+                raise ValueError(f'Agent {agent_id} not registered')
+            old_answer_length = len(self.agent_states[agent_id].curr_answer)
+            self.agent_states[agent_id].add_update(answer)
+            preview = answer[:100] + '...' if len(answer) > 100 else answer
+            print(f'📝 Agent {agent_id} answer updated ({old_answer_length} → {len(answer)} chars)')
+            print(f'   🔍 {preview}')
+            if self.log_manager:
+                self.log_manager.log_agent_answer_update(agent_id=agent_id, answer=answer, phase=self.system_state.phase, orchestrator=self)
+            self._log_event('answer_updated', {'agent_id': agent_id, 'answer': answer, 'timestamp': time.time()})
+
+    def _get_current_vote_counts(self) -> Counter:
+        """
+        Get current vote counts based on agent states' vote_target.
+        Returns Counter of agent_id -> vote_count for ALL agents (0 if no votes).
+        """
+        current_votes = []
+        for agent_id, state in self.agent_states.items():
+            if state.status == 'voted' and state.curr_vote is not None:
+                current_votes.append(state.curr_vote.target_id)
+        vote_counts = Counter(current_votes)
+        for agent_id in self.agent_states.keys():
+            if agent_id not in vote_counts:
+                vote_counts[agent_id] = 0
+        return vote_counts
+
+    def _get_current_voted_agents_count(self) -> int:
+        """
+        Get count of agents who currently have status "voted".
+        """
+        return len([s for s in self.agent_states.values() if s.status == 'voted'])
+
+    def _get_voting_status(self) -> Dict[str, Any]:
+        """Get current voting status and distribution."""
+        vote_counts = self._get_current_vote_counts()
+        total_agents = len(self.agents)
+        failed_agents = len([s for s in self.agent_states.values() if s.status == 'failed'])
+        votable_agents = total_agents - failed_agents
+        voted_agents = self._get_current_voted_agents_count()
+        return {'vote_distribution': dict(vote_counts), 'total_agents': total_agents, 'failed_agents': failed_agents, 'votable_agents': votable_agents, 'voted_agents': voted_agents, 'votes_needed_for_consensus': max(1, int(votable_agents * self.consensus_threshold)), 'leading_agent': vote_counts.most_common(1)[0] if vote_counts else None}
+
+    def get_system_status(self) -> Dict[str, Any]:
+        """Get comprehensive system status information."""
+        return {'phase': self.system_state.phase, 'consensus_reached': self.system_state.consensus_reached, 'agents': {agent_id: {'status': state.status, 'update_times': len(state.updated_answers), 'chat_round': state.chat_round, 'vote_target': state.curr_vote.target_id if state.curr_vote else None, 'execution_time': state.execution_time} for agent_id, state in self.agent_states.items()}, 'voting_status': self._get_voting_status(), 'runtime': time.time() - self.system_state.start_time if self.system_state.start_time else 0}
+
+    def cast_vote(self, voter_id: int, target_id: int, reason: str=''):
+        """
+        Record a vote from one agent for another agent's solution.
+
+        Args:
+            voter_id: ID of the agent casting the vote
+            target_id: ID of the agent being voted for
+            reason: The reason for the vote (optional)
+        """
+        with self._lock:
+            logger.info(f'🗳️ VOTING: Agent {voter_id} casting vote')
+            print(f'🗳️  VOTE: Agent {voter_id} → Agent {target_id} ({self.system_state.phase})')
+            if reason:
+                print(f'   📝 Voting reason: {len(reason)} chars')
+            if voter_id not in self.agent_states:
+                logger.error(f'   ❌ Invalid voter: Agent {voter_id} not registered')
+                raise ValueError(f'Voter agent {voter_id} not registered')
+            if target_id not in self.agent_states:
+                logger.error(f'   ❌ Invalid target: Agent {target_id} not registered')
+                raise ValueError(f'Target agent {target_id} not registered')
+            previous_vote = self.agent_states[voter_id].curr_vote
+            if previous_vote:
+                logger.info(f'   🔄 Agent {voter_id} changed vote from Agent {previous_vote.target_id} to Agent {target_id}')
+            else:
+                logger.info(f'   ✨ Agent {voter_id} new vote for Agent {target_id}')
+            vote = VoteRecord(voter_id=voter_id, target_id=target_id, reason=reason, timestamp=time.time())
+            self.votes.append(vote)
+            old_status = self.agent_states[voter_id].status
+            self.agent_states[voter_id].status = 'voted'
+            self.agent_states[voter_id].curr_vote = vote
+            self.agent_states[voter_id].cast_votes.append(vote)
+            self.agent_states[voter_id].execution_end_time = time.time()
+            if self.streaming_orchestrator:
+                self.streaming_orchestrator.update_agent_status(voter_id, 'voted')
+                self.streaming_orchestrator.update_agent_vote_target(voter_id, target_id)
+                update_count = len(self.agent_states[voter_id].updated_answers)
+                self.streaming_orchestrator.update_agent_update_count(voter_id, update_count)
+                for agent_id, agent_state in self.agent_states.items():
+                    vote_cast_count = len(agent_state.cast_votes)
+                    self.streaming_orchestrator.update_agent_votes_cast(agent_id, vote_cast_count)
+                vote_counts = self._get_current_vote_counts()
+                self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
+                vote_msg = f'👍 Agent {voter_id} voted for Agent {target_id}'
+                self.streaming_orchestrator.add_system_message(vote_msg)
+            if self.log_manager:
+                self.log_manager.log_voting_event(voter_id=voter_id, target_id=target_id, phase=self.system_state.phase, reason=reason, orchestrator=self)
+                self.log_manager.log_agent_status_change(agent_id=voter_id, old_status=old_status, new_status='voted', phase=self.system_state.phase)
+            vote_counts = self._get_current_vote_counts()
+            voted_agents_count = self._get_current_voted_agents_count()
+            logger.info(f'   📊 Vote distribution: {dict(vote_counts)}')
+            logger.info(f'   📈 Voting progress: {voted_agents_count}/{len(self.agent_states)} agents voted')
+            total_agents = len(self.agent_states)
+            votes_needed = max(1, int(total_agents * self.consensus_threshold))
+            if vote_counts:
+                leading_agent, leading_votes = vote_counts.most_common(1)[0]
+                logger.info(f'   🏆 Leading: Agent {leading_agent} with {leading_votes} votes (need {votes_needed} for consensus)')
+            self._log_event('vote_cast', {'voter_id': voter_id, 'target_id': target_id, 'timestamp': vote.timestamp, 'vote_distribution': dict(vote_counts), 'total_votes': voted_agents_count})
+
+    def notify_answer_update(self, agent_id: int, answer: str):
+        """
+        Called when an agent updates their answer.
+        This should restart all voted agents who haven't seen this update yet.
+        """
+        logger.info(f'📢 Agent {agent_id} updated answer')
+        self.update_agent_answer(agent_id, answer)
+        if self.streaming_orchestrator:
+            answer_msg = f'📝 Agent {agent_id} updated answer ({len(answer)} chars)'
+            self.streaming_orchestrator.add_system_message(answer_msg)
+            update_count = len(self.agent_states[agent_id].updated_answers)
+            self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
+        with self._lock:
+            restarted_agents = []
+            time.time()
+            for other_agent_id, state in self.agent_states.items():
+                if other_agent_id != agent_id and state.status == 'voted':
+                    state.status = 'working'
+                    state.curr_vote = None
+                    state.execution_start_time = time.time()
+                    restarted_agents.append(other_agent_id)
+                    logger.info(f'🔄 Agent {other_agent_id} restarted due to update from Agent {agent_id}')
+                    if self.streaming_orchestrator:
+                        self.streaming_orchestrator.update_agent_status(other_agent_id, 'working')
+                        self.streaming_orchestrator.update_agent_vote_target(other_agent_id, None)
+                        update_count = len(self.agent_states[other_agent_id].updated_answers)
+                        self.streaming_orchestrator.update_agent_update_count(other_agent_id, update_count)
+                        restart_msg = f'🔄 Agent {other_agent_id} restarted due to new update'
+                        self.streaming_orchestrator.add_system_message(restart_msg)
+                    if self.log_manager:
+                        self.log_manager.log_agent_restart(agent_id=other_agent_id, reason=f'new_update_from_agent_{agent_id}', phase=self.system_state.phase)
+            if restarted_agents:
+                logger.info(f'🔄 Restarted agents: {restarted_agents}')
+                if self.streaming_orchestrator:
+                    vote_counts = self._get_current_vote_counts()
+                    self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
+                    for agent_id, agent_state in self.agent_states.items():
+                        vote_cast_count = len(agent_state.cast_votes)
+                        self.streaming_orchestrator.update_agent_votes_cast(agent_id, vote_cast_count)
+            return restarted_agents
+
+    def _check_consensus(self) -> bool:
+        """
+        Check if consensus has been reached based on current votes.
+        Improved to handle edge cases and ensure proper consensus calculation.
+        """
+        with self._lock:
+            total_agents = len(self.agents)
+            failed_agents_count = len([s for s in self.agent_states.values() if s.status == 'failed'])
+            votable_agents_count = total_agents - failed_agents_count
+            if votable_agents_count == 0:
+                logger.warning('⚠️ No votable agents available for consensus')
+                return False
+            if votable_agents_count == 1:
+                working_agents = [aid for aid, state in self.agent_states.items() if state.status == 'working']
+                if not working_agents:
+                    votable_agent = [aid for aid, state in self.agent_states.items() if state.status != 'failed'][0]
+                    logger.info(f'🎯 Single agent consensus: Agent {votable_agent}')
+                    self._reach_consensus(votable_agent)
+                    return True
+                return False
+            vote_counts = self._get_current_vote_counts()
+            votes_needed = max(1, int(votable_agents_count * self.consensus_threshold))
+            if vote_counts and vote_counts.most_common(1)[0][1] >= votes_needed:
+                winning_agent_id = vote_counts.most_common(1)[0][0]
+                winning_votes = vote_counts.most_common(1)[0][1]
+                if self.agent_states[winning_agent_id].status == 'failed':
+                    logger.warning(f'⚠️ Winning agent {winning_agent_id} has failed - recalculating')
+                    return False
+                logger.info(f'✅ Consensus reached: Agent {winning_agent_id} with {winning_votes}/{votable_agents_count} votes')
+                self._reach_consensus(winning_agent_id)
+                return True
+            return False
+
+    def mark_agent_failed(self, agent_id: int, reason: str=''):
+        """
+        Mark an agent as failed.
+
+        Args:
+            agent_id: ID of the agent to mark as failed
+            reason: Optional reason for the failure
+        """
+        with self._lock:
+            logger.info(f'💥 AGENT FAILURE: Agent {agent_id} marked as failed')
+            print(f'      💥 MARK_FAILED: Agent {agent_id}')
+            print(f'      📊 Current phase: {self.system_state.phase}')
+            if agent_id not in self.agent_states:
+                logger.error(f'   ❌ Invalid agent: Agent {agent_id} not registered')
+                raise ValueError(f'Agent {agent_id} not registered')
+            old_status = self.agent_states[agent_id].status
+            self.agent_states[agent_id].status = 'failed'
+            self.agent_states[agent_id].execution_end_time = time.time()
+            if self.streaming_orchestrator:
+                self.streaming_orchestrator.update_agent_status(agent_id, 'failed')
+                failure_msg = f'💥 Agent {agent_id} failed: {reason}' if reason else f'💥 Agent {agent_id} failed'
+                self.streaming_orchestrator.add_system_message(failure_msg)
+            if self.log_manager:
+                self.log_manager.log_agent_status_change(agent_id=agent_id, old_status=old_status, new_status='failed', phase=self.system_state.phase)
+            self._log_event('agent_failed', {'agent_id': agent_id, 'reason': reason, 'timestamp': time.time(), 'old_status': old_status})
+            status_counts = Counter((state.status for state in self.agent_states.values()))
+            logger.info(f'   📊 Status distribution: {dict(status_counts)}')
+            logger.info(f'   📈 Failed agents: {status_counts.get('failed', 0)}/{len(self.agent_states)} total')
+
+    def _reach_consensus(self, winning_agent_id: int):
+        """Mark consensus as reached and finalize the system."""
+        old_phase = self.system_state.phase
+        self.system_state.consensus_reached = True
+        self.system_state.representative_agent_id = winning_agent_id
+        self.system_state.phase = 'consensus'
+        if self.streaming_orchestrator:
+            vote_distribution = dict(self._get_current_vote_counts())
+            self.streaming_orchestrator.update_consensus_status(winning_agent_id, vote_distribution)
+            self.streaming_orchestrator.update_phase(old_phase, 'consensus')
+        if self.log_manager:
+            vote_distribution = dict(self._get_current_vote_counts())
+            self.log_manager.log_consensus_reached(winning_agent_id=winning_agent_id, vote_distribution=vote_distribution, is_fallback=False, phase=self.system_state.phase)
+            self.log_manager.log_phase_transition(old_phase=old_phase, new_phase='consensus', additional_data={'consensus_reached': True, 'winning_agent_id': winning_agent_id, 'is_fallback': False})
+        self._log_event('consensus_reached', {'winning_agent_id': winning_agent_id, 'fallback_to_majority': False, 'final_vote_distribution': dict(self._get_current_vote_counts())})
+
+    def export_detailed_session_log(self) -> Dict[str, Any]:
+        """
+        Export complete detailed session information for comprehensive analysis.
+        Includes all outputs, metrics, and evaluation results.
+        """
+        session_log = {'session_metadata': {'session_id': f'mass_session_{int(self.system_state.start_time)}' if self.system_state.start_time else None, 'start_time': self.system_state.start_time, 'end_time': self.system_state.end_time, 'total_duration': self.system_state.end_time - self.system_state.start_time if self.system_state.start_time and self.system_state.end_time else None, 'timestamp': datetime.now().isoformat(), 'system_version': 'MassGen v1.0'}, 'task_information': {'question': self.system_state.task.question if self.system_state.task else None, 'task_id': self.system_state.task.task_id if self.system_state.task else None, 'context': self.system_state.task.context if self.system_state.task else None}, 'system_configuration': {'max_duration': self.max_duration, 'consensus_threshold': self.consensus_threshold, 'max_debate_rounds': self.max_debate_rounds, 'agents': [agent.model for agent in self.agents.values()]}, 'agent_details': {agent_id: {'status': state.status, 'updates_count': len(state.updated_answers), 'chat_length': len(state.chat_history), 'chat_round': state.chat_round, 'vote_target': state.curr_vote.target_id if state.curr_vote else None, 'execution_time': state.execution_time, 'execution_start_time': state.execution_start_time, 'execution_end_time': state.execution_end_time, 'updated_answers': [{'timestamp': update.timestamp, 'status': update.status, 'answer_length': len(update.answer)} for update in state.updated_answers]} for agent_id, state in self.agent_states.items()}, 'voting_analysis': {'vote_records': [{'voter_id': vote.voter_id, 'target_id': vote.target_id, 'timestamp': vote.timestamp, 'reason_length': len(vote.reason) if vote.reason else 0} for vote in self.votes], 'vote_timeline': [{'timestamp': vote.timestamp, 'event': f'Agent {vote.voter_id} → Agent {vote.target_id}'} for vote in self.votes]}, 'communication_log': self.communication_log, 'system_events': [{'timestamp': entry['timestamp'], 'event_type': entry['event_type'], 'data_summary': {k: len(v) if isinstance(v, (str, list, dict)) else v for k, v in entry['data'].items()}} for entry in self.communication_log]}
+        return session_log
+
+    def start_task(self, task: TaskInput):
+        """
+        Initialize the system for a new task and run the main workflow.
+
+        Args:
+            task: TaskInput containing the problem to solve
+
+        Returns:
+            response: Dict[str, Any] containing the final answer to the task's question, and relevant information
+        """
+        with self._lock:
+            logger.info('🎯 ORCHESTRATOR: Starting new task')
+            logger.info(f'   Task ID: {task.task_id}')
+            logger.info(f'   Question preview: {task.question}')
+            logger.info(f'   Registered agents: {list(self.agents.keys())}')
+            logger.info(f'   Max duration: {self.max_duration}')
+            logger.info(f'   Consensus threshold: {self.consensus_threshold}')
+            self.system_state.task = task
+            self.system_state.start_time = time.time()
+            self.system_state.phase = 'collaboration'
+            self.final_response = None
+            for agent_id, agent in self.agents.items():
+                agent.state = AgentState(agent_id=agent_id)
+                self.agent_states[agent_id] = agent.state
+                agent.state.chat_history = []
+                if self.streaming_orchestrator:
+                    self.streaming_orchestrator.set_agent_model(agent_id, agent.model)
+                    self.streaming_orchestrator.update_agent_status(agent_id, 'working')
+                    self.streaming_orchestrator.update_agent_update_count(agent_id, 0)
+            self.votes.clear()
+            self.communication_log.clear()
+            if self.streaming_orchestrator:
+                self.streaming_orchestrator.update_phase('unknown', 'collaboration')
+                self.streaming_orchestrator.update_debate_rounds(0)
+                init_msg = f'🚀 Starting MassGen task with {len(self.agents)} agents'
+                self.streaming_orchestrator.add_system_message(init_msg)
+            self._log_event('task_started', {'task_id': task.task_id, 'question': task.question})
+            logger.info('✅ Task initialization completed successfully')
+        return self._run_mass_workflow(task)
+
+    def _run_mass_workflow(self, task: TaskInput) -> Dict[str, Any]:
+        """
+        Run the MassGen workflow with dynamic agent restart support:
+        1. All agents work in parallel
+        2. Agents restart when others share updates (if they had voted)
+        3. When all have voted, check consensus
+        4. If no consensus, restart all for debate
+        5. If consensus, representative presents final answer
+        """
+        logger.info('🚀 Starting MassGen workflow')
+        debate_rounds = 0
+        start_time = time.time()
+        while not self._stop_event.is_set():
+            if time.time() - start_time > self.max_duration:
+                logger.warning('⏰ Maximum duration reached - forcing consensus')
+                self._force_consensus_by_timeout()
+                self._present_final_answer(task)
+                break
+            logger.info(f'📢 Starting collaboration round {debate_rounds + 1}')
+            self._run_all_agents_with_dynamic_restart(task)
+            if self._all_agents_voted():
+                logger.info('🗳️ All agents have voted - checking consensus')
+                if self._check_consensus():
+                    logger.info('🎉 Consensus reached!')
+                    self._present_final_answer(task)
+                    break
+                else:
+                    debate_rounds += 1
+                    if self.streaming_orchestrator:
+                        self.streaming_orchestrator.update_debate_rounds(debate_rounds)
+                    if debate_rounds > self.max_debate_rounds:
+                        logger.warning(f'⚠️ Maximum debate rounds ({self.max_debate_rounds}) reached')
+                        self._force_consensus_by_timeout()
+                        self._present_final_answer(task)
+                        break
+                    logger.info(f'🗣️ No consensus - starting debate round {debate_rounds}')
+                    self._restart_all_agents_for_debate()
+            else:
+                time.sleep(self.status_check_interval)
+        return self._finalize_session()
+
+    def _run_all_agents_with_dynamic_restart(self, task: TaskInput):
+        """
+        Run all agents in parallel with support for dynamic restarts.
+        This approach handles agents restarting mid-execution.
+        """
+        active_futures = {}
+        executor = ThreadPoolExecutor(max_workers=len(self.agents))
+        try:
+            for agent_id in self.agents.keys():
+                if self.agent_states[agent_id].status not in ['failed']:
+                    self._start_agent_if_working(agent_id, task, executor, active_futures)
+            while active_futures and (not self._all_agents_voted()):
+                completed_futures = []
+                for agent_id, future in list(active_futures.items()):
+                    if future.done():
+                        completed_futures.append(agent_id)
+                        try:
+                            future.result()
+                        except Exception as e:
+                            logger.error(f'❌ Agent {agent_id} failed: {e}')
+                            self.mark_agent_failed(agent_id, str(e))
+                for agent_id in completed_futures:
+                    del active_futures[agent_id]
+                for agent_id in self.agents.keys():
+                    if agent_id not in active_futures and self.agent_states[agent_id].status == 'working':
+                        self._start_agent_if_working(agent_id, task, executor, active_futures)
+                time.sleep(0.1)
+        finally:
+            for future in active_futures.values():
+                future.cancel()
+            executor.shutdown(wait=True)
+
+    def _start_agent_if_working(self, agent_id: int, task: TaskInput, executor: ThreadPoolExecutor, active_futures: Dict):
+        """Start an agent if it's in working status and not already running."""
+        if self.agent_states[agent_id].status == 'working' and agent_id not in active_futures:
+            self.agent_states[agent_id].execution_start_time = time.time()
+            future = executor.submit(self._run_single_agent, agent_id, task)
+            active_futures[agent_id] = future
+            logger.info(f'🤖 Agent {agent_id} started/restarted')
+
+    def _run_single_agent(self, agent_id: int, task: TaskInput):
+        """Run a single agent's work_on_task method."""
+        agent = self.agents[agent_id]
+        try:
+            logger.info(f'🤖 Agent {agent_id} starting work')
+            updated_messages = agent.work_on_task(task)
+            self.agent_states[agent_id].chat_history.append(updated_messages)
+            self.agent_states[agent_id].chat_round = agent.state.chat_round
+            if self.streaming_orchestrator:
+                self.streaming_orchestrator.update_agent_chat_round(agent_id, agent.state.chat_round)
+                update_count = len(self.agent_states[agent_id].updated_answers)
+                self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
+            logger.info(f'✅ Agent {agent_id} completed work with status: {self.agent_states[agent_id].status}')
+        except Exception as e:
+            logger.error(f'❌ Agent {agent_id} failed: {e}')
+            self.mark_agent_failed(agent_id, str(e))
+
+    def _all_agents_voted(self) -> bool:
+        """Check if all votable agents have voted."""
+        votable_agents = [aid for aid, state in self.agent_states.items() if state.status not in ['failed']]
+        voted_agents = [aid for aid, state in self.agent_states.items() if state.status == 'voted']
+        return len(voted_agents) == len(votable_agents) and len(votable_agents) > 0
+
+    def _restart_all_agents_for_debate(self):
+        """
+        Restart all agents for debate by resetting their status
+        We don't clear vote target when restarting for debate as answers are not updated
+        """
+        logger.info('🔄 Restarting all agents for debate')
+        with self._lock:
+            if self.streaming_orchestrator:
+                self.streaming_orchestrator.reset_consensus()
+                self.streaming_orchestrator.update_phase(self.system_state.phase, 'collaboration')
+                self.streaming_orchestrator.add_system_message('🗣️ Starting debate phase - no consensus reached')
+            if self.log_manager:
+                self.log_manager.log_debate_started(phase='collaboration')
+                self.log_manager.log_phase_transition(old_phase=self.system_state.phase, new_phase='collaboration', additional_data={'reason': 'no_consensus_reached', 'debate_round': True})
+            for agent_id, state in self.agent_states.items():
+                if state.status not in ['failed']:
+                    state.status
+                    state.status = 'working'
+                    if self.streaming_orchestrator:
+                        self.streaming_orchestrator.update_agent_status(agent_id, 'working')
+                    if self.log_manager:
+                        self.log_manager.log_agent_restart(agent_id=agent_id, reason='debate_phase_restart', phase='collaboration')
+            self.system_state.phase = 'collaboration'
+
+    def _present_final_answer(self, task: TaskInput):
+        """
+        Run the final presentation by the representative agent.
+        """
+        representative_id = self.system_state.representative_agent_id
+        if not representative_id:
+            logger.error('No representative agent selected')
+            return
+        logger.info(f'🎯 Agent {representative_id} presenting final answer')
+        try:
+            representative_agent = self.agents[representative_id]
+            _, user_input = representative_agent._get_task_input(task)
+            messages = [{'role': 'system', 'content': "\nYou are given a task and multiple agents' answers and their votes.\nPlease incorporate these information and provide a final BEST answer to the original message.\n"}, {'role': 'user', 'content': user_input + '\nPlease provide the final BEST answer to the original message by incorporating these information.\nThe final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.\n'}]
+            result = representative_agent.process_message(messages)
+            self.final_response = result.text
+            self.system_state.phase = 'completed'
+            self.system_state.end_time = time.time()
+            logger.info(f'✅ Final presentation completed by Agent {representative_id}')
+        except Exception as e:
+            logger.error(f'❌ Final presentation failed: {e}')
+            self.final_response = f'Error in final presentation: {str(e)}'
+
+    def _force_consensus_by_timeout(self):
+        """
+        Force consensus selection when maximum duration is reached.
+        """
+        logger.warning('⏰ Forcing consensus due to timeout')
+        with self._lock:
+            vote_counts = self._get_current_vote_counts()
+            if vote_counts:
+                winning_agent_id = vote_counts.most_common(1)[0][0]
+                logger.info(f'   Selected Agent {winning_agent_id} with {vote_counts[winning_agent_id]} votes')
+            else:
+                working_agents = [aid for aid, state in self.agent_states.items() if state.status == 'working']
+                winning_agent_id = working_agents[0] if working_agents else list(self.agents.keys())[0]
+                logger.info(f'   No votes - selected Agent {winning_agent_id} as fallback')
+            self._reach_consensus(winning_agent_id)
+
+    def _finalize_session(self) -> Dict[str, Any]:
+        """
+        Finalize the session and return comprehensive results.
+        """
+        logger.info('🏁 Finalizing session')
+        with self._lock:
+            if not self.system_state.end_time:
+                self.system_state.end_time = time.time()
+            session_duration = self.system_state.end_time - self.system_state.start_time if self.system_state.start_time else 0
+            if self.log_manager:
+                self.log_manager.save_agent_states(self)
+                self.log_manager.log_task_completion({'final_answer': self.final_response, 'consensus_reached': self.system_state.consensus_reached, 'representative_agent_id': self.system_state.representative_agent_id, 'session_duration': session_duration})
+            result = {'answer': self.final_response or 'No final answer generated', 'consensus_reached': self.system_state.consensus_reached, 'representative_agent_id': self.system_state.representative_agent_id, 'session_duration': session_duration, 'summary': {'total_agents': len(self.agents), 'failed_agents': len([s for s in self.agent_states.values() if s.status == 'failed']), 'total_votes': len(self.votes), 'final_vote_distribution': dict(self._get_current_vote_counts())}, 'system_logs': self.export_detailed_session_log()}
+            if self.log_manager and (not self.log_manager.non_blocking):
+                try:
+                    result_file = self.log_manager.session_dir / 'result.json'
+                    with open(result_file, 'w', encoding='utf-8') as f:
+                        json.dump(result, f, indent=2, ensure_ascii=False, default=str)
+                    logger.info(f'💾 Result saved to {result_file}')
+                except Exception as e:
+                    logger.warning(f'⚠️ Failed to save result.json: {e}')
+            logger.info(f'✅ Session completed in {session_duration:.2f} seconds')
+            logger.info(f'   Consensus: {result['consensus_reached']}')
+            logger.info(f'   Representative: Agent {result['representative_agent_id']}')
+            return result
+
+    def cleanup(self):
+        """
+        Clean up resources and stop all agents.
+        """
+        logger.info('🧹 Cleaning up orchestrator resources')
+        self._stop_event.set()
+        if self.log_manager and self.agent_states:
+            try:
+                self.log_manager.save_agent_states(self)
+                logger.info('✅ Final agent states saved')
+            except Exception as e:
+                logger.warning(f'⚠️ Error saving final agent states: {e}')
+        if self.log_manager:
+            try:
+                self.log_manager.cleanup()
+                logger.info('✅ Log manager cleaned up')
+            except Exception as e:
+                logger.warning(f'⚠️ Error cleaning up log manager: {e}')
+        if self.streaming_orchestrator:
+            try:
+                self.streaming_orchestrator.cleanup()
+                logger.info('✅ Streaming orchestrator cleaned up')
+            except Exception as e:
+                logger.warning(f'⚠️ Error cleaning up streaming orchestrator: {e}')
+        logger.info('✅ Orchestrator cleanup completed')
+
+def _log_event(self, event_type: str, data: Dict[str, Any]):
+    """Log an orchestrator event."""
+    self.communication_log.append({'timestamp': time.time(), 'event_type': event_type, 'data': data})
+
+def update_agent_answer(self, agent_id: int, answer: str):
+    """
+        Update an agent's running answer.
+
+        Args:
+            agent_id: ID of the agent updating their answer
+            answer: New answer content
+        """
+    with self._lock:
+        if agent_id not in self.agent_states:
+            raise ValueError(f'Agent {agent_id} not registered')
+        old_answer_length = len(self.agent_states[agent_id].curr_answer)
+        self.agent_states[agent_id].add_update(answer)
+        preview = answer[:100] + '...' if len(answer) > 100 else answer
+        print(f'📝 Agent {agent_id} answer updated ({old_answer_length} → {len(answer)} chars)')
+        print(f'   🔍 {preview}')
+        if self.log_manager:
+            self.log_manager.log_agent_answer_update(agent_id=agent_id, answer=answer, phase=self.system_state.phase, orchestrator=self)
+        self._log_event('answer_updated', {'agent_id': agent_id, 'answer': answer, 'timestamp': time.time()})
+
+def _get_voting_status(self) -> Dict[str, Any]:
+    """Get current voting status and distribution."""
+    vote_counts = self._get_current_vote_counts()
+    total_agents = len(self.agents)
+    failed_agents = len([s for s in self.agent_states.values() if s.status == 'failed'])
+    votable_agents = total_agents - failed_agents
+    voted_agents = self._get_current_voted_agents_count()
+    return {'vote_distribution': dict(vote_counts), 'total_agents': total_agents, 'failed_agents': failed_agents, 'votable_agents': votable_agents, 'voted_agents': voted_agents, 'votes_needed_for_consensus': max(1, int(votable_agents * self.consensus_threshold)), 'leading_agent': vote_counts.most_common(1)[0] if vote_counts else None}
+
+def cast_vote(self, voter_id: int, target_id: int, reason: str=''):
+    """
+        Record a vote from one agent for another agent's solution.
+
+        Args:
+            voter_id: ID of the agent casting the vote
+            target_id: ID of the agent being voted for
+            reason: The reason for the vote (optional)
+        """
+    with self._lock:
+        logger.info(f'🗳️ VOTING: Agent {voter_id} casting vote')
+        print(f'🗳️  VOTE: Agent {voter_id} → Agent {target_id} ({self.system_state.phase})')
+        if reason:
+            print(f'   📝 Voting reason: {len(reason)} chars')
+        if voter_id not in self.agent_states:
+            logger.error(f'   ❌ Invalid voter: Agent {voter_id} not registered')
+            raise ValueError(f'Voter agent {voter_id} not registered')
+        if target_id not in self.agent_states:
+            logger.error(f'   ❌ Invalid target: Agent {target_id} not registered')
+            raise ValueError(f'Target agent {target_id} not registered')
+        previous_vote = self.agent_states[voter_id].curr_vote
+        if previous_vote:
+            logger.info(f'   🔄 Agent {voter_id} changed vote from Agent {previous_vote.target_id} to Agent {target_id}')
+        else:
+            logger.info(f'   ✨ Agent {voter_id} new vote for Agent {target_id}')
+        vote = VoteRecord(voter_id=voter_id, target_id=target_id, reason=reason, timestamp=time.time())
+        self.votes.append(vote)
+        old_status = self.agent_states[voter_id].status
+        self.agent_states[voter_id].status = 'voted'
+        self.agent_states[voter_id].curr_vote = vote
+        self.agent_states[voter_id].cast_votes.append(vote)
+        self.agent_states[voter_id].execution_end_time = time.time()
+        if self.streaming_orchestrator:
+            self.streaming_orchestrator.update_agent_status(voter_id, 'voted')
+            self.streaming_orchestrator.update_agent_vote_target(voter_id, target_id)
+            update_count = len(self.agent_states[voter_id].updated_answers)
+            self.streaming_orchestrator.update_agent_update_count(voter_id, update_count)
+            for agent_id, agent_state in self.agent_states.items():
+                vote_cast_count = len(agent_state.cast_votes)
+                self.streaming_orchestrator.update_agent_votes_cast(agent_id, vote_cast_count)
+            vote_counts = self._get_current_vote_counts()
+            self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
+            vote_msg = f'👍 Agent {voter_id} voted for Agent {target_id}'
+            self.streaming_orchestrator.add_system_message(vote_msg)
+        if self.log_manager:
+            self.log_manager.log_voting_event(voter_id=voter_id, target_id=target_id, phase=self.system_state.phase, reason=reason, orchestrator=self)
+            self.log_manager.log_agent_status_change(agent_id=voter_id, old_status=old_status, new_status='voted', phase=self.system_state.phase)
+        vote_counts = self._get_current_vote_counts()
+        voted_agents_count = self._get_current_voted_agents_count()
+        logger.info(f'   📊 Vote distribution: {dict(vote_counts)}')
+        logger.info(f'   📈 Voting progress: {voted_agents_count}/{len(self.agent_states)} agents voted')
+        total_agents = len(self.agent_states)
+        votes_needed = max(1, int(total_agents * self.consensus_threshold))
+        if vote_counts:
+            leading_agent, leading_votes = vote_counts.most_common(1)[0]
+            logger.info(f'   🏆 Leading: Agent {leading_agent} with {leading_votes} votes (need {votes_needed} for consensus)')
+        self._log_event('vote_cast', {'voter_id': voter_id, 'target_id': target_id, 'timestamp': vote.timestamp, 'vote_distribution': dict(vote_counts), 'total_votes': voted_agents_count})
+
+def notify_answer_update(self, agent_id: int, answer: str):
+    """
+        Called when an agent updates their answer.
+        This should restart all voted agents who haven't seen this update yet.
+        """
+    logger.info(f'📢 Agent {agent_id} updated answer')
+    self.update_agent_answer(agent_id, answer)
+    if self.streaming_orchestrator:
+        answer_msg = f'📝 Agent {agent_id} updated answer ({len(answer)} chars)'
+        self.streaming_orchestrator.add_system_message(answer_msg)
+        update_count = len(self.agent_states[agent_id].updated_answers)
+        self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
+    with self._lock:
+        restarted_agents = []
+        time.time()
+        for other_agent_id, state in self.agent_states.items():
+            if other_agent_id != agent_id and state.status == 'voted':
+                state.status = 'working'
+                state.curr_vote = None
+                state.execution_start_time = time.time()
+                restarted_agents.append(other_agent_id)
+                logger.info(f'🔄 Agent {other_agent_id} restarted due to update from Agent {agent_id}')
+                if self.streaming_orchestrator:
+                    self.streaming_orchestrator.update_agent_status(other_agent_id, 'working')
+                    self.streaming_orchestrator.update_agent_vote_target(other_agent_id, None)
+                    update_count = len(self.agent_states[other_agent_id].updated_answers)
+                    self.streaming_orchestrator.update_agent_update_count(other_agent_id, update_count)
+                    restart_msg = f'🔄 Agent {other_agent_id} restarted due to new update'
+                    self.streaming_orchestrator.add_system_message(restart_msg)
+                if self.log_manager:
+                    self.log_manager.log_agent_restart(agent_id=other_agent_id, reason=f'new_update_from_agent_{agent_id}', phase=self.system_state.phase)
+        if restarted_agents:
+            logger.info(f'🔄 Restarted agents: {restarted_agents}')
+            if self.streaming_orchestrator:
+                vote_counts = self._get_current_vote_counts()
+                self.streaming_orchestrator.update_vote_distribution(dict(vote_counts))
+                for agent_id, agent_state in self.agent_states.items():
+                    vote_cast_count = len(agent_state.cast_votes)
+                    self.streaming_orchestrator.update_agent_votes_cast(agent_id, vote_cast_count)
+        return restarted_agents
+
+def _check_consensus(self) -> bool:
+    """
+        Check if consensus has been reached based on current votes.
+        Improved to handle edge cases and ensure proper consensus calculation.
+        """
+    with self._lock:
+        total_agents = len(self.agents)
+        failed_agents_count = len([s for s in self.agent_states.values() if s.status == 'failed'])
+        votable_agents_count = total_agents - failed_agents_count
+        if votable_agents_count == 0:
+            logger.warning('⚠️ No votable agents available for consensus')
+            return False
+        if votable_agents_count == 1:
+            working_agents = [aid for aid, state in self.agent_states.items() if state.status == 'working']
+            if not working_agents:
+                votable_agent = [aid for aid, state in self.agent_states.items() if state.status != 'failed'][0]
+                logger.info(f'🎯 Single agent consensus: Agent {votable_agent}')
+                self._reach_consensus(votable_agent)
+                return True
+            return False
+        vote_counts = self._get_current_vote_counts()
+        votes_needed = max(1, int(votable_agents_count * self.consensus_threshold))
+        if vote_counts and vote_counts.most_common(1)[0][1] >= votes_needed:
+            winning_agent_id = vote_counts.most_common(1)[0][0]
+            winning_votes = vote_counts.most_common(1)[0][1]
+            if self.agent_states[winning_agent_id].status == 'failed':
+                logger.warning(f'⚠️ Winning agent {winning_agent_id} has failed - recalculating')
+                return False
+            logger.info(f'✅ Consensus reached: Agent {winning_agent_id} with {winning_votes}/{votable_agents_count} votes')
+            self._reach_consensus(winning_agent_id)
+            return True
+        return False
+
+def mark_agent_failed(self, agent_id: int, reason: str=''):
+    """
+        Mark an agent as failed.
+
+        Args:
+            agent_id: ID of the agent to mark as failed
+            reason: Optional reason for the failure
+        """
+    with self._lock:
+        logger.info(f'💥 AGENT FAILURE: Agent {agent_id} marked as failed')
+        print(f'      💥 MARK_FAILED: Agent {agent_id}')
+        print(f'      📊 Current phase: {self.system_state.phase}')
+        if agent_id not in self.agent_states:
+            logger.error(f'   ❌ Invalid agent: Agent {agent_id} not registered')
+            raise ValueError(f'Agent {agent_id} not registered')
+        old_status = self.agent_states[agent_id].status
+        self.agent_states[agent_id].status = 'failed'
+        self.agent_states[agent_id].execution_end_time = time.time()
+        if self.streaming_orchestrator:
+            self.streaming_orchestrator.update_agent_status(agent_id, 'failed')
+            failure_msg = f'💥 Agent {agent_id} failed: {reason}' if reason else f'💥 Agent {agent_id} failed'
+            self.streaming_orchestrator.add_system_message(failure_msg)
+        if self.log_manager:
+            self.log_manager.log_agent_status_change(agent_id=agent_id, old_status=old_status, new_status='failed', phase=self.system_state.phase)
+        self._log_event('agent_failed', {'agent_id': agent_id, 'reason': reason, 'timestamp': time.time(), 'old_status': old_status})
+        status_counts = Counter((state.status for state in self.agent_states.values()))
+        logger.info(f'   📊 Status distribution: {dict(status_counts)}')
+        logger.info(f'   📈 Failed agents: {status_counts.get('failed', 0)}/{len(self.agent_states)} total')
+
+def _reach_consensus(self, winning_agent_id: int):
+    """Mark consensus as reached and finalize the system."""
+    old_phase = self.system_state.phase
+    self.system_state.consensus_reached = True
+    self.system_state.representative_agent_id = winning_agent_id
+    self.system_state.phase = 'consensus'
+    if self.streaming_orchestrator:
+        vote_distribution = dict(self._get_current_vote_counts())
+        self.streaming_orchestrator.update_consensus_status(winning_agent_id, vote_distribution)
+        self.streaming_orchestrator.update_phase(old_phase, 'consensus')
+    if self.log_manager:
+        vote_distribution = dict(self._get_current_vote_counts())
+        self.log_manager.log_consensus_reached(winning_agent_id=winning_agent_id, vote_distribution=vote_distribution, is_fallback=False, phase=self.system_state.phase)
+        self.log_manager.log_phase_transition(old_phase=old_phase, new_phase='consensus', additional_data={'consensus_reached': True, 'winning_agent_id': winning_agent_id, 'is_fallback': False})
+    self._log_event('consensus_reached', {'winning_agent_id': winning_agent_id, 'fallback_to_majority': False, 'final_vote_distribution': dict(self._get_current_vote_counts())})
+
+def export_detailed_session_log(self) -> Dict[str, Any]:
+    """
+        Export complete detailed session information for comprehensive analysis.
+        Includes all outputs, metrics, and evaluation results.
+        """
+    session_log = {'session_metadata': {'session_id': f'mass_session_{int(self.system_state.start_time)}' if self.system_state.start_time else None, 'start_time': self.system_state.start_time, 'end_time': self.system_state.end_time, 'total_duration': self.system_state.end_time - self.system_state.start_time if self.system_state.start_time and self.system_state.end_time else None, 'timestamp': datetime.now().isoformat(), 'system_version': 'MassGen v1.0'}, 'task_information': {'question': self.system_state.task.question if self.system_state.task else None, 'task_id': self.system_state.task.task_id if self.system_state.task else None, 'context': self.system_state.task.context if self.system_state.task else None}, 'system_configuration': {'max_duration': self.max_duration, 'consensus_threshold': self.consensus_threshold, 'max_debate_rounds': self.max_debate_rounds, 'agents': [agent.model for agent in self.agents.values()]}, 'agent_details': {agent_id: {'status': state.status, 'updates_count': len(state.updated_answers), 'chat_length': len(state.chat_history), 'chat_round': state.chat_round, 'vote_target': state.curr_vote.target_id if state.curr_vote else None, 'execution_time': state.execution_time, 'execution_start_time': state.execution_start_time, 'execution_end_time': state.execution_end_time, 'updated_answers': [{'timestamp': update.timestamp, 'status': update.status, 'answer_length': len(update.answer)} for update in state.updated_answers]} for agent_id, state in self.agent_states.items()}, 'voting_analysis': {'vote_records': [{'voter_id': vote.voter_id, 'target_id': vote.target_id, 'timestamp': vote.timestamp, 'reason_length': len(vote.reason) if vote.reason else 0} for vote in self.votes], 'vote_timeline': [{'timestamp': vote.timestamp, 'event': f'Agent {vote.voter_id} → Agent {vote.target_id}'} for vote in self.votes]}, 'communication_log': self.communication_log, 'system_events': [{'timestamp': entry['timestamp'], 'event_type': entry['event_type'], 'data_summary': {k: len(v) if isinstance(v, (str, list, dict)) else v for k, v in entry['data'].items()}} for entry in self.communication_log]}
+    return session_log
+
+def start_task(self, task: TaskInput):
+    """
+        Initialize the system for a new task and run the main workflow.
+
+        Args:
+            task: TaskInput containing the problem to solve
+
+        Returns:
+            response: Dict[str, Any] containing the final answer to the task's question, and relevant information
+        """
+    with self._lock:
+        logger.info('🎯 ORCHESTRATOR: Starting new task')
+        logger.info(f'   Task ID: {task.task_id}')
+        logger.info(f'   Question preview: {task.question}')
+        logger.info(f'   Registered agents: {list(self.agents.keys())}')
+        logger.info(f'   Max duration: {self.max_duration}')
+        logger.info(f'   Consensus threshold: {self.consensus_threshold}')
+        self.system_state.task = task
+        self.system_state.start_time = time.time()
+        self.system_state.phase = 'collaboration'
+        self.final_response = None
+        for agent_id, agent in self.agents.items():
+            agent.state = AgentState(agent_id=agent_id)
+            self.agent_states[agent_id] = agent.state
+            agent.state.chat_history = []
+            if self.streaming_orchestrator:
+                self.streaming_orchestrator.set_agent_model(agent_id, agent.model)
+                self.streaming_orchestrator.update_agent_status(agent_id, 'working')
+                self.streaming_orchestrator.update_agent_update_count(agent_id, 0)
+        self.votes.clear()
+        self.communication_log.clear()
+        if self.streaming_orchestrator:
+            self.streaming_orchestrator.update_phase('unknown', 'collaboration')
+            self.streaming_orchestrator.update_debate_rounds(0)
+            init_msg = f'🚀 Starting MassGen task with {len(self.agents)} agents'
+            self.streaming_orchestrator.add_system_message(init_msg)
+        self._log_event('task_started', {'task_id': task.task_id, 'question': task.question})
+        logger.info('✅ Task initialization completed successfully')
+    return self._run_mass_workflow(task)
+
+def _run_mass_workflow(self, task: TaskInput) -> Dict[str, Any]:
+    """
+        Run the MassGen workflow with dynamic agent restart support:
+        1. All agents work in parallel
+        2. Agents restart when others share updates (if they had voted)
+        3. When all have voted, check consensus
+        4. If no consensus, restart all for debate
+        5. If consensus, representative presents final answer
+        """
+    logger.info('🚀 Starting MassGen workflow')
+    debate_rounds = 0
+    start_time = time.time()
+    while not self._stop_event.is_set():
+        if time.time() - start_time > self.max_duration:
+            logger.warning('⏰ Maximum duration reached - forcing consensus')
+            self._force_consensus_by_timeout()
+            self._present_final_answer(task)
+            break
+        logger.info(f'📢 Starting collaboration round {debate_rounds + 1}')
+        self._run_all_agents_with_dynamic_restart(task)
+        if self._all_agents_voted():
+            logger.info('🗳️ All agents have voted - checking consensus')
+            if self._check_consensus():
+                logger.info('🎉 Consensus reached!')
+                self._present_final_answer(task)
+                break
+            else:
+                debate_rounds += 1
+                if self.streaming_orchestrator:
+                    self.streaming_orchestrator.update_debate_rounds(debate_rounds)
+                if debate_rounds > self.max_debate_rounds:
+                    logger.warning(f'⚠️ Maximum debate rounds ({self.max_debate_rounds}) reached')
+                    self._force_consensus_by_timeout()
+                    self._present_final_answer(task)
+                    break
+                logger.info(f'🗣️ No consensus - starting debate round {debate_rounds}')
+                self._restart_all_agents_for_debate()
+        else:
+            time.sleep(self.status_check_interval)
+    return self._finalize_session()
+
+def _start_agent_if_working(self, agent_id: int, task: TaskInput, executor: ThreadPoolExecutor, active_futures: Dict):
+    """Start an agent if it's in working status and not already running."""
+    if self.agent_states[agent_id].status == 'working' and agent_id not in active_futures:
+        self.agent_states[agent_id].execution_start_time = time.time()
+        future = executor.submit(self._run_single_agent, agent_id, task)
+        active_futures[agent_id] = future
+        logger.info(f'🤖 Agent {agent_id} started/restarted')
+
+def _run_single_agent(self, agent_id: int, task: TaskInput):
+    """Run a single agent's work_on_task method."""
+    agent = self.agents[agent_id]
+    try:
+        logger.info(f'🤖 Agent {agent_id} starting work')
+        updated_messages = agent.work_on_task(task)
+        self.agent_states[agent_id].chat_history.append(updated_messages)
+        self.agent_states[agent_id].chat_round = agent.state.chat_round
+        if self.streaming_orchestrator:
+            self.streaming_orchestrator.update_agent_chat_round(agent_id, agent.state.chat_round)
+            update_count = len(self.agent_states[agent_id].updated_answers)
+            self.streaming_orchestrator.update_agent_update_count(agent_id, update_count)
+        logger.info(f'✅ Agent {agent_id} completed work with status: {self.agent_states[agent_id].status}')
+    except Exception as e:
+        logger.error(f'❌ Agent {agent_id} failed: {e}')
+        self.mark_agent_failed(agent_id, str(e))
+
+def _restart_all_agents_for_debate(self):
+    """
+        Restart all agents for debate by resetting their status
+        We don't clear vote target when restarting for debate as answers are not updated
+        """
+    logger.info('🔄 Restarting all agents for debate')
+    with self._lock:
+        if self.streaming_orchestrator:
+            self.streaming_orchestrator.reset_consensus()
+            self.streaming_orchestrator.update_phase(self.system_state.phase, 'collaboration')
+            self.streaming_orchestrator.add_system_message('🗣️ Starting debate phase - no consensus reached')
+        if self.log_manager:
+            self.log_manager.log_debate_started(phase='collaboration')
+            self.log_manager.log_phase_transition(old_phase=self.system_state.phase, new_phase='collaboration', additional_data={'reason': 'no_consensus_reached', 'debate_round': True})
+        for agent_id, state in self.agent_states.items():
+            if state.status not in ['failed']:
+                state.status
+                state.status = 'working'
+                if self.streaming_orchestrator:
+                    self.streaming_orchestrator.update_agent_status(agent_id, 'working')
+                if self.log_manager:
+                    self.log_manager.log_agent_restart(agent_id=agent_id, reason='debate_phase_restart', phase='collaboration')
+        self.system_state.phase = 'collaboration'
+
+def _present_final_answer(self, task: TaskInput):
+    """
+        Run the final presentation by the representative agent.
+        """
+    representative_id = self.system_state.representative_agent_id
+    if not representative_id:
+        logger.error('No representative agent selected')
+        return
+    logger.info(f'🎯 Agent {representative_id} presenting final answer')
+    try:
+        representative_agent = self.agents[representative_id]
+        _, user_input = representative_agent._get_task_input(task)
+        messages = [{'role': 'system', 'content': "\nYou are given a task and multiple agents' answers and their votes.\nPlease incorporate these information and provide a final BEST answer to the original message.\n"}, {'role': 'user', 'content': user_input + '\nPlease provide the final BEST answer to the original message by incorporating these information.\nThe final answer must be self-contained, complete, well-sourced, compelling, and ready to serve as the definitive final response.\n'}]
+        result = representative_agent.process_message(messages)
+        self.final_response = result.text
+        self.system_state.phase = 'completed'
+        self.system_state.end_time = time.time()
+        logger.info(f'✅ Final presentation completed by Agent {representative_id}')
+    except Exception as e:
+        logger.error(f'❌ Final presentation failed: {e}')
+        self.final_response = f'Error in final presentation: {str(e)}'
+
+def _force_consensus_by_timeout(self):
+    """
+        Force consensus selection when maximum duration is reached.
+        """
+    logger.warning('⏰ Forcing consensus due to timeout')
+    with self._lock:
+        vote_counts = self._get_current_vote_counts()
+        if vote_counts:
+            winning_agent_id = vote_counts.most_common(1)[0][0]
+            logger.info(f'   Selected Agent {winning_agent_id} with {vote_counts[winning_agent_id]} votes')
+        else:
+            working_agents = [aid for aid, state in self.agent_states.items() if state.status == 'working']
+            winning_agent_id = working_agents[0] if working_agents else list(self.agents.keys())[0]
+            logger.info(f'   No votes - selected Agent {winning_agent_id} as fallback')
+        self._reach_consensus(winning_agent_id)
+
+def _finalize_session(self) -> Dict[str, Any]:
+    """
+        Finalize the session and return comprehensive results.
+        """
+    logger.info('🏁 Finalizing session')
+    with self._lock:
+        if not self.system_state.end_time:
+            self.system_state.end_time = time.time()
+        session_duration = self.system_state.end_time - self.system_state.start_time if self.system_state.start_time else 0
+        if self.log_manager:
+            self.log_manager.save_agent_states(self)
+            self.log_manager.log_task_completion({'final_answer': self.final_response, 'consensus_reached': self.system_state.consensus_reached, 'representative_agent_id': self.system_state.representative_agent_id, 'session_duration': session_duration})
+        result = {'answer': self.final_response or 'No final answer generated', 'consensus_reached': self.system_state.consensus_reached, 'representative_agent_id': self.system_state.representative_agent_id, 'session_duration': session_duration, 'summary': {'total_agents': len(self.agents), 'failed_agents': len([s for s in self.agent_states.values() if s.status == 'failed']), 'total_votes': len(self.votes), 'final_vote_distribution': dict(self._get_current_vote_counts())}, 'system_logs': self.export_detailed_session_log()}
+        if self.log_manager and (not self.log_manager.non_blocking):
+            try:
+                result_file = self.log_manager.session_dir / 'result.json'
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    json.dump(result, f, indent=2, ensure_ascii=False, default=str)
+                logger.info(f'💾 Result saved to {result_file}')
+            except Exception as e:
+                logger.warning(f'⚠️ Failed to save result.json: {e}')
+        logger.info(f'✅ Session completed in {session_duration:.2f} seconds')
+        logger.info(f'   Consensus: {result['consensus_reached']}')
+        logger.info(f'   Representative: Agent {result['representative_agent_id']}')
+        return result
+
+def cleanup(self):
+    """
+        Clean up resources and stop all agents.
+        """
+    logger.info('🧹 Cleaning up orchestrator resources')
+    self._stop_event.set()
+    if self.log_manager and self.agent_states:
+        try:
+            self.log_manager.save_agent_states(self)
+            logger.info('✅ Final agent states saved')
+        except Exception as e:
+            logger.warning(f'⚠️ Error saving final agent states: {e}')
+    if self.log_manager:
+        try:
+            self.log_manager.cleanup()
+            logger.info('✅ Log manager cleaned up')
+        except Exception as e:
+            logger.warning(f'⚠️ Error cleaning up log manager: {e}')
+    if self.streaming_orchestrator:
+        try:
+            self.streaming_orchestrator.cleanup()
+            logger.info('✅ Streaming orchestrator cleaned up')
+        except Exception as e:
+            logger.warning(f'⚠️ Error cleaning up streaming orchestrator: {e}')
+    logger.info('✅ Orchestrator cleanup completed')
+
+def _run_single_agent_simple(question: str, config: MassConfig) -> Dict[str, Any]:
+    """
+    Simple single-agent processing that bypasses the multi-agent orchestration system.
+
+    Args:
+        question: The question to solve
+        config: MassConfig object with exactly one agent
+
+    Returns:
+        Dict containing the answer and detailed results
+    """
+    start_time = time.time()
+    agent_config = config.agents[0]
+    logger.info(f'🤖 Running single agent mode with {agent_config.model_config.model}')
+    logger.info(f'   Question: {question}')
+    log_manager = MassLogManager(log_dir=config.logging.log_dir, session_id=config.logging.session_id, non_blocking=config.logging.non_blocking)
+    try:
+        agent = create_agent(agent_type=agent_config.agent_type, agent_id=agent_config.agent_id, orchestrator=None, model_config=agent_config.model_config, stream_callback=None)
+        messages = [{'role': 'system', 'content': "You are an expert agent equipped with tools to solve complex tasks. Please provide a comprehensive answer to the user's question."}, {'role': 'user', 'content': question}]
+        tools = agent_config.model_config.tools if agent_config.model_config.tools else []
+        result = agent.process_message(messages=messages, tools=tools)
+        session_duration = time.time() - start_time
+        response = {'answer': result.text if result.text else 'No response generated', 'consensus_reached': True, 'representative_agent_id': agent_config.agent_id, 'session_duration': session_duration, 'summary': {'total_agents': 1, 'failed_agents': 0, 'total_votes': 1, 'final_vote_distribution': {agent_config.agent_id: 1}}, 'model_used': agent_config.model_config.model, 'citations': result.citations if hasattr(result, 'citations') else [], 'code': result.code if hasattr(result, 'code') else [], 'single_agent_mode': True}
+        if log_manager and (not log_manager.non_blocking):
+            try:
+                result_file = log_manager.session_dir / 'result.json'
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    json.dump(response, f, indent=2, ensure_ascii=False, default=str)
+                logger.info(f'💾 Single agent result saved to {result_file}')
+            except Exception as e:
+                logger.warning(f'⚠️ Failed to save result.json: {e}')
+        logger.info(f'✅ Single agent completed in {session_duration:.1f}s')
+        return response
+    except Exception as e:
+        session_duration = time.time() - start_time
+        logger.error(f'❌ Single agent failed: {e}')
+        error_response = {'answer': f'Error in single agent processing: {str(e)}', 'consensus_reached': False, 'representative_agent_id': None, 'session_duration': session_duration, 'summary': {'total_agents': 1, 'failed_agents': 1, 'total_votes': 0, 'final_vote_distribution': {}}, 'model_used': agent_config.model_config.model, 'citations': [], 'code': [], 'single_agent_mode': True, 'error': str(e)}
+        if log_manager and (not log_manager.non_blocking):
+            try:
+                result_file = log_manager.session_dir / 'result.json'
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    json.dump(error_response, f, indent=2, ensure_ascii=False, default=str)
+                logger.info(f'💾 Single agent error result saved to {result_file}')
+            except Exception as e:
+                logger.warning(f'⚠️ Failed to save result.json: {e}')
+        return error_response
+    finally:
+        if log_manager:
+            try:
+                log_manager.cleanup()
+            except Exception as e:
+                logger.warning(f'⚠️ Error cleaning up log manager: {e}')
+
+class TestHelper:
+
+    def __init__(self):
+        self.temp_dir = None
+        self.workspace_dir = None
+        self.context_dir = None
+        self.readonly_dir = None
+
+    def setup(self):
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.workspace_dir = self.temp_dir / 'workspace'
+        self.context_dir = self.temp_dir / 'context'
+        self.readonly_dir = self.temp_dir / 'readonly'
+        self.workspace_dir.mkdir(parents=True)
+        self.context_dir.mkdir(parents=True)
+        self.readonly_dir.mkdir(parents=True)
+        (self.workspace_dir / 'workspace_file.txt').write_text('workspace content')
+        (self.context_dir / 'context_file.txt').write_text('context content')
+        (self.readonly_dir / 'readonly_file.txt').write_text('readonly content')
+
+    def teardown(self):
+        if self.temp_dir and self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir)
+
+    def create_permission_manager(self, context_write_enabled=False):
+        manager = PathPermissionManager(context_write_access_enabled=context_write_enabled)
+        manager.add_path(self.workspace_dir, Permission.WRITE, 'workspace')
+        if context_write_enabled:
+            manager.add_path(self.context_dir, Permission.WRITE, 'context')
+        else:
+            manager.add_path(self.context_dir, Permission.READ, 'context')
+        manager.add_path(self.readonly_dir, Permission.READ, 'context')
+        return manager
+
+def teardown(self):
+    if self.temp_dir and self.temp_dir.exists():
+        shutil.rmtree(self.temp_dir)
+

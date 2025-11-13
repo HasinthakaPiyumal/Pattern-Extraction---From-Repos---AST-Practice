@@ -1,0 +1,379 @@
+{
+    "shared/check_env.py": {
+        "file_name": "/shared/check_env.py",
+        "imports": [
+            "os",
+            "sys",
+            "pathlib.Path",
+            "typing.Dict",
+            "typing.List",
+            "typing.Tuple",
+            "dotenv.load_dotenv",
+            "rich.console.Console",
+            "rich.table.Table"
+        ],
+        "classes": [],
+        "functions": {
+            "check_required_vars": [
+                "getenv",
+                "append",
+                "len"
+            ],
+            "check_backend_config": [
+                "lower",
+                "getenv",
+                "startswith",
+                "bool",
+                "get"
+            ],
+            "display_status": [
+                "print",
+                "check_required_vars",
+                "check_backend_config",
+                "Table",
+                "add_column",
+                "items",
+                "add_row",
+                "upper"
+            ],
+            "main": [
+                "exists",
+                "Path",
+                "print",
+                "exit",
+                "display_status"
+            ]
+        }
+    },
+    "shared/gabarito.py": {
+        "file_name": "/shared/gabarito.py",
+        "imports": [
+            "json",
+            "sys",
+            "pathlib.Path",
+            "typing.Dict",
+            "typing.List",
+            "typing.Optional",
+            "rich.console.Console",
+            "rich.panel.Panel",
+            "rich.syntax.Syntax",
+            "shutil",
+            "shutil"
+        ],
+        "classes": [
+            {
+                "class_name": "Gabarito",
+                "methods": [
+                    "__init__",
+                    "load_gabarito",
+                    "show_hints",
+                    "show_solution",
+                    "apply_fix",
+                    "list_exercises"
+                ]
+            }
+        ],
+        "functions": {
+            "__init__": [
+                "Path"
+            ],
+            "load_gabarito": [
+                "exists",
+                "print",
+                "open",
+                "load"
+            ],
+            "show_hints": [
+                "load_gabarito",
+                "print",
+                "get",
+                "enumerate"
+            ],
+            "show_solution": [
+                "load_gabarito",
+                "print",
+                "get",
+                "exists",
+                "open",
+                "read",
+                "Syntax",
+                "Panel"
+            ],
+            "apply_fix": [
+                "load_gabarito",
+                "print",
+                "get",
+                "show_solution",
+                "exists",
+                "input",
+                "lower",
+                "with_suffix",
+                "copy2",
+                "mkdir"
+            ],
+            "list_exercises": [
+                "load_gabarito",
+                "print",
+                "items"
+            ],
+            "main": [
+                "len",
+                "print",
+                "exit",
+                "Gabarito",
+                "list_exercises",
+                "show_hints",
+                "input",
+                "lower",
+                "show_solution",
+                "apply_fix"
+            ]
+        }
+    },
+    "agents_drop2_lab02/labs/02_mcp/client.py": {
+        "file_name": "/agents_drop2_lab02/labs/02_mcp/client.py",
+        "imports": [
+            "os",
+            "sys",
+            "subprocess",
+            "time",
+            "json",
+            "pathlib.Path",
+            "urllib.request.urlopen",
+            "urllib.request.Request",
+            "urllib.error.URLError"
+        ],
+        "classes": [],
+        "functions": {
+            "http_get": [
+                "urlopen",
+                "loads",
+                "decode",
+                "read"
+            ],
+            "http_post": [
+                "encode",
+                "dumps",
+                "Request",
+                "urlopen",
+                "loads",
+                "decode",
+                "read"
+            ],
+            "main": [
+                "Popen",
+                "str",
+                "range",
+                "http_get",
+                "get",
+                "sleep",
+                "terminate",
+                "SystemExit",
+                "append",
+                "http_post",
+                "open",
+                "write",
+                "dumps",
+                "wait",
+                "print"
+            ]
+        }
+    },
+    "agents_drop2_lab02/labs/02_mcp/server.py": {
+        "file_name": "/agents_drop2_lab02/labs/02_mcp/server.py",
+        "imports": [
+            "json",
+            "os",
+            "http.server.HTTPServer",
+            "http.server.BaseHTTPRequestHandler",
+            "urllib.parse.urlparse",
+            "pathlib.Path",
+            "threading"
+        ],
+        "classes": [
+            {
+                "class_name": "H",
+                "methods": [
+                    "_json",
+                    "do_GET",
+                    "do_POST"
+                ]
+            }
+        ],
+        "functions": {
+            "summarize_text": [
+                "split",
+                "len",
+                "join"
+            ],
+            "_json": [
+                "send_response",
+                "send_header",
+                "end_headers",
+                "write",
+                "encode",
+                "dumps"
+            ],
+            "do_GET": [
+                "_json"
+            ],
+            "do_POST": [
+                "int",
+                "get",
+                "decode",
+                "read",
+                "loads",
+                "sorted",
+                "iterdir",
+                "is_file",
+                "_json",
+                "exists",
+                "read_text",
+                "summarize_text",
+                "start",
+                "Thread"
+            ],
+            "stopper": [
+                "shutdown"
+            ],
+            "main": [
+                "int",
+                "getenv",
+                "HTTPServer",
+                "print",
+                "serve_forever"
+            ]
+        }
+    },
+    "agents_drop2_lab02/labs/02_mcp/py/server.py": {
+        "file_name": "/agents_drop2_lab02/labs/02_mcp/py/server.py",
+        "imports": [
+            "fastapi.FastAPI",
+            "pydantic.BaseModel",
+            "typing.Dict",
+            "typing.Any",
+            "typing.List"
+        ],
+        "classes": [
+            {
+                "class_name": "ToolSchema",
+                "methods": []
+            },
+            {
+                "class_name": "InvokeRequest",
+                "methods": []
+            },
+            {
+                "class_name": "InvokeResponse",
+                "methods": []
+            }
+        ],
+        "functions": {
+            "calculator": [
+                "set",
+                "all",
+                "eval",
+                "float"
+            ],
+            "text_analyzer": [
+                "len",
+                "strip",
+                "split"
+            ],
+            "list_tools": [
+                "get"
+            ],
+            "invoke_tool": [
+                "InvokeResponse",
+                "list",
+                "keys",
+                "tool_function",
+                "post"
+            ]
+        }
+    },
+    "agents_drop2_lab02/tests/test_lab02.py": {
+        "file_name": "/agents_drop2_lab02/tests/test_lab02.py",
+        "imports": [
+            "pytest",
+            "fastapi.testclient.TestClient",
+            "sys",
+            "os",
+            "server.app"
+        ],
+        "classes": [],
+        "functions": {
+            "test_list_tools_endpoint": [
+                "get",
+                "json",
+                "isinstance",
+                "len",
+                "next"
+            ],
+            "test_invoke_calculator_tool": [
+                "post",
+                "json"
+            ],
+            "test_invoke_text_analyzer_tool": [
+                "post",
+                "json",
+                "isinstance"
+            ],
+            "test_invoke_tool_not_found": [
+                "post",
+                "json",
+                "lower",
+                "str"
+            ],
+            "test_invoke_calculator_with_invalid_expression": [
+                "post",
+                "json",
+                "lower",
+                "str"
+            ]
+        }
+    },
+    "mcp/labs/lab1_mcp_basics.py": {
+        "file_name": "/mcp/labs/lab1_mcp_basics.py",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "agents_drop1_lab01/labs/01_sdk_boot/py/app.py": {
+        "file_name": "/agents_drop1_lab01/labs/01_sdk_boot/py/app.py",
+        "imports": [
+            "os",
+            "json",
+            "time",
+            "pathlib",
+            "sys"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "agents_drop1_lab01/labs/01_sdk_boot/tests/test_lab01.py": {
+        "file_name": "/agents_drop1_lab01/labs/01_sdk_boot/tests/test_lab01.py",
+        "imports": [
+            "json",
+            "pathlib"
+        ],
+        "classes": [],
+        "functions": {
+            "test_python_output_exists": [
+                "exists"
+            ],
+            "test_js_output_exists": [
+                "exists"
+            ],
+            "test_schema_and_result": [
+                "loads",
+                "splitlines",
+                "read_text",
+                "any",
+                "get",
+                "set",
+                "keys"
+            ]
+        }
+    }
+}

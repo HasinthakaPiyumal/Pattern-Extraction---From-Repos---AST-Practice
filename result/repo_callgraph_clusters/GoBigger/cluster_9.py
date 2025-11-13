@@ -1,0 +1,1035 @@
+# Cluster 9
+
+class Server:
+
+    @staticmethod
+    def default_config():
+        cfg = copy.deepcopy(server_default_config)
+        return EasyDict(cfg)
+
+    def __init__(self, cfg=None, seed=None):
+        self.cfg = Server.default_config()
+        if isinstance(cfg, dict):
+            cfg = EasyDict(cfg)
+            self.cfg = deep_merge_dicts(self.cfg, cfg)
+        self.update_match_ratio()
+        logging.debug(self.cfg)
+        self.team_num = self.cfg.team_num
+        self.player_num_per_team = self.cfg.player_num_per_team
+        self.map_width = self.cfg.map_width
+        self.map_height = self.cfg.map_height
+        self.frame_limit = self.cfg.frame_limit
+        self.fps = self.cfg.fps
+        self.frame_duration = 1 / self.fps
+        self.collision_detection_type = self.cfg.collision_detection_type
+        self.eat_ratio = self.cfg.eat_ratio
+        self.playback_settings = self.cfg.playback_settings
+        self.opening_settings = self.cfg.opening_settings
+        self.manager_settings = self.cfg.manager_settings
+        self.obs_settings = self.cfg.obs_settings
+        self.seed(seed)
+        self.border = Border(0, 0, self.map_width, self.map_height, self._random)
+        self.last_frame_count = 0
+        self.init_playback()
+        self.init_opening()
+        self.sequence_generator = SequenceGenerator()
+        self.food_manager = FoodManager(self.manager_settings.food_manager, border=self.border, random_generator=self._random, sequence_generator=self.sequence_generator)
+        self.thorns_manager = ThornsManager(self.manager_settings.thorns_manager, border=self.border, random_generator=self._random, sequence_generator=self.sequence_generator)
+        self.spore_manager = SporeManager(self.manager_settings.spore_manager, border=self.border, random_generator=self._random, sequence_generator=self.sequence_generator)
+        self.player_manager = PlayerManager(self.manager_settings.player_manager, border=self.border, team_num=self.team_num, player_num_per_team=self.player_num_per_team, spore_manager_settings=self.cfg.manager_settings.spore_manager, random_generator=self._random, sequence_generator=self.sequence_generator)
+        self.init_obs()
+        self.collision_detection = create_collision_detection(self.collision_detection_type, border=self.border)
+
+    def update_match_ratio(self):
+        self.cfg.map_width = int(self.cfg.map_width * math.sqrt(self.cfg.match_ratio))
+        self.cfg.map_height = int(self.cfg.map_height * math.sqrt(self.cfg.match_ratio))
+        self.cfg.manager_settings.food_manager.num_init = int(self.cfg.manager_settings.food_manager.num_init * self.cfg.match_ratio)
+        self.cfg.manager_settings.food_manager.num_min = int(self.cfg.manager_settings.food_manager.num_min * self.cfg.match_ratio)
+        self.cfg.manager_settings.food_manager.num_max = int(self.cfg.manager_settings.food_manager.num_max * self.cfg.match_ratio)
+        self.cfg.manager_settings.thorns_manager.num_init = int(self.cfg.manager_settings.thorns_manager.num_init * self.cfg.match_ratio)
+        self.cfg.manager_settings.thorns_manager.num_min = int(self.cfg.manager_settings.thorns_manager.num_min * self.cfg.match_ratio)
+        self.cfg.manager_settings.thorns_manager.num_max = int(self.cfg.manager_settings.thorns_manager.num_max * self.cfg.match_ratio)
+
+    def init_playback(self):
+        self.diff_balls_remove = [[], [], [], []]
+        self.diff_balls_modify = [{}, {}, {}, {}]
+        self.playback_type = self.playback_settings.playback_type
+        self.save_video = self.playback_settings.by_video.save_video
+        self.save_frame = self.playback_settings.by_frame.save_frame
+        self.playback_util = create_pb(self.playback_settings, fps=self.fps, map_width=self.map_width, map_height=self.map_height)
+
+    def init_opening(self):
+        self.custom_init_food = []
+        self.custom_init_thorns = []
+        self.custom_init_spore = []
+        self.custom_init_clone = []
+        opening_type = self.opening_settings.opening_type
+        if opening_type == 'none':
+            pass
+        elif opening_type == 'handcraft':
+            self.custom_init_food = self.opening_settings.handcraft.food
+            self.custom_init_thorns = self.opening_settings.handcraft.thorns
+            self.custom_init_spore = self.opening_settings.handcraft.spore
+            self.custom_init_clone = self.opening_settings.handcraft.clone
+        elif opening_type == 'from_frame':
+            if self.frame_path and os.path.isfile(self.frame_path):
+                with open(self.frame_path, 'rb') as f:
+                    data = pickle.load(f)
+                self.custom_init_food = data['food']
+                self.custom_init_thorns = data['thorns']
+                self.custom_init_spore = data['spore']
+                self.custom_init_clone = data['clone']
+
+    def init_obs(self):
+        self.eats = {player_id: {'food': 0, 'thorns': 0, 'spore': 0, 'clone_self': 0, 'clone_team': 0, 'clone_other': 0, 'eaten': 0} for player_id in self.player_manager.get_player_names()}
+        self.player_states_util = PlayerStatesUtil(self.obs_settings)
+
+    def spawn_balls(self):
+        """
+        Overview:
+            Initialize all balls. If self.custom_init is set, initialize all balls based on it.
+        """
+        self.food_manager.init_balls(custom_init=self.custom_init_food)
+        self.thorns_manager.init_balls(custom_init=self.custom_init_thorns)
+        self.spore_manager.init_balls(custom_init=self.custom_init_spore)
+        self.player_manager.init_balls(custom_init=self.custom_init_clone)
+        if self.save_frame:
+            for ball in self.food_manager.get_balls():
+                self.diff_balls_modify[0][ball.ball_id] = ball.save()
+            for ball in self.thorns_manager.get_balls():
+                self.diff_balls_modify[1][ball.ball_id] = ball.save()
+            for ball in self.spore_manager.get_balls():
+                self.diff_balls_modify[2][ball.ball_id] = ball.save()
+            for ball in self.player_manager.get_balls():
+                self.diff_balls_modify[3][ball.ball_id] = ball.save()
+
+    def step_one_frame(self, actions=None):
+        moving_balls = []
+        total_balls = []
+        if actions is not None and isinstance(actions, dict):
+            for player in self.player_manager.get_players():
+                if player.player_id in actions:
+                    direction_x, direction_y, action_type = actions[player.player_id]
+                    if direction_x is None or direction_y is None:
+                        direction = None
+                    else:
+                        direction = Vector2(direction_x, direction_y)
+                        if direction.length() > 1:
+                            direction = direction.normalize()
+                    if action_type == 1:
+                        tmp_spore_balls = player.eject(direction=direction)
+                        for tmp_spore_ball in tmp_spore_balls:
+                            if tmp_spore_ball:
+                                self.spore_manager.add_balls(tmp_spore_ball)
+                                if self.save_frame:
+                                    self.diff_balls_modify[2][tmp_spore_ball.ball_id] = tmp_spore_ball.save()
+                    elif action_type == 2:
+                        self.player_manager.add_balls(player.split(direction=direction))
+                    player.move(direction=direction, duration=self.frame_duration)
+                    moving_balls.extend(player.get_balls())
+                else:
+                    player.move(duration=self.frame_duration)
+                    moving_balls.extend(player.get_balls())
+        else:
+            for player in self.player_manager.get_players():
+                player.move(duration=self.frame_duration)
+                moving_balls.extend(player.get_balls())
+        moving_balls = sorted(moving_balls, reverse=True)
+        for thorns_ball in self.thorns_manager.get_balls():
+            if thorns_ball.moving:
+                thorns_ball.move(duration=self.frame_duration)
+                if self.save_frame:
+                    self.diff_balls_modify[1][thorns_ball.ball_id] = thorns_ball.save()
+            moving_balls.append(thorns_ball)
+        for spore_ball in self.spore_manager.get_balls():
+            if spore_ball.moving:
+                spore_ball.move(duration=self.frame_duration)
+                if self.save_frame:
+                    self.diff_balls_modify[2][spore_ball.ball_id] = spore_ball.save()
+        eats = self.player_manager.adjust()
+        for player_id, clone_self_num in eats.items():
+            self.eats[player_id]['clone_self'] += clone_self_num
+        total_balls.extend(self.player_manager.get_balls())
+        total_balls.extend(self.thorns_manager.get_balls())
+        total_balls.extend(self.spore_manager.get_balls())
+        total_balls.extend(self.food_manager.get_balls())
+        collisions_dict = self.collision_detection.solve(moving_balls, total_balls)
+        for index, moving_ball in enumerate(moving_balls):
+            if not moving_ball.is_remove and index in collisions_dict:
+                for target_ball in collisions_dict[index]:
+                    self.deal_with_collision(moving_ball, target_ball)
+        new_food_balls = self.food_manager.step(duration=self.frame_duration)
+        new_thorns_balls = self.thorns_manager.step(duration=self.frame_duration)
+        self.spore_manager.step(duration=self.frame_duration)
+        self.player_manager.step()
+        self.last_frame_count += 1
+        if self.save_frame:
+            self.diff_balls_modify[0].update(new_food_balls)
+            self.diff_balls_modify[1].update(new_thorns_balls)
+            for ball in self.player_manager.get_balls():
+                self.diff_balls_modify[3][ball.ball_id] = ball.save()
+
+    def deal_with_collision(self, moving_ball, target_ball):
+        if not moving_ball.is_remove and (not target_ball.is_remove):
+            if isinstance(moving_ball, CloneBall):
+                if isinstance(target_ball, CloneBall):
+                    if moving_ball.team_id != target_ball.team_id:
+                        if moving_ball.score > target_ball.score and self.can_eat(moving_ball.score, target_ball.score):
+                            moving_ball.eat(target_ball)
+                            self.eats[moving_ball.player_id]['clone_other'] += 1
+                            self.eats[target_ball.player_id]['eaten'] += 1
+                            self.player_manager.remove_balls(target_ball)
+                        elif self.can_eat(target_ball.score, moving_ball.score):
+                            target_ball.eat(moving_ball)
+                            self.eats[target_ball.player_id]['clone_other'] += 1
+                            self.eats[moving_ball.player_id]['eaten'] += 1
+                            self.player_manager.remove_balls(moving_ball)
+                    elif moving_ball.player_id != target_ball.player_id:
+                        if moving_ball.score > target_ball.score and self.can_eat(moving_ball.score, target_ball.score):
+                            if self.player_manager.get_clone_num(target_ball) > 1:
+                                moving_ball.eat(target_ball)
+                                self.eats[moving_ball.player_id]['clone_team'] += 1
+                                self.eats[target_ball.player_id]['eaten'] += 1
+                                self.player_manager.remove_balls(target_ball)
+                        elif self.can_eat(target_ball.score, moving_ball.score):
+                            if self.player_manager.get_clone_num(moving_ball) > 1:
+                                target_ball.eat(moving_ball)
+                                self.eats[target_ball.player_id]['clone_team'] += 1
+                                self.eats[moving_ball.player_id]['eaten'] += 1
+                                self.player_manager.remove_balls(moving_ball)
+                elif isinstance(target_ball, FoodBall):
+                    moving_ball.eat(target_ball)
+                    self.eats[moving_ball.player_id]['food'] += 1
+                    if self.save_frame:
+                        self.diff_balls_remove[0].append(target_ball.ball_id)
+                    self.food_manager.remove_balls(target_ball)
+                elif isinstance(target_ball, SporeBall):
+                    moving_ball.eat(target_ball)
+                    self.eats[moving_ball.player_id]['spore'] += 1
+                    if self.save_frame:
+                        self.diff_balls_remove[2].append(target_ball.ball_id)
+                    self.spore_manager.remove_balls(target_ball)
+                elif isinstance(target_ball, ThornsBall):
+                    if moving_ball.score > target_ball.score and self.can_eat(moving_ball.score, target_ball.score):
+                        ret = moving_ball.eat(target_ball, clone_num=self.player_manager.get_clone_num(moving_ball))
+                        self.eats[moving_ball.player_id]['thorns'] += 1
+                        if self.save_frame:
+                            self.diff_balls_remove[1].append(target_ball.ball_id)
+                        self.thorns_manager.remove_balls(target_ball)
+                        if isinstance(ret, list):
+                            self.player_manager.add_balls(ret)
+            elif isinstance(moving_ball, ThornsBall):
+                if isinstance(target_ball, CloneBall):
+                    if moving_ball.score < target_ball.score and self.can_eat(target_ball.score, moving_ball.score):
+                        ret = target_ball.eat(moving_ball, clone_num=self.player_manager.get_clone_num(target_ball))
+                        self.eats[target_ball.player_id]['thorns'] += 1
+                        if self.save_frame:
+                            self.diff_balls_remove[1].append(moving_ball.ball_id)
+                        self.thorns_manager.remove_balls(moving_ball)
+                        if isinstance(ret, list):
+                            self.player_manager.add_balls(ret)
+                elif isinstance(target_ball, SporeBall):
+                    moving_ball.eat(target_ball)
+                    if self.save_frame:
+                        self.diff_balls_remove[2].append(target_ball.ball_id)
+                    self.spore_manager.remove_balls(target_ball)
+            elif isinstance(moving_ball, SporeBall):
+                if isinstance(target_ball, CloneBall) or isinstance(target_ball, ThornsBall):
+                    target_ball.eat(moving_ball)
+                    if isinstance(target_ball, CloneBall):
+                        self.eats[target_ball.player_id]['spore'] += 1
+                    if self.save_frame:
+                        self.diff_balls_remove[2].append(moving_ball.ball_id)
+                        if isinstance(target_ball, ThornsBall):
+                            self.diff_balls_modify[1][target_ball.ball_id] = target_ball.save()
+                    self.spore_manager.remove_balls(moving_ball)
+        else:
+            return
+
+    def can_eat(self, score1, score2):
+        if score1 > self.eat_ratio * score2:
+            return True
+        else:
+            return False
+
+    def reset(self):
+        self.last_frame_count = 0
+        self.init_playback()
+        self.init_opening()
+        self.food_manager.reset()
+        self.thorns_manager.reset()
+        self.spore_manager.reset()
+        self.player_manager.reset()
+        self.spawn_balls()
+        self.init_obs()
+        self._end_flag = False
+
+    def step(self, actions=None, save_frame_full_path='', **kwargs):
+        if not self._end_flag:
+            self.step_one_frame(actions)
+            if self.playback_util.need_save(self.last_frame_count):
+                if self.save_video:
+                    self.playback_util.save_step(food_balls=self.food_manager.get_balls(), thorns_balls=self.thorns_manager.get_balls(), spore_balls=self.spore_manager.get_balls(), players=self.player_manager.get_players(), player_num_per_team=self.player_num_per_team)
+                elif self.save_frame:
+                    self.playback_util.save_step(diff_balls_remove=self.diff_balls_remove, diff_balls_modify=self.diff_balls_modify, leaderboard=self.leaderboard, last_frame_count=self.last_frame_count)
+                    self.diff_balls_remove = [[], [], [], []]
+                    self.diff_balls_modify = [{}, {}, {}, {}]
+        if self.last_frame_count >= self.frame_limit:
+            if not self._end_flag:
+                self.playback_util.save_final(self.cfg)
+            self._end_flag = True
+        return self._end_flag
+
+    def obs(self, obs_type='all'):
+        assert obs_type in ['all', 'single']
+        global_state = self.get_global_state()
+        player_states = self.player_states_util.get_player_states(food_balls=self.food_manager.get_balls(), thorns_balls=self.thorns_manager.get_balls(), spore_balls=self.spore_manager.get_balls(), players=self.player_manager.get_players())
+        self.leaderboard = global_state['leaderboard']
+        return (global_state, player_states, {'eats': self.eats})
+
+    def get_global_state(self):
+        team_name_score = self.player_manager.get_teams_score()
+        global_state = {'border': [self.map_width, self.map_height], 'total_frame': self.frame_limit, 'last_frame_count': self.last_frame_count, 'last_time': self.last_frame_count, 'leaderboard': {i: team_name_score[i] for i in range(self.team_num)}}
+        return global_state
+
+    def get_player_names(self):
+        return self.player_manager.get_player_names()
+
+    def get_team_names(self):
+        return self.player_manager.get_team_names()
+
+    def get_player_names_with_team(self):
+        return self.player_manager.get_player_names_with_team()
+
+    def get_team_infos(self):
+        return self.player_manager.get_team_infos()
+
+    def close(self):
+        if hasattr(self, 'render'):
+            self.render.close()
+
+    def seed(self, seed=None):
+        if seed is None:
+            self._seed = random.randrange(sys.maxsize)
+        else:
+            self._seed = seed
+        self._random = random.Random(self._seed)
+
+@staticmethod
+def default_config():
+    cfg = copy.deepcopy(server_default_config)
+    return EasyDict(cfg)
+
+def __init__(self, cfg=None, seed=None):
+    self.cfg = Server.default_config()
+    if isinstance(cfg, dict):
+        cfg = EasyDict(cfg)
+        self.cfg = deep_merge_dicts(self.cfg, cfg)
+    self.update_match_ratio()
+    logging.debug(self.cfg)
+    self.team_num = self.cfg.team_num
+    self.player_num_per_team = self.cfg.player_num_per_team
+    self.map_width = self.cfg.map_width
+    self.map_height = self.cfg.map_height
+    self.frame_limit = self.cfg.frame_limit
+    self.fps = self.cfg.fps
+    self.frame_duration = 1 / self.fps
+    self.collision_detection_type = self.cfg.collision_detection_type
+    self.eat_ratio = self.cfg.eat_ratio
+    self.playback_settings = self.cfg.playback_settings
+    self.opening_settings = self.cfg.opening_settings
+    self.manager_settings = self.cfg.manager_settings
+    self.obs_settings = self.cfg.obs_settings
+    self.seed(seed)
+    self.border = Border(0, 0, self.map_width, self.map_height, self._random)
+    self.last_frame_count = 0
+    self.init_playback()
+    self.init_opening()
+    self.sequence_generator = SequenceGenerator()
+    self.food_manager = FoodManager(self.manager_settings.food_manager, border=self.border, random_generator=self._random, sequence_generator=self.sequence_generator)
+    self.thorns_manager = ThornsManager(self.manager_settings.thorns_manager, border=self.border, random_generator=self._random, sequence_generator=self.sequence_generator)
+    self.spore_manager = SporeManager(self.manager_settings.spore_manager, border=self.border, random_generator=self._random, sequence_generator=self.sequence_generator)
+    self.player_manager = PlayerManager(self.manager_settings.player_manager, border=self.border, team_num=self.team_num, player_num_per_team=self.player_num_per_team, spore_manager_settings=self.cfg.manager_settings.spore_manager, random_generator=self._random, sequence_generator=self.sequence_generator)
+    self.init_obs()
+    self.collision_detection = create_collision_detection(self.collision_detection_type, border=self.border)
+
+def init_opening(self):
+    self.custom_init_food = []
+    self.custom_init_thorns = []
+    self.custom_init_spore = []
+    self.custom_init_clone = []
+    opening_type = self.opening_settings.opening_type
+    if opening_type == 'none':
+        pass
+    elif opening_type == 'handcraft':
+        self.custom_init_food = self.opening_settings.handcraft.food
+        self.custom_init_thorns = self.opening_settings.handcraft.thorns
+        self.custom_init_spore = self.opening_settings.handcraft.spore
+        self.custom_init_clone = self.opening_settings.handcraft.clone
+    elif opening_type == 'from_frame':
+        if self.frame_path and os.path.isfile(self.frame_path):
+            with open(self.frame_path, 'rb') as f:
+                data = pickle.load(f)
+            self.custom_init_food = data['food']
+            self.custom_init_thorns = data['thorns']
+            self.custom_init_spore = data['spore']
+            self.custom_init_clone = data['clone']
+
+def reset(self):
+    self.last_frame_count = 0
+    self.init_playback()
+    self.init_opening()
+    self.food_manager.reset()
+    self.thorns_manager.reset()
+    self.spore_manager.reset()
+    self.player_manager.reset()
+    self.spawn_balls()
+    self.init_obs()
+    self._end_flag = False
+
+class ServerSP(Server):
+
+    @staticmethod
+    def default_config():
+        cfg = copy.deepcopy(server_sp_default_config)
+        return EasyDict(cfg)
+
+    def __init__(self, cfg=None, seed=None):
+        self.cfg = ServerSP.default_config()
+        if isinstance(cfg, dict):
+            cfg = EasyDict(cfg)
+            self.cfg = deep_merge_dicts(self.cfg, cfg)
+        self.update_match_ratio()
+        logging.debug(self.cfg)
+        self.team_num = self.cfg.team_num
+        self.player_num_per_team = self.cfg.player_num_per_team
+        self.map_width = self.cfg.map_width
+        self.map_height = self.cfg.map_height
+        self.frame_limit = self.cfg.frame_limit
+        self.fps = self.cfg.fps
+        self.frame_duration = 1 / self.fps
+        self.collision_detection_type = self.cfg.collision_detection_type
+        self.eat_ratio = self.cfg.eat_ratio
+        self.playback_settings = self.cfg.playback_settings
+        self.opening_settings = self.cfg.opening_settings
+        self.manager_settings = self.cfg.manager_settings
+        self.obs_settings = self.cfg.obs_settings
+        self.seed(seed)
+        self.border = Border(0, 0, self.map_width, self.map_height, self._random)
+        self.last_frame_count = 0
+        self.init_playback()
+        self.init_opening()
+        self.food_manager = FoodManager(self.manager_settings.food_manager, border=self.border, random_generator=self._random)
+        self.thorns_manager = ThornsManager(self.manager_settings.thorns_manager, border=self.border, random_generator=self._random)
+        self.spore_manager = SporeManager(self.manager_settings.spore_manager, border=self.border, random_generator=self._random)
+        self.player_manager = PlayerSPManager(self.manager_settings.player_manager, border=self.border, team_num=self.team_num, player_num_per_team=self.player_num_per_team, spore_manager_settings=self.cfg.manager_settings.spore_manager, random_generator=self._random)
+        self.init_obs()
+        self.collision_detection = create_collision_detection(self.collision_detection_type, border=self.border)
+
+    def init_obs(self):
+        self.eats = {player_id: {'food': 0, 'thorns': 0, 'spore': 0, 'clone_self': 0, 'clone_team': 0, 'clone_other': 0, 'eaten': 0} for player_id in self.player_manager.get_player_names()}
+        self.player_states_util = PlayerStatesSPUtil(self.obs_settings)
+
+    def step_one_frame(self, actions=None):
+        moving_balls = []
+        total_balls = []
+        if actions is not None and isinstance(actions, dict):
+            for player in self.player_manager.get_players():
+                if player.player_id in actions:
+                    for ball_id, action in actions[player.player_id].items():
+                        direction_x, direction_y, action_type = action
+                        if direction_x is None or direction_y is None:
+                            direction = None
+                        else:
+                            direction = Vector2(direction_x, direction_y)
+                            if direction.length() > 1:
+                                direction = direction.normalize()
+                        if action_type == 1:
+                            tmp_spore_balls = player.eject(ball_id, direction=direction)
+                            for tmp_spore_ball in tmp_spore_balls:
+                                if tmp_spore_ball:
+                                    self.spore_manager.add_balls(tmp_spore_ball)
+                        elif action_type == 2:
+                            self.player_manager.add_balls(player.split(ball_id, direction=direction))
+                        player.move(ball_id, direction=direction, duration=self.frame_duration)
+                        moving_balls.extend(player.get_balls())
+                else:
+                    player.move(duration=self.frame_duration)
+                    moving_balls.extend(player.get_balls())
+        else:
+            for player in self.player_manager.get_players():
+                player.move(duration=self.frame_duration)
+                moving_balls.extend(player.get_balls())
+        moving_balls = sorted(moving_balls, reverse=True)
+        for thorns_ball in self.thorns_manager.get_balls():
+            if thorns_ball.moving:
+                thorns_ball.move(duration=self.frame_duration)
+            moving_balls.append(thorns_ball)
+        for spore_ball in self.spore_manager.get_balls():
+            if spore_ball.moving:
+                spore_ball.move(duration=self.frame_duration)
+        self.player_manager.adjust()
+        total_balls.extend(self.player_manager.get_balls())
+        total_balls.extend(self.thorns_manager.get_balls())
+        total_balls.extend(self.spore_manager.get_balls())
+        total_balls.extend(self.food_manager.get_balls())
+        collisions_dict = self.collision_detection.solve(moving_balls, total_balls)
+        for index, moving_ball in enumerate(moving_balls):
+            if not moving_ball.is_remove and index in collisions_dict:
+                for target_ball in collisions_dict[index]:
+                    self.deal_with_collision(moving_ball, target_ball)
+        self.food_manager.step(duration=self.frame_duration)
+        self.spore_manager.step(duration=self.frame_duration)
+        self.thorns_manager.step(duration=self.frame_duration)
+        self.player_manager.step()
+        self.last_frame_count += 1
+
+@staticmethod
+def default_config():
+    cfg = copy.deepcopy(server_sp_default_config)
+    return EasyDict(cfg)
+
+def __init__(self, cfg=None, seed=None):
+    self.cfg = ServerSP.default_config()
+    if isinstance(cfg, dict):
+        cfg = EasyDict(cfg)
+        self.cfg = deep_merge_dicts(self.cfg, cfg)
+    self.update_match_ratio()
+    logging.debug(self.cfg)
+    self.team_num = self.cfg.team_num
+    self.player_num_per_team = self.cfg.player_num_per_team
+    self.map_width = self.cfg.map_width
+    self.map_height = self.cfg.map_height
+    self.frame_limit = self.cfg.frame_limit
+    self.fps = self.cfg.fps
+    self.frame_duration = 1 / self.fps
+    self.collision_detection_type = self.cfg.collision_detection_type
+    self.eat_ratio = self.cfg.eat_ratio
+    self.playback_settings = self.cfg.playback_settings
+    self.opening_settings = self.cfg.opening_settings
+    self.manager_settings = self.cfg.manager_settings
+    self.obs_settings = self.cfg.obs_settings
+    self.seed(seed)
+    self.border = Border(0, 0, self.map_width, self.map_height, self._random)
+    self.last_frame_count = 0
+    self.init_playback()
+    self.init_opening()
+    self.food_manager = FoodManager(self.manager_settings.food_manager, border=self.border, random_generator=self._random)
+    self.thorns_manager = ThornsManager(self.manager_settings.thorns_manager, border=self.border, random_generator=self._random)
+    self.spore_manager = SporeManager(self.manager_settings.spore_manager, border=self.border, random_generator=self._random)
+    self.player_manager = PlayerSPManager(self.manager_settings.player_manager, border=self.border, team_num=self.team_num, player_num_per_team=self.player_num_per_team, spore_manager_settings=self.cfg.manager_settings.spore_manager, random_generator=self._random)
+    self.init_obs()
+    self.collision_detection = create_collision_detection(self.collision_detection_type, border=self.border)
+
+def read_pb(pb_path):
+    with open(pb_path, 'rb') as f:
+        pb_data = pickle.load(f)
+    pb_data = pickle.loads(lz4.frame.decompress(pb_data))
+    return pb_data
+
+def save_frame_info(self, save_frame_full_path, food_balls, thorns_balls, spore_balls, clone_balls):
+    if save_frame_full_path != '':
+        frame_info = {'food': [], 'thorns': [], 'spore': [], 'clone': []}
+        for ball in food_balls:
+            frame_info['food'].append([ball.position.x, ball.position.y, ball.radius])
+        for ball in thorns_balls:
+            frame_info['thorns'].append([ball.position.x, ball.position.y, ball.radius, ball.vel.x, ball.vel.y, ball.acc.x, ball.acc.y, ball.move_time, ball.moving])
+        for ball in spore_balls:
+            frame_info['spore'].append([ball.position.x, ball.position.y, ball.radius, ball.direction.x, ball.direction.y, ball.vel.x, ball.vel.y, ball.acc.x, ball.acc.y, ball.move_time, ball.moving])
+        for ball in clone_balls:
+            frame_info['clone'].append([ball.position.x, ball.position.y, ball.radius, ball.owner, ball.team_name, ball.vel.x, ball.vel.y, ball.acc.x, ball.acc.y, ball.vel_last.x, ball.vel_last.y, ball.acc_last.x, ball.acc_last.y, ball.direction.x, ball.direction.y, ball.last_given_acc.x, ball.last_given_acc.y, ball.age, ball.cooling_last, ball.stop_flag, ball.stop_time, ball.acc_stop.x, ball.acc_stop.y])
+        with open(save_frame_full_path, 'wb') as f:
+            pickle.dump(frame_info, f)
+
+def load_frame_info():
+    custom_init_food = []
+    custom_init_thorns = []
+    custom_init_spore = []
+    custom_init_clone = []
+    if frame_path:
+        with open(frame_path, 'rb') as f:
+            data = pickle.load(f)
+        custom_init_food = data['food']
+        custom_init_thorns = data['thorns']
+        custom_init_spore = data['spore']
+        custom_init_clone = data['clone']
+    return (custom_init_food, custom_init_thorns, custom_init_spore, custom_init_clone)
+
+def test_deep_merge_dicts():
+    a = EasyDict(dict(name='aaa', content=dict(team_num=4, map_width=1000)))
+    b = EasyDict(dict(name='bbb', content=dict(map_width=2000)))
+    c = deep_merge_dicts(a, b)
+    assert c.name == 'bbb'
+    assert c.content.map_width == 2000
+    assert c.content.team_num == 4
+
+class GoBiggerEnv(gym.Env):
+
+    def __init__(self, server_cfg=None, step_mul=2, **kwargs):
+        self.server_cfg = server_cfg
+        self.step_mul = step_mul
+        self.init_server()
+
+    def step(self, actions):
+        for i in range(self.step_mul):
+            if i == 0:
+                done = self.server.step(actions=actions)
+            else:
+                done = self.server.step(actions=None)
+        obs_raw = self.server.obs()
+        global_state, player_states, info = obs_raw
+        obs = [global_state, player_states]
+        total_score = [global_state['leaderboard'][i] for i in range(len(global_state['leaderboard']))]
+        assert len(self.last_total_score) == len(total_score)
+        reward = [total_score[i] - self.last_total_score[i] for i in range(len(total_score))]
+        self.last_total_score = total_score
+        return (obs, reward, done, info)
+
+    def reset(self):
+        self.server.reset()
+        obs_raw = self.server.obs()
+        global_state, player_states, info = obs_raw
+        obs = [global_state, player_states]
+        self.last_total_score = [global_state['leaderboard'][i] for i in range(len(global_state['leaderboard']))]
+        return obs
+
+    def close(self):
+        self.server.close()
+
+    def seed(self, seed):
+        self.server.seed(seed)
+
+    def get_team_infos(self):
+        assert hasattr(self, 'server'), 'Please call `reset()` first'
+        return self.server.get_team_infos()
+
+    def init_server(self):
+        self.server = Server(cfg=self.server_cfg)
+
+def seed(self, seed):
+    self.server.seed(seed)
+
+@total_ordering
+class BaseBall(ABC):
+    """
+    Overview:
+        Base class of all balls
+    """
+
+    @staticmethod
+    def default_config():
+        """
+        Overview:
+            Default config
+        """
+        cfg = dict()
+        return EasyDict(cfg)
+
+    def __init__(self, ball_id, position, score, border, **kwargs):
+        """
+        Parameters:
+             vel <Vector2> : the direction of the ball's speed 
+             acc <Vector2> : the direction of the ball's acceleration
+        """
+        self.ball_id = ball_id
+        self.position = position
+        kwargs = EasyDict(kwargs)
+        cfg = BaseBall.default_config()
+        cfg = deep_merge_dicts(cfg, kwargs)
+        self.score = score
+        self.border = border
+        self.radius = self.score_to_radius(self.score)
+        self.is_remove = False
+        self.quad_node = None
+
+    def set_score(self, score: float) -> None:
+        self.score = score
+        self.radius = self.score_to_radius(self.score)
+
+    def radius_to_score(self, radius):
+        return (math.pow(radius, 2) - 0.15) / 0.042 * 100
+
+    def score_to_radius(self, score):
+        return math.sqrt(score / 100 * 0.042 + 0.15)
+
+    def move(self, direction, duration):
+        """
+        Overview:
+            Realize the movement of the ball, pass in the direction and time parameters, and return the new position
+        Parameters:
+            direction <Vector2>: A point in the unit circle
+            duration <float>: time
+        Returns:
+            position <Vector2>: position after moving 
+        """
+        raise NotImplementedError
+
+    def eat(self, ball):
+        """
+        Overview:
+            Describe the rules of eating and being eaten
+        Parameters:
+            ball <BaseBall>: Eaten ball
+        """
+        raise NotImplementedError
+
+    def remove(self):
+        """
+        Overview:
+            Things to do when being removed from the map
+        """
+        self.is_remove = True
+
+    def check_border(self):
+        """
+        Overview:
+            Check to see if the position of the ball exceeds the bounds of the map. 
+            If it exceeds, the speed and acceleration in the corresponding direction will be zeroed, and the position will be edged
+        """
+        if self.position.x < self.border.minx or self.position.x > self.border.maxx:
+            self.position.x = max(self.position.x, self.border.minx)
+            self.position.x = min(self.position.x, self.border.maxx)
+        if self.position.y < self.border.miny or self.position.y > self.border.maxy:
+            self.position.y = max(self.position.y, self.border.miny)
+            self.position.y = min(self.position.y, self.border.maxy)
+
+    def get_dis(self, ball):
+        """
+        Overview:
+            Get the distance between the centers of the two balls
+        Parameters:
+            ball <BaseBall>: another ball
+        """
+        return (self.position - ball.position).length()
+
+    def judge_cover(self, ball):
+        """
+        Overview:
+            Determine whether the center of the two balls is covered
+        Parameters:
+            ball <BaseBall>: another ball
+        Returns:
+            is_covered <bool>: covered or not
+        """
+        if ball.ball_id == self.ball_id:
+            return False
+        dis = self.get_dis(ball)
+        if self.radius > dis or ball.radius > dis:
+            return True
+        else:
+            return False
+
+    def judge_in_rectangle(self, rectangle):
+        """
+        Overview:
+            Determine if the ball and rectangle intersect
+        Parameters:
+            rectangle <List>: left_top_x, left_top_y, right_bottom_x, right_bottom_y
+        Returns:
+            <bool> : intersect or not
+        """
+        dx = rectangle[0] - self.position.x if rectangle[0] > self.position.x else self.position.x - rectangle[2] if self.position.x > rectangle[2] else 0
+        dy = rectangle[1] - self.position.y if rectangle[1] > self.position.y else self.position.y - rectangle[3] if self.position.y > rectangle[3] else 0
+        return dx ** 2 + dy ** 2 <= self.radius ** 2
+
+    def __repr__(self) -> str:
+        return 'position={}, score={:.3f}, radius={:.3f}'.format(self.position, self.score, self.radius)
+
+    def __eq__(self, other):
+        return self.score == other.score
+
+    def __le__(self, other):
+        return self.score < other.score
+
+    def __gt__(self, other):
+        return self.score > other.score
+
+@staticmethod
+def default_config():
+    """
+        Overview:
+            Default config
+        """
+    cfg = dict()
+    return EasyDict(cfg)
+
+class ActionPB(BasePB):
+
+    def __init__(self, playback_settings, **kwargs):
+        self.playback_settings = playback_settings
+        self.save_action = self.playback_settings.save_action
+        self.save_dir = self.playback_settings.save_dir
+        self.save_name_prefix = self.playback_settings.save_name_prefix
+        if self.save_action:
+            if not os.path.isdir(self.save_dir):
+                try:
+                    os.makedirs(self.save_dir)
+                except:
+                    pass
+                logging.warning('save_dir={} must be an existed directory!'.format(self.save_dir))
+            if not self.save_name_prefix:
+                self.save_name_prefix = str(uuid.uuid1())
+        self.playback_data = {}
+        logging.warning('`by_action` is not available now, please use `by_video` or `by_frame`.')
+
+    def need_save(self, *args, **kwargs):
+        return self.save_action
+
+    def save_step(self, actions, last_frame_count):
+        self.playback_data[last_frame_count] = actions
+
+    def save_final(self, cfg, seed):
+        self.playback_data['cfg'] = cfg
+        self.playback_data['seed'] = seed
+        self.playback_path = os.path.join(self.save_dir, self.save_name_prefix + '.ac')
+        compressed_data = lz4.frame.compress(pickle.dumps(self.playback_data))
+        with open(self.playback_path, 'wb') as f:
+            pickle.dump(compressed_data, f)
+        logging.info('save ac at {}'.format(self.playback_path))
+
+def save_final(self, cfg, seed):
+    self.playback_data['cfg'] = cfg
+    self.playback_data['seed'] = seed
+    self.playback_path = os.path.join(self.save_dir, self.save_name_prefix + '.ac')
+    compressed_data = lz4.frame.compress(pickle.dumps(self.playback_data))
+    with open(self.playback_path, 'wb') as f:
+        pickle.dump(compressed_data, f)
+    logging.info('save ac at {}'.format(self.playback_path))
+
+class FramePB(BasePB):
+
+    def __init__(self, playback_settings, **kwargs):
+        self.playback_settings = playback_settings
+        self.save_frame = self.playback_settings.save_frame
+        self.save_all = self.playback_settings.save_all
+        self.save_partial = self.playback_settings.save_partial
+        self.save_dir = self.playback_settings.save_dir
+        self.save_name_prefix = self.playback_settings.save_name_prefix
+        if self.save_frame:
+            if not os.path.isdir(self.save_dir):
+                try:
+                    os.makedirs(self.save_dir)
+                except:
+                    pass
+                logging.warning('save_dir={} must be an existed directory!'.format(self.save_dir))
+            if not self.save_name_prefix:
+                self.save_name_prefix = str(uuid.uuid1())
+        self.playback_data = {}
+
+    def need_save(self, *args, **kwargs):
+        return self.save_frame
+
+    def save_step(self, diff_balls_remove, diff_balls_modify, leaderboard, last_frame_count, *args, **kwargs):
+        self.playback_data[last_frame_count] = [diff_balls_modify, diff_balls_remove, leaderboard]
+
+    def save_final(self, cfg, *args, **kwargs):
+        if self.save_frame:
+            self.playback_data['cfg'] = cfg
+            self.playback_path = os.path.join(self.save_dir, self.save_name_prefix + '.pb')
+            compressed_data = lz4.frame.compress(pickle.dumps(self.playback_data))
+            with open(self.playback_path, 'wb') as f:
+                pickle.dump(compressed_data, f)
+            logging.info('save pb at {}'.format(self.playback_path))
+
+def save_final(self, cfg, *args, **kwargs):
+    if self.save_frame:
+        self.playback_data['cfg'] = cfg
+        self.playback_path = os.path.join(self.save_dir, self.save_name_prefix + '.pb')
+        compressed_data = lz4.frame.compress(pickle.dumps(self.playback_data))
+        with open(self.playback_path, 'wb') as f:
+            pickle.dump(compressed_data, f)
+        logging.info('save pb at {}'.format(self.playback_path))
+
+class VideoPB(BasePB):
+
+    def __init__(self, playback_settings, **kwargs):
+        self.playback_settings = playback_settings
+        self.fps = kwargs['fps']
+        self.map_width = kwargs['map_width']
+        self.map_height = kwargs['map_height']
+        self.save_video = self.playback_settings.save_video
+        self.save_fps = self.playback_settings.save_fps
+        self.save_resolution = self.playback_settings.save_resolution
+        self.save_all = self.playback_settings.save_all
+        self.save_partial = self.playback_settings.save_partial
+        self.save_dir = self.playback_settings.save_dir
+        self.save_name_prefix = self.playback_settings.save_name_prefix
+        if self.save_video:
+            if not os.path.isdir(self.save_dir):
+                try:
+                    os.makedirs(self.save_dir)
+                except:
+                    pass
+                logging.warning('save_dir={} must be an existed directory!'.format(self.save_dir))
+            if not self.save_name_prefix:
+                self.save_name_prefix = str(uuid.uuid1())
+            self.save_fps = int(self.save_fps)
+            self.save_resolution = int(self.save_resolution)
+            self.save_freq = self.fps // self.save_fps
+        self.render = EnvRender(game_screen_width=self.save_resolution, game_screen_height=self.save_resolution, map_width=self.map_width, map_height=self.map_width)
+        self.screens_all = []
+        self.screens_partial = []
+
+    def get_clip_screen(self, screen_data, rectangle):
+        rectangle_tmp = copy.deepcopy(rectangle)
+        left_top_x, left_top_y, right_bottom_x, right_bottom_y = rectangle_tmp
+        left_top_x_fix = max(left_top_x, 0)
+        left_top_y_fix = max(left_top_y, 0)
+        right_bottom_x_fix = min(right_bottom_x, self.width)
+        right_bottom_y_fix = min(right_bottom_y, self.height)
+        if len(screen_data.shape) == 3:
+            screen_data_clip = screen_data[left_top_x_fix:right_bottom_x_fix, left_top_y_fix:right_bottom_y_fix, :]
+            screen_data_clip = np.pad(screen_data_clip, ((left_top_x_fix - left_top_x, right_bottom_x - right_bottom_x_fix), (left_top_y_fix - left_top_y, right_bottom_y - right_bottom_y_fix), (0, 0)), mode='constant')
+        elif len(screen_data.shape) == 2:
+            screen_data_clip = screen_data[left_top_x_fix:right_bottom_x_fix, left_top_y_fix:right_bottom_y_fix]
+            screen_data_clip = np.pad(screen_data_clip, ((left_top_x_fix - left_top_x, right_bottom_x - right_bottom_x_fix), (left_top_y_fix - left_top_y, right_bottom_y - right_bottom_y_fix)), mode='constant')
+        else:
+            raise NotImplementedError
+        return screen_data_clip
+
+    def need_save(self, last_frame_count, *args, **kwargs):
+        return self.save_video and last_frame_count % self.save_freq == 0
+
+    def save_step(self, food_balls, thorns_balls, spore_balls, players, player_num_per_team, *args, **kwargs):
+        self.screens_all.append(self.render.get_screen(food_balls, thorns_balls, spore_balls, players, player_num_per_team))
+
+    def save_final(self, *args, **kwargs):
+        if self.save_video:
+            if self.save_all:
+                video_file_all = os.path.join(self.save_dir, '{}-all.mp4'.format(self.save_name_prefix))
+                out = cv2.VideoWriter(video_file_all, cv2.VideoWriter_fourcc(*'mp4v'), self.save_fps, (self.screens_all[0].shape[1], self.screens_all[0].shape[0]))
+                for index, screen in enumerate(self.screens_all):
+                    out.write(screen)
+                out.release()
+                cv2.destroyAllWindows()
+            if self.save_partial:
+                for player_id, screens in self.screens_partial.items():
+                    video_file_partial = os.path.join(self.save_dir, '{}-{:02d}.mp4'.format(self.save_name_prefix, player_id))
+                    out = cv2.VideoWriter(video_file_partial, cv2.VideoWriter_fourcc(*'mp4v'), self.save_fps, (screens[0].shape[1], screens[0].shape[0]))
+                    for index, screen in enumerate(self.screens):
+                        if index % self.save_freq == 0:
+                            out.write(screen)
+                    out.release()
+                    cv2.destroyAllWindows()
+
+def save_final(self, *args, **kwargs):
+    if self.save_video:
+        if self.save_all:
+            video_file_all = os.path.join(self.save_dir, '{}-all.mp4'.format(self.save_name_prefix))
+            out = cv2.VideoWriter(video_file_all, cv2.VideoWriter_fourcc(*'mp4v'), self.save_fps, (self.screens_all[0].shape[1], self.screens_all[0].shape[0]))
+            for index, screen in enumerate(self.screens_all):
+                out.write(screen)
+            out.release()
+            cv2.destroyAllWindows()
+        if self.save_partial:
+            for player_id, screens in self.screens_partial.items():
+                video_file_partial = os.path.join(self.save_dir, '{}-{:02d}.mp4'.format(self.save_name_prefix, player_id))
+                out = cv2.VideoWriter(video_file_partial, cv2.VideoWriter_fourcc(*'mp4v'), self.save_fps, (screens[0].shape[1], screens[0].shape[0]))
+                for index, screen in enumerate(self.screens):
+                    if index % self.save_freq == 0:
+                        out.write(screen)
+                out.release()
+                cv2.destroyAllWindows()
+
+class AIAgent:
+
+    def __init__(self, team_name, player_names):
+        cfg = EasyDict({'team_name': team_name, 'player_names': player_names, 'env': {'name': 'gobigger', 'player_num_per_team': 2, 'team_num': 2, 'step_mul': 8}, 'agent': {'player_id': None, 'game_player_id': None, 'features': {}}, 'checkpoint_path': 'PATH/MODEL_NAME.pth.tar'})
+        self.agents = {}
+        for player_name in player_names:
+            cfg_cp = deepcopy(cfg)
+            cfg_cp.agent.player_id = player_name
+            cfg_cp.agent.game_player_id = player_name
+            agent = Agent(cfg_cp)
+            agent.reset()
+            agent.model.load_state_dict(torch.load(cfg.checkpoint_path, map_location='cpu')['model'], strict=False)
+            self.agents[player_name] = agent
+
+    def get_actions(self, obs):
+        global_state, player_states = obs
+        actions = {}
+        for player_name, agent in self.agents.items():
+            action = agent.step([global_state, {player_name: player_states[player_name]}])
+            actions.update(action)
+        return actions
+
+def __init__(self, team_name, player_names):
+    cfg = EasyDict({'team_name': team_name, 'player_names': player_names, 'env': {'name': 'gobigger', 'player_num_per_team': 2, 'team_num': 2, 'step_mul': 8}, 'agent': {'player_id': None, 'game_player_id': None, 'features': {}}, 'checkpoint_path': 'PATH/MODEL_NAME.pth.tar'})
+    self.agents = {}
+    for player_name in player_names:
+        cfg_cp = deepcopy(cfg)
+        cfg_cp.agent.player_id = player_name
+        cfg_cp.agent.game_player_id = player_name
+        agent = Agent(cfg_cp)
+        agent.reset()
+        agent.model.load_state_dict(torch.load(cfg.checkpoint_path, map_location='cpu')['model'], strict=False)
+        self.agents[player_name] = agent
+
+def read_config(path: str) -> EasyDict:
+    """
+    Overview:
+        read configuration from path
+    Arguments:
+        - path (:obj:`str`): Path of source yaml
+    Returns:
+        - (:obj:`EasyDict`): Config data from this file with dict type
+    """
+    if path:
+        assert os.path.exists(path), path
+        with open(path, 'r') as f:
+            config = yaml.safe_load(f)
+    else:
+        config = {}
+    return EasyDict(config)
+
+class AIAgent:
+
+    def __init__(self, team_name, player_names):
+        cfg = EasyDict({'env': {'name': 'gobigger', 'player_num_per_team': 1, 'team_num': 2}, 'agent': {'player_id': None, 'game_player_id': None, 'features': {}}, 'checkpoint_path': 'PATH/MODEL_NAME.pth.tar'})
+        self.agents = {}
+        for player_name in player_names:
+            cfg_cp = deepcopy(cfg)
+            cfg_cp.agent.player_id = player_name
+            cfg_cp.agent.game_player_id = player_name
+            agent = Agent(cfg_cp)
+            agent.reset()
+            agent.model.load_state_dict(torch.load(cfg.checkpoint_path, map_location='cpu')['model'], strict=False)
+            self.agents[player_name] = agent
+
+    def get_actions(self, obs):
+        global_state, player_states = obs
+        actions = {}
+        for player_name, agent in self.agents.items():
+            action = agent.step([global_state, {player_name: player_states[player_name]}])
+            actions.update(action)
+        return actions
+
+def __init__(self, team_name, player_names):
+    cfg = EasyDict({'env': {'name': 'gobigger', 'player_num_per_team': 1, 'team_num': 2}, 'agent': {'player_id': None, 'game_player_id': None, 'features': {}}, 'checkpoint_path': 'PATH/MODEL_NAME.pth.tar'})
+    self.agents = {}
+    for player_name in player_names:
+        cfg_cp = deepcopy(cfg)
+        cfg_cp.agent.player_id = player_name
+        cfg_cp.agent.game_player_id = player_name
+        agent = Agent(cfg_cp)
+        agent.reset()
+        agent.model.load_state_dict(torch.load(cfg.checkpoint_path, map_location='cpu')['model'], strict=False)
+        self.agents[player_name] = agent
+
+def read_config(path: str) -> EasyDict:
+    """
+    Overview:
+        read configuration from path
+    Arguments:
+        - path (:obj:`str`): Path of source yaml
+    Returns:
+        - (:obj:`EasyDict`): Config data from this file with dict type
+    """
+    if path:
+        assert os.path.exists(path), path
+        with open(path, 'r') as f:
+            config = yaml.safe_load(f)
+    else:
+        config = {}
+    return EasyDict(config)
+

@@ -1,0 +1,1431 @@
+[
+  {
+    "full_name": "jiegzhan/multi-class-text-classification-cnn",
+    "stars": 427,
+    "svn_url": "https://github.com/jiegzhan/multi-class-text-classification-cnn",
+    "description": "Classify Kaggle Consumer Finance Complaints into 11 classes. Build the model with CNN (Convolutional Neural Network) and Word Embeddings on Tensorflow.",
+    "topics": [
+      "cnn",
+      "text-classification",
+      "tensorflow",
+      "convolutional-neural-networks",
+      "embeddings",
+      "sentence-classification",
+      "multi"
+    ],
+    "owner": "https://github.com/jiegzhan"
+  },
+  {
+    "full_name": "claws-lab/jodie",
+    "stars": 401,
+    "svn_url": "https://github.com/claws-lab/jodie",
+    "description": "A PyTorch implementation of ACM SIGKDD 2019 paper Predicting Dynamic Embedding Trajectory in Temporal Interaction Networks",
+    "topics": [
+      "embeddings",
+      "representation-learning",
+      "network-embedding",
+      "machine-learning",
+      "dynamic-networks",
+      "temporal-network",
+      "kdd2019",
+      "embedding-trajectories"
+    ],
+    "owner": "https://github.com/claws-lab"
+  },
+  {
+    "full_name": "AutoLLM/ArxivDigest",
+    "stars": 378,
+    "svn_url": "https://github.com/AutoLLM/ArxivDigest",
+    "description": "ArXiv Digest and Personalized Recommendations using Large Language Models",
+    "topics": [
+      "ai",
+      "arxiv",
+      "arxiv-papers",
+      "chatgpt",
+      "llm",
+      "gpt",
+      "gpt4",
+      "ml"
+    ],
+    "owner": "https://github.com/AutoLLM"
+  },
+  {
+    "full_name": "Fincept-Corporation/FinceptTerminal",
+    "stars": 363,
+    "svn_url": "https://github.com/Fincept-Corporation/FinceptTerminal",
+    "description": "FinceptTerminal is a modern finance application offering advanced market analytics, investment research, and economic data tools, designed for interactive exploration and data-driven decision-making in a user-friendly environment.",
+    "topics": [
+      "bloomberg-terminal",
+      "finance",
+      "financial-markets",
+      "investing",
+      "investment",
+      "investment-research",
+      "machine-learning",
+      "python",
+      "quantitative-finance",
+      "stock-market",
+      "stocks",
+      "contributions-welcome",
+      "foss",
+      "opensource",
+      "good-first-issue",
+      "help-wanted"
+    ],
+    "owner": "https://github.com/Fincept-Corporation"
+  },
+  {
+    "full_name": "kefirski/pytorch_RVAE",
+    "stars": 357,
+    "svn_url": "https://github.com/kefirski/pytorch_RVAE",
+    "description": "Recurrent Variational Autoencoder that generates sequential data implemented with pytorch",
+    "topics": [
+      "pytorch",
+      "python",
+      "vae",
+      "deep-learning",
+      "nlp"
+    ],
+    "owner": "https://github.com/kefirski"
+  },
+  {
+    "full_name": "joshpocock/Stride-AI-Agents",
+    "stars": 341,
+    "svn_url": "https://github.com/joshpocock/Stride-AI-Agents",
+    "description": "This Repo Is In Development. It will slowly but surely become one of the most potent repos available for open source AI agent code for n8n and other use cases that I cover in my YouTube videos. Star the repo to support and to stay up-to-date. Book a call with my team if you want AI agent DFY.",
+    "topics": [
+      "agents",
+      "ai",
+      "aiagent",
+      "aiagents",
+      "n8n",
+      "python"
+    ],
+    "owner": "https://github.com/joshpocock"
+  },
+  {
+    "full_name": "codelion/adaptive-classifier",
+    "stars": 468,
+    "svn_url": "https://github.com/codelion/adaptive-classifier",
+    "description": "A flexible, adaptive classification system for dynamic text classification",
+    "topics": [
+      "adaptive-learning",
+      "bert",
+      "classifier",
+      "continous-learning",
+      "distilbert",
+      "elastic-weight-consolidation",
+      "embeddings",
+      "faiss",
+      "large-language-models",
+      "llms",
+      "multi-class-classification",
+      "multi-label-classification",
+      "neural-networks",
+      "online-learning",
+      "roberta",
+      "text-classification",
+      "transformers",
+      "machine-learning",
+      "neural-layers",
+      "adaptive-neural-network"
+    ],
+    "owner": "https://github.com/codelion"
+  },
+  {
+    "full_name": "twni2016/pomdp-baselines",
+    "stars": 334,
+    "svn_url": "https://github.com/twni2016/pomdp-baselines",
+    "description": "Simple (but often Strong) Baselines for POMDPs in PyTorch, ICML 2022",
+    "topics": [
+      "pomdp",
+      "recurrent-neural-networks",
+      "meta-rl",
+      "robust-rl",
+      "generalization",
+      "deep-reinforcement-learning",
+      "pytorch",
+      "td3",
+      "sac",
+      "discrete-sac",
+      "credit-assignment"
+    ],
+    "owner": "https://github.com/twni2016"
+  },
+  {
+    "full_name": "PhantomInsights/mexican-government-report",
+    "stars": 480,
+    "svn_url": "https://github.com/PhantomInsights/mexican-government-report",
+    "description": "Text Mining on the 2019 Mexican Government Report, covering from extracting text from a PDF file to plotting the results.",
+    "topics": [
+      "pandas",
+      "matplotlib",
+      "numpy",
+      "seaborn",
+      "spacy",
+      "nlp",
+      "geopandas"
+    ],
+    "owner": "https://github.com/PhantomInsights"
+  },
+  {
+    "full_name": "TilmanGriesel/chipper",
+    "stars": 472,
+    "svn_url": "https://github.com/TilmanGriesel/chipper",
+    "description": "✨ AI interface for tinkerers (Ollama, Haystack RAG, Python)",
+    "topics": [
+      "embedding",
+      "llm",
+      "llm-inference",
+      "ollama",
+      "ollama-api",
+      "ollama-client",
+      "ollama-gui",
+      "rag",
+      "retrival-augmented-generation",
+      "hugging-face",
+      "huggingface",
+      "deepseek-r1",
+      "deepseek",
+      "deepseek-chat",
+      "llama3",
+      "phi4",
+      "agent",
+      "agentic-ai"
+    ],
+    "owner": "https://github.com/TilmanGriesel"
+  },
+  {
+    "full_name": "Ank-Cha/Social-Distancing-Analyser-COVID-19",
+    "stars": 414,
+    "svn_url": "https://github.com/Ank-Cha/Social-Distancing-Analyser-COVID-19",
+    "description": "A social distancing analyzer AI tool to regulate social distancing protocol using video surveillance of CCTV cameras and drones. Social Distancing Analyser to prevent COVID19",
+    "topics": [
+      "covid-19",
+      "covid19",
+      "social-distancing",
+      "artificial-intelligence",
+      "computer-vision",
+      "stay-home",
+      "python",
+      "yolo"
+    ],
+    "owner": "https://github.com/Ank-Cha"
+  },
+  {
+    "full_name": "suitedaces/computer-agent",
+    "stars": 496,
+    "svn_url": "https://github.com/suitedaces/computer-agent",
+    "description": "Desktop app powered by Claude’s computer use capability to control your computer",
+    "topics": [
+      "ai",
+      "ai-tools",
+      "anthropic",
+      "claude-3-5-sonnet",
+      "computer-use",
+      "gui",
+      "pyqt",
+      "pyqt6",
+      "python"
+    ],
+    "owner": "https://github.com/suitedaces"
+  },
+  {
+    "full_name": "danijar/crafter",
+    "stars": 477,
+    "svn_url": "https://github.com/danijar/crafter",
+    "description": "Benchmarking the Spectrum of Agent Capabilities",
+    "topics": [
+      "artificial-intelligence",
+      "reinforcement-learning",
+      "minecraft",
+      "environment",
+      "simulation",
+      "deep-learning"
+    ],
+    "owner": "https://github.com/danijar"
+  },
+  {
+    "full_name": "khanrc/tf.gans-comparison",
+    "stars": 469,
+    "svn_url": "https://github.com/khanrc/tf.gans-comparison",
+    "description": "Implementations of (theoretical) generative adversarial networks and comparison without cherry-picking",
+    "topics": [
+      "gans",
+      "dcgan",
+      "lsgan",
+      "wgan",
+      "wgan-gp",
+      "dragan",
+      "ebgan",
+      "began",
+      "tensorflow",
+      "celeba",
+      "lsun",
+      "gan"
+    ],
+    "owner": "https://github.com/khanrc"
+  },
+  {
+    "full_name": "opendilab/DI-sheep",
+    "stars": 468,
+    "svn_url": "https://github.com/opendilab/DI-sheep",
+    "description": "羊了个羊 + 深度强化学习（Deep Reinforcement Learning + 3 Tiles Game)",
+    "topics": [
+      "deep-reinforcement-learning",
+      "python",
+      "reinforcement-learning",
+      "javascript",
+      "typescript",
+      "react",
+      "artificial-intelligence",
+      "di-engine"
+    ],
+    "owner": "https://github.com/opendilab"
+  },
+  {
+    "full_name": "opendilab/GoBigger",
+    "stars": 467,
+    "svn_url": "https://github.com/opendilab/GoBigger",
+    "description": "[ICLR 2023] Come & try  Decision-Intelligence version of Agar! Gobigger could also help you with multi-agent decision intelligence study.",
+    "topics": [
+      "python",
+      "reinforcement-learning",
+      "multi-agent",
+      "environment",
+      "gym",
+      "league",
+      "game",
+      "rl-environment"
+    ],
+    "owner": "https://github.com/opendilab"
+  },
+  {
+    "full_name": "proroklab/VectorizedMultiAgentSimulator",
+    "stars": 463,
+    "svn_url": "https://github.com/proroklab/VectorizedMultiAgentSimulator",
+    "description": "VMAS is a vectorized differentiable simulator designed for efficient Multi-Agent Reinforcement Learning benchmarking. It is comprised of a vectorized 2D physics engine written in PyTorch and a set of challenging multi-robot scenarios. Additional scenarios can be implemented through a simple and modular interface.",
+    "topics": [
+      "gym",
+      "gym-environment",
+      "marl",
+      "multi-agent",
+      "multi-agent-learning",
+      "multi-agent-reinforcement-learning",
+      "multi-agent-simulation",
+      "multi-agent-systems",
+      "multi-robot",
+      "multi-robot-framework",
+      "multi-robot-sim",
+      "multi-robot-simulator",
+      "multi-robot-systems",
+      "pytorch",
+      "rllib",
+      "simulator",
+      "vectorization",
+      "vectorized",
+      "robotics",
+      "simulation"
+    ],
+    "owner": "https://github.com/proroklab"
+  },
+  {
+    "full_name": "IBM/clai",
+    "stars": 488,
+    "svn_url": "https://github.com/IBM/clai",
+    "description": "Command Line Artificial Intelligence or CLAI is an open-sourced project from IBM Research aimed to bring the power of AI to the command line interface. ",
+    "topics": [
+      "bash",
+      "command-line",
+      "artificial-intelligence",
+      "machine-learning",
+      "ibm-research",
+      "ai",
+      "ml"
+    ],
+    "owner": "https://github.com/IBM"
+  },
+  {
+    "full_name": "sichkar-valentyn/Reinforcement_Learning_in_Python",
+    "stars": 486,
+    "svn_url": "https://github.com/sichkar-valentyn/Reinforcement_Learning_in_Python",
+    "description": "Implementing Reinforcement Learning, namely Q-learning and Sarsa algorithms, for global path planning of mobile robot in unknown environment with obstacles. Comparison analysis of Q-learning and Sarsa",
+    "topics": [
+      "reinforcement-learning",
+      "q-learning",
+      "path-planning",
+      "rl-qlearning",
+      "reinforcement-learning-algorithms",
+      "maze-algorithms",
+      "sarsa-learning",
+      "rl-algorithms",
+      "sarsa",
+      "sarsa-search",
+      "q-learning-vs-sarsa",
+      "shortest-path",
+      "maze-solver",
+      "rl-sarsa",
+      "rl-agents",
+      "rl-environment",
+      "rl-playground",
+      "rl-experiments",
+      "rl-emulator",
+      "obstacle-avoidance"
+    ],
+    "owner": "https://github.com/sichkar-valentyn"
+  },
+  {
+    "full_name": "Tongjilibo/build_MiniLLM_from_scratch",
+    "stars": 484,
+    "svn_url": "https://github.com/Tongjilibo/build_MiniLLM_from_scratch",
+    "description": "从0到1构建一个MiniLLM (pretrain+sft+dpo实践中)",
+    "topics": [
+      "bert4torch",
+      "llama2",
+      "llm"
+    ],
+    "owner": "https://github.com/Tongjilibo"
+  },
+  {
+    "full_name": "AndrejOrsula/drl_grasping",
+    "stars": 482,
+    "svn_url": "https://github.com/AndrejOrsula/drl_grasping",
+    "description": "Deep Reinforcement Learning for Robotic Grasping from Octrees",
+    "topics": [
+      "robotics",
+      "grasping",
+      "reinforcement-learning",
+      "octree",
+      "domain-randomization",
+      "sim2real",
+      "ros2",
+      "gym-ignition",
+      "stable-baselines3",
+      "deep-reinforcement-learning",
+      "openai-gym",
+      "gazebo",
+      "ros"
+    ],
+    "owner": "https://github.com/AndrejOrsula"
+  },
+  {
+    "full_name": "AliaksandrSiarohin/monkey-net",
+    "stars": 475,
+    "svn_url": "https://github.com/AliaksandrSiarohin/monkey-net",
+    "description": "Animating Arbitrary Objects via Deep Motion Transfer",
+    "topics": [
+      "deep-learning",
+      "animation",
+      "video"
+    ],
+    "owner": "https://github.com/AliaksandrSiarohin"
+  },
+  {
+    "full_name": "idreesshaikh/Autonomous-Driving-in-Carla-using-Deep-Reinforcement-Learning",
+    "stars": 471,
+    "svn_url": "https://github.com/idreesshaikh/Autonomous-Driving-in-Carla-using-Deep-Reinforcement-Learning",
+    "description": "Deep Reinforcement Learning (PPO) in Autonomous Driving (Carla) [from scratch]",
+    "topics": [
+      "autonomous-driving",
+      "ddqn",
+      "reinforcement-learning",
+      "self-driving-car",
+      "deep-reinforcement-learning",
+      "ppo",
+      "carla-driving-simulator",
+      "carla-environment",
+      "deep-learning",
+      "proximal-policy-optimization",
+      "carla-simulator",
+      "deep-learning-algorithms",
+      "openai",
+      "pytorch",
+      "self-driving",
+      "self-driving-car-simulation",
+      "self-driving-cars"
+    ],
+    "owner": "https://github.com/idreesshaikh"
+  },
+  {
+    "full_name": "swz30/MIRNetv2",
+    "stars": 459,
+    "svn_url": "https://github.com/swz30/MIRNetv2",
+    "description": "[TPAMI 2022] Learning Enriched Features for Fast Image Restoration and Enhancement. Results on Defocus Deblurring, Denoising, Super-resolution, and image enhancement",
+    "topics": [
+      "contrast-enhancement",
+      "defocus-deblurring",
+      "denoising",
+      "high-resolution",
+      "image-denoising",
+      "image-enhancement",
+      "image-processing",
+      "image-restoration",
+      "low-level-vision",
+      "low-light-image-enhancement",
+      "pytorch",
+      "tpami"
+    ],
+    "owner": "https://github.com/swz30"
+  },
+  {
+    "full_name": "yifanlu0227/ChatSim",
+    "stars": 406,
+    "svn_url": "https://github.com/yifanlu0227/ChatSim",
+    "description": "[CVPR2024 Highlight] Editable Scene Simulation for Autonomous Driving via LLM-Agent Collaboration",
+    "topics": [
+      "3d",
+      "3d-reconstruction",
+      "3d-vision",
+      "auto",
+      "autonomous-driving",
+      "llm",
+      "llm-agent",
+      "llm-agents"
+    ],
+    "owner": "https://github.com/yifanlu0227"
+  },
+  {
+    "full_name": "eddyhkchiu/mahalanobis_3d_multi_object_tracking",
+    "stars": 394,
+    "svn_url": "https://github.com/eddyhkchiu/mahalanobis_3d_multi_object_tracking",
+    "description": "[NeurIPS Workshop 2019] Official code of the paper Probabilistic 3D Multi-Object Tracking for Autonomous Driving. First Place of the First NuScenes Tracking Challenge in the AI Driving Olympics Workshop of NeurIPS.",
+    "topics": [
+      "3d-multi-object-tracking",
+      "autonomous-driving",
+      "computer-vision",
+      "kalman-filter",
+      "robotics"
+    ],
+    "owner": "https://github.com/eddyhkchiu"
+  },
+  {
+    "full_name": "ruhyadi/YOLO3D",
+    "stars": 357,
+    "svn_url": "https://github.com/ruhyadi/YOLO3D",
+    "description": "YOLO 3D Object Detection for Autonomous Driving Vehicle",
+    "topics": [
+      "yolo",
+      "self-driving-car",
+      "3d-object-detection",
+      "pytorch",
+      "deep-learning"
+    ],
+    "owner": "https://github.com/ruhyadi"
+  },
+  {
+    "full_name": "DerrickXuNu/v2x-vit",
+    "stars": 321,
+    "svn_url": "https://github.com/DerrickXuNu/v2x-vit",
+    "description": "[ECCV2022] Official Implementation of  paper V2X-ViT: Vehicle-to-Everything Cooperative Perception with Vision Transformer",
+    "topics": [
+      "autonomous-driving",
+      "computer-vision",
+      "machine-learning",
+      "3d-object-detection",
+      "collaborative-perception",
+      "deep-learning",
+      "multi-agent-system",
+      "pytorch",
+      "simulation",
+      "v2x",
+      "vehicle-to-everything",
+      "vision-transformer"
+    ],
+    "owner": "https://github.com/DerrickXuNu"
+  },
+  {
+    "full_name": "fregu856/3DOD_thesis",
+    "stars": 286,
+    "svn_url": "https://github.com/fregu856/3DOD_thesis",
+    "description": "3D Object Detection for Autonomous Driving in PyTorch, trained on the KITTI dataset.",
+    "topics": [
+      "pytorch",
+      "object-detection",
+      "3d-detection",
+      "3d-deep-learning",
+      "autonomous-driving",
+      "computer-vision",
+      "deep-learning",
+      "machine-learning"
+    ],
+    "owner": "https://github.com/fregu856"
+  },
+  {
+    "full_name": "deadbits/vigil-llm",
+    "stars": 416,
+    "svn_url": "https://github.com/deadbits/vigil-llm",
+    "description": "⚡ Vigil ⚡  Detect prompt injections, jailbreaks, and other potentially risky Large Language Model (LLM) inputs",
+    "topics": [
+      "llm-security",
+      "prompt-injection",
+      "adversarial-attacks",
+      "adversarial-machine-learning",
+      "large-language-models",
+      "llmops",
+      "yara-scanner",
+      "security-tools"
+    ],
+    "owner": "https://github.com/deadbits"
+  },
+  {
+    "full_name": "morpheuslord/HackBot",
+    "stars": 317,
+    "svn_url": "https://github.com/morpheuslord/HackBot",
+    "description": "AI-powered cybersecurity chatbot designed to provide helpful and accurate answers to your cybersecurity-related queries and also do code analysis and scan analysis.",
+    "topics": [
+      "ai",
+      "chatbot",
+      "cli-chat-app",
+      "llama2",
+      "automation",
+      "cybersecurity",
+      "cybersecurity-education",
+      "cybersecurity-tools",
+      "llama2-7b",
+      "llamacpp",
+      "llm-inference",
+      "runpod",
+      "llama-api"
+    ],
+    "owner": "https://github.com/morpheuslord"
+  },
+  {
+    "full_name": "dhammon/ai-goat",
+    "stars": 302,
+    "svn_url": "https://github.com/dhammon/ai-goat",
+    "description": "Learn AI security through a series of vulnerable LLM CTF challenges. No sign ups, no cloud fees, run everything locally on your system.",
+    "topics": [
+      "ai",
+      "ctf",
+      "llm",
+      "security"
+    ],
+    "owner": "https://github.com/dhammon"
+  },
+  {
+    "full_name": "noahho/CAAFE",
+    "stars": 170,
+    "svn_url": "https://github.com/noahho/CAAFE",
+    "description": "Semi-automatic feature engineering process using Language Models and your dataset descriptions. Based on the paper LLMs for Semi-Automated Data Science: Introducing CAAFE for Context-Aware Automated Feature Engineering by Hollmann, Müller, and Hutter (2023).",
+    "topics": [
+      "automl",
+      "data-science",
+      "deep-learning",
+      "feature-engineering",
+      "machine-learning",
+      "tabpfn"
+    ],
+    "owner": "https://github.com/noahho"
+  },
+  {
+    "full_name": "Colorado-Mesa-University-Cybersecurity/DeepLearning-IDS",
+    "stars": 163,
+    "svn_url": "https://github.com/Colorado-Mesa-University-Cybersecurity/DeepLearning-IDS",
+    "description": "Network Intrusion Detection System using Deep Learning Techniques",
+    "topics": [
+      "deep-learning",
+      "fastai",
+      "tensorflow",
+      "neural-networks",
+      "intrusion-detection",
+      "theano"
+    ],
+    "owner": "https://github.com/Colorado-Mesa-University-Cybersecurity"
+  },
+  {
+    "full_name": "miccunifi/ladi-vton",
+    "stars": 454,
+    "svn_url": "https://github.com/miccunifi/ladi-vton",
+    "description": "[ACM MM 2023] - LaDI-VTON: Latent Diffusion Textual-Inversion Enhanced Virtual Try-On",
+    "topics": [
+      "dresscode",
+      "fashionai",
+      "generative-model",
+      "latent-diffusion-models",
+      "stable-diffusion",
+      "textual-inversion",
+      "virtual-tryon",
+      "viton-hd",
+      "acmmm",
+      "acmmm2023"
+    ],
+    "owner": "https://github.com/miccunifi"
+  },
+  {
+    "full_name": "princeton-nlp/WebShop",
+    "stars": 406,
+    "svn_url": "https://github.com/princeton-nlp/WebShop",
+    "description": "[NeurIPS 2022] 🛒WebShop: Towards Scalable Real-World Web Interaction with Grounded Language Agents",
+    "topics": [
+      "decision-making",
+      "language",
+      "language-grounding",
+      "ml",
+      "nlp",
+      "rl",
+      "rl-environment",
+      "shopping",
+      "sim-to-real",
+      "web-based"
+    ],
+    "owner": "https://github.com/princeton-nlp"
+  },
+  {
+    "full_name": "HiKapok/tf.fashionAI",
+    "stars": 374,
+    "svn_url": "https://github.com/HiKapok/tf.fashionAI",
+    "description": "Full pipeline for TianChi FashionAI clothes keypoints detection compitetion in TensorFlow",
+    "topics": [
+      "keypoints-detector",
+      "keypoint-localization",
+      "fashionai",
+      "tensorflow",
+      "cascaded-pyramid-network",
+      "stacked-hourglass-networks",
+      "pose-estimation",
+      "clothes-detection",
+      "hourglass"
+    ],
+    "owner": "https://github.com/HiKapok"
+  },
+  {
+    "full_name": "LongmaoTeamTf/deep_recommenders",
+    "stars": 329,
+    "svn_url": "https://github.com/LongmaoTeamTf/deep_recommenders",
+    "description": "Deep Recommenders",
+    "topics": [
+      "deep-learning",
+      "ranking",
+      "retrieval",
+      "recommendation-system",
+      "multi-task-learning"
+    ],
+    "owner": "https://github.com/LongmaoTeamTf"
+  },
+  {
+    "full_name": "alexfazio/viral-clips-crew",
+    "stars": 493,
+    "svn_url": "https://github.com/alexfazio/viral-clips-crew",
+    "description": "Your CrewAI Powered Video Editing Assistant",
+    "topics": [
+      "crewai",
+      "ffmpeg",
+      "whisper",
+      "yt-dlp"
+    ],
+    "owner": "https://github.com/alexfazio"
+  },
+  {
+    "full_name": "PrithivirajDamodaran/Styleformer",
+    "stars": 487,
+    "svn_url": "https://github.com/PrithivirajDamodaran/Styleformer",
+    "description": "A Neural Language Style Transfer framework to transfer natural language text smoothly between fine-grained language styles like formal/casual, active/passive, and many more. Created by Prithiviraj Damodaran. Open to pull requests and other forms of collaboration.",
+    "topics": [
+      "style-transfer",
+      "slang",
+      "informal-sentences",
+      "formal-languages",
+      "nlp",
+      "active",
+      "passive",
+      "text-style-transfer",
+      "text-style",
+      "text-style-transfer-benchmark"
+    ],
+    "owner": "https://github.com/PrithivirajDamodaran"
+  },
+  {
+    "full_name": "MLNLP-World/SimBiber",
+    "stars": 459,
+    "svn_url": "https://github.com/MLNLP-World/SimBiber",
+    "description": "MLNLP社区用来帮助缩短参考文献的工具。A tool for simplifying bibtex with official info",
+    "topics": [
+      "deep-learning",
+      "latex",
+      "machine-learning",
+      "natural-language-processing",
+      "python",
+      "mlnlp"
+    ],
+    "owner": "https://github.com/MLNLP-World"
+  },
+  {
+    "full_name": "shamspias/customizable-gpt-chatbot",
+    "stars": 393,
+    "svn_url": "https://github.com/shamspias/customizable-gpt-chatbot",
+    "description": "A dynamic, scalable AI chatbot built with Django REST framework, supporting custom training from PDFs, documents, websites, and YouTube videos. Leveraging OpenAI's GPT-3.5, Pinecone, FAISS, and Celery for seamless integration and performance.",
+    "topics": [
+      "artificial-intelligence",
+      "chatbot",
+      "data-preprocessing",
+      "django",
+      "django-rest-framework",
+      "gpt-3",
+      "machine-learning",
+      "nlp",
+      "python",
+      "conversational-ai",
+      "voice-chat",
+      "voice-recognition",
+      "voice-to-text",
+      "voice-transcription",
+      "gpt-voice",
+      "natural-language-processing",
+      "langchain",
+      "langchain-python",
+      "longchain",
+      "autogpt"
+    ],
+    "owner": "https://github.com/shamspias"
+  },
+  {
+    "full_name": "arxhr007/Aliens_eye",
+    "stars": 357,
+    "svn_url": "https://github.com/arxhr007/Aliens_eye",
+    "description": "Hunt down 840+ social media accounts using AI",
+    "topics": [
+      "osint",
+      "python",
+      "linux",
+      "python3",
+      "debain",
+      "information",
+      "information-gathering",
+      "termux",
+      "termux-tool",
+      "python-script",
+      "hack",
+      "hacker",
+      "hacking",
+      "hackingtools",
+      "linux-desktop",
+      "social-media",
+      "socialmediahacking",
+      "ai",
+      "artificial-intelligence"
+    ],
+    "owner": "https://github.com/arxhr007"
+  },
+  {
+    "full_name": "0ssamaak0/DLTA-AI",
+    "stars": 352,
+    "svn_url": "https://github.com/0ssamaak0/DLTA-AI",
+    "description": "Data Labeling, Tracking and Annotation with AI",
+    "topics": [
+      "annotation",
+      "computer-vision",
+      "datasets-preparation",
+      "pytorch"
+    ],
+    "owner": "https://github.com/0ssamaak0"
+  },
+  {
+    "full_name": "Leezekun/MassGen",
+    "stars": 466,
+    "svn_url": "https://github.com/Leezekun/MassGen",
+    "description": "🚀 MassGen: An Open-source Multi-Agent Scaling System Inspired by Grok Heavy and Gemini Deep Think. Join the discord channel: https://discord.com/invite/VVrT2rQaz5",
+    "topics": [
+      "agent",
+      "llm",
+      "multi-agent",
+      "test-time-scaling"
+    ],
+    "owner": "https://github.com/Leezekun"
+  },
+  {
+    "full_name": "GH05TCREW/PentestAgent",
+    "stars": 423,
+    "svn_url": "https://github.com/GH05TCREW/PentestAgent",
+    "description": "All-in-one offensive security toolbox with AI agent and MCP architecture. Integrates tools like Nmap, Metasploit, FFUF, SQLMap. Enables pentesting, bug bounty hunting, threat hunting, and reporting. RAG-based responses with local knowledge base support.",
+    "topics": [
+      "cybersecurity",
+      "penetration-testing",
+      "security-automation",
+      "redteam",
+      "pentesting-tools",
+      "ai-security",
+      "hacking-tools",
+      "pentest-reports",
+      "assistant",
+      "pentest",
+      "llm"
+    ],
+    "owner": "https://github.com/GH05TCREW"
+  },
+  {
+    "full_name": "HKUDS/RLMRec",
+    "stars": 415,
+    "svn_url": "https://github.com/HKUDS/RLMRec",
+    "description": "[WWW'2024] RLMRec: Representation Learning with Large Language Models for Recommendation",
+    "topics": [
+      "collaborative-filtering",
+      "graph-neural-networks",
+      "large-language-models",
+      "recommendation",
+      "recommender-systems"
+    ],
+    "owner": "https://github.com/HKUDS"
+  },
+  {
+    "full_name": "Pointcept/PointTransformerV2",
+    "stars": 413,
+    "svn_url": "https://github.com/Pointcept/PointTransformerV2",
+    "description": "[NeurIPS'22] An official PyTorch implementation of PTv2.",
+    "topics": [
+      "pytorch",
+      "3d-vision",
+      "point-cloud"
+    ],
+    "owner": "https://github.com/Pointcept"
+  },
+  {
+    "full_name": "Leavingseason/OpenLearning4DeepRecsys",
+    "stars": 399,
+    "svn_url": "https://github.com/Leavingseason/OpenLearning4DeepRecsys",
+    "description": "Some deep learning based recsys for open learning.",
+    "topics": [
+      "deep-learning",
+      "factorization-machines",
+      "recommender-system",
+      "tensorflow",
+      "neumf",
+      "neural-collaborative-filtering"
+    ],
+    "owner": "https://github.com/Leavingseason"
+  },
+  {
+    "full_name": "myshell-ai/AIlice",
+    "stars": 1257,
+    "svn_url": "https://github.com/myshell-ai/AIlice",
+    "description": "AIlice is a fully autonomous, general-purpose AI agent.",
+    "topics": [
+      "agent",
+      "ai",
+      "llm",
+      "llm-agent"
+    ],
+    "owner": "https://github.com/myshell-ai"
+  },
+  {
+    "full_name": "reczoo/FuxiCTR",
+    "stars": 1288,
+    "svn_url": "https://github.com/reczoo/FuxiCTR",
+    "description": "A configurable, tunable, and reproducible library for CTR prediction https://fuxictr.github.io",
+    "topics": [
+      "ctr-prediction",
+      "recommender-systems",
+      "ctr",
+      "cvr",
+      "pytorch"
+    ],
+    "owner": "https://github.com/reczoo"
+  },
+  {
+    "full_name": "autonomousvision/transfuser",
+    "stars": 1404,
+    "svn_url": "https://github.com/autonomousvision/transfuser",
+    "description": "[PAMI'23] TransFuser: Imitation with Transformer-Based Sensor Fusion for Autonomous Driving; [CVPR'21] Multi-Modal Fusion Transformer for End-to-End Autonomous Driving",
+    "topics": [
+      "imitation-learning",
+      "autonomous-driving",
+      "transformers",
+      "sensor-fusion"
+    ],
+    "owner": "https://github.com/autonomousvision"
+  },
+  {
+    "full_name": "EvoAgentX/EvoAgentX",
+    "stars": 1809,
+    "svn_url": "https://github.com/EvoAgentX/EvoAgentX",
+    "description": "🚀 EvoAgentX: Building a Self-Evolving Ecosystem of AI Agents",
+    "topics": [
+      "agent",
+      "ai",
+      "ai-agents",
+      "llms",
+      "multi-agent-systems",
+      "natural-language-processing",
+      "self-evolving",
+      "memory",
+      "rag",
+      "tool",
+      "tools"
+    ],
+    "owner": "https://github.com/EvoAgentX"
+  },
+  {
+    "full_name": "tradytics/surpriver",
+    "stars": 1823,
+    "svn_url": "https://github.com/tradytics/surpriver",
+    "description": "Find big moving stocks before they move using machine learning and anomaly detection",
+    "topics": [
+      "machine-learning",
+      "finance-application",
+      "trading",
+      "trading-algorithms",
+      "algotrading",
+      "anomaly-detection",
+      "ai",
+      "investment",
+      "stock-analysis",
+      "stock"
+    ],
+    "owner": "https://github.com/tradytics"
+  },
+  {
+    "full_name": "itsOwen/CyberScraper-2077",
+    "stars": 1863,
+    "svn_url": "https://github.com/itsOwen/CyberScraper-2077",
+    "description": "A Powerful web scraper powered by LLM | OpenAI, Gemini & Ollama",
+    "topics": [
+      "ai-scraping",
+      "llm",
+      "openai",
+      "scraper",
+      "webscraping",
+      "gemini-api",
+      "llm-scraper",
+      "web-scraper"
+    ],
+    "owner": "https://github.com/itsOwen"
+  },
+  {
+    "full_name": "camel-ai/oasis",
+    "stars": 1978,
+    "svn_url": "https://github.com/camel-ai/oasis",
+    "description": "🏝️ OASIS: Open Agent Social Interaction Simulations with One Million Agents. ",
+    "topics": [
+      "agent-based-framework",
+      "agent-based-simulation",
+      "large-language-models",
+      "large-scale",
+      "llm-agents",
+      "deep-learning",
+      "natural-language-processing",
+      "ai-societies",
+      "multi-agent-systems"
+    ],
+    "owner": "https://github.com/camel-ai"
+  },
+  {
+    "full_name": "TorchIO-project/torchio",
+    "stars": 2277,
+    "svn_url": "https://github.com/TorchIO-project/torchio",
+    "description": "Medical imaging processing for AI applications.",
+    "topics": [
+      "pytorch",
+      "medical-image-computing",
+      "deep-learning",
+      "data-augmentation",
+      "medical-images",
+      "machine-learning",
+      "python",
+      "medical-image-processing",
+      "medical-image-analysis",
+      "medical-imaging-datasets",
+      "medical-imaging-with-deep-learning",
+      "augmentation"
+    ],
+    "owner": "https://github.com/TorchIO-project"
+  },
+  {
+    "full_name": "JasonKessler/scattertext",
+    "stars": 2314,
+    "svn_url": "https://github.com/JasonKessler/scattertext",
+    "description": "Beautiful visualizations of how language differs among document types.",
+    "topics": [
+      "nlp",
+      "d3",
+      "word-embeddings",
+      "machine-learning",
+      "natural-language-processing",
+      "visualization",
+      "word2vec",
+      "text-visualization",
+      "text-mining",
+      "japanese-language",
+      "computational-social-science",
+      "sentiment",
+      "eda",
+      "exploratory-data-analysis",
+      "text-as-data",
+      "scatter-plot",
+      "topic-modeling",
+      "stylometry",
+      "stylometric",
+      "semiotic-squares"
+    ],
+    "owner": "https://github.com/JasonKessler"
+  },
+  {
+    "full_name": "hitsz-ids/synthetic-data-generator",
+    "stars": 2378,
+    "svn_url": "https://github.com/hitsz-ids/synthetic-data-generator",
+    "description": "SDG is a specialized framework designed to generate high-quality structured tabular data.",
+    "topics": [
+      "deep-learning",
+      "gan",
+      "generative-ai",
+      "machine-learning",
+      "privacy",
+      "synthetic-data",
+      "tabular-data",
+      "agent",
+      "data-generator",
+      "llm"
+    ],
+    "owner": "https://github.com/hitsz-ids"
+  },
+  {
+    "full_name": "InternLM/HuixiangDou",
+    "stars": 2434,
+    "svn_url": "https://github.com/InternLM/HuixiangDou",
+    "description": "HuixiangDou: Overcoming Group Chat Scenarios with LLM-based Technical Assistance",
+    "topics": [
+      "chatbot",
+      "llm",
+      "rag",
+      "dsl",
+      "lark",
+      "pipeline",
+      "robot",
+      "wechat",
+      "application",
+      "multimodal",
+      "image-retrieval",
+      "assistant",
+      "assistant-chat-bots",
+      "group-chat"
+    ],
+    "owner": "https://github.com/InternLM"
+  },
+  {
+    "full_name": "georgia-tech-db/evadb",
+    "stars": 2683,
+    "svn_url": "https://github.com/georgia-tech-db/evadb",
+    "description": "Database system for AI-powered apps",
+    "topics": [
+      "eva",
+      "video-analytics",
+      "serving",
+      "database",
+      "labeling",
+      "object-detection",
+      "data-analysis",
+      "ai",
+      "chatgpt",
+      "langchain",
+      "auto-gpt",
+      "gpt4all",
+      "huggingface",
+      "llm",
+      "gpt-4",
+      "agent",
+      "hacktoberfest"
+    ],
+    "owner": "https://github.com/georgia-tech-db"
+  },
+  {
+    "full_name": "edtechre/pybroker",
+    "stars": 2811,
+    "svn_url": "https://github.com/edtechre/pybroker",
+    "description": "Algorithmic Trading in Python with Machine Learning",
+    "topics": [
+      "algotrading",
+      "backtesting",
+      "machine-learning",
+      "python",
+      "trading",
+      "quantitative-finance",
+      "stocks",
+      "framework",
+      "investment",
+      "ai",
+      "artificial-intelligence",
+      "algorithmic-trading",
+      "data-science",
+      "finance",
+      "trading-strategies",
+      "crypto",
+      "cryptocurrency"
+    ],
+    "owner": "https://github.com/edtechre"
+  },
+  {
+    "full_name": "THUDM/AgentBench",
+    "stars": 2825,
+    "svn_url": "https://github.com/THUDM/AgentBench",
+    "description": "A Comprehensive Benchmark to Evaluate LLMs as Agents (ICLR'24)",
+    "topics": [
+      "chatgpt",
+      "gpt-4",
+      "llm",
+      "llm-agent"
+    ],
+    "owner": "https://github.com/THUDM"
+  },
+  {
+    "full_name": "aurelio-labs/semantic-router",
+    "stars": 2826,
+    "svn_url": "https://github.com/aurelio-labs/semantic-router",
+    "description": "Superfast AI decision making and intelligent processing of multi-modal data.",
+    "topics": [
+      "ai",
+      "artificial-intelligence",
+      "chatbot",
+      "computer-vision",
+      "generative-ai",
+      "machine-learning",
+      "nlp"
+    ],
+    "owner": "https://github.com/aurelio-labs"
+  },
+  {
+    "full_name": "jina-ai/dalle-flow",
+    "stars": 2832,
+    "svn_url": "https://github.com/jina-ai/dalle-flow",
+    "description": "🌊 A Human-in-the-Loop workflow for creating HD images from text",
+    "topics": [
+      "dalle",
+      "generative-art",
+      "human-in-the-loop",
+      "jina",
+      "neural-search",
+      "openai",
+      "swinir",
+      "dalle-mega",
+      "dalle-mini",
+      "glid3"
+    ],
+    "owner": "https://github.com/jina-ai"
+  },
+  {
+    "full_name": "zzw922cn/Automatic_Speech_Recognition",
+    "stars": 2842,
+    "svn_url": "https://github.com/zzw922cn/Automatic_Speech_Recognition",
+    "description": "End-to-end Automatic Speech Recognition for Madarian and English in Tensorflow ",
+    "topics": [
+      "automatic-speech-recognition",
+      "tensorflow",
+      "timit-dataset",
+      "feature-vector",
+      "phonemes",
+      "data-preprocessing",
+      "rnn",
+      "audio",
+      "deep-learning",
+      "lstm",
+      "end-to-end",
+      "cnn",
+      "rnn-encoder-decoder",
+      "evaluation",
+      "paper",
+      "speech-recognition",
+      "layer-normalization",
+      "chinese-speech-recognition"
+    ],
+    "owner": "https://github.com/zzw922cn"
+  },
+  {
+    "full_name": "MiniMax-AI/MiniMax-M1",
+    "stars": 2912,
+    "svn_url": "https://github.com/MiniMax-AI/MiniMax-M1",
+    "description": "MiniMax-M1, the world's first open-weight, large-scale hybrid-attention reasoning model.",
+    "topics": [
+      "large-language-models",
+      "llm",
+      "reasoning-models",
+      "minimax-m1"
+    ],
+    "owner": "https://github.com/MiniMax-AI"
+  },
+  {
+    "full_name": "codelion/optillm",
+    "stars": 2961,
+    "svn_url": "https://github.com/codelion/optillm",
+    "description": "Optimizing inference proxy for LLMs",
+    "topics": [
+      "agent",
+      "agentic-ai",
+      "agentic-workflow",
+      "agents",
+      "api-gateway",
+      "genai",
+      "large-language-models",
+      "llm",
+      "llm-inference",
+      "llmapi",
+      "mixture-of-experts",
+      "moa",
+      "openai",
+      "openai-api",
+      "optimization",
+      "proxy-server",
+      "agentic-framework",
+      "chain-of-thought",
+      "monte-carlo-tree-search",
+      "prompt-engineering"
+    ],
+    "owner": "https://github.com/codelion"
+  },
+  {
+    "full_name": "Cartucho/mAP",
+    "stars": 2963,
+    "svn_url": "https://github.com/Cartucho/mAP",
+    "description": "mean Average Precision - This code evaluates the performance of your neural net for object recognition.",
+    "topics": [
+      "machine-learning",
+      "pascal-voc",
+      "average-precision",
+      "ground-truth",
+      "object-detection",
+      "computer-vision",
+      "metrics",
+      "detection",
+      "neural-network",
+      "darkflow",
+      "yolo",
+      "darknet"
+    ],
+    "owner": "https://github.com/Cartucho"
+  },
+  {
+    "full_name": "XinJingHao/DRL-Pytorch",
+    "stars": 2976,
+    "svn_url": "https://github.com/XinJingHao/DRL-Pytorch",
+    "description": "Clean, Robust, and Unified PyTorch implementation of popular Deep Reinforcement Learning (DRL) algorithms (Q-learning, Duel DDQN, PER, C51, Noisy DQN, PPO, DDPG, TD3, SAC, ASL)",
+    "topics": [
+      "deep-reinforcement-learning",
+      "pytorch",
+      "reinforcement-learning",
+      "machine-learning",
+      "asl",
+      "c51",
+      "categorical-dqn",
+      "ddpg",
+      "double-dqn",
+      "dueling-dqn",
+      "noisynet-dqn",
+      "ppo",
+      "prioritized-experience-replay",
+      "q-learning",
+      "sac",
+      "td3"
+    ],
+    "owner": "https://github.com/XinJingHao"
+  },
+  {
+    "full_name": "morpheuslord/GPT_Vuln-analyzer",
+    "stars": 582,
+    "svn_url": "https://github.com/morpheuslord/GPT_Vuln-analyzer",
+    "description": "Uses ChatGPT API, Bard API, and Llama2, Python-Nmap, DNS Recon, PCAP and JWT recon modules and uses the GPT3 model to create vulnerability reports based on Nmap scan data, and DNS scan information. It can also perform subdomain enumeration to a great extent",
+    "topics": [
+      "chatgpt",
+      "chatgpt-api",
+      "information-gathering",
+      "nmap",
+      "nmap-api",
+      "openai",
+      "terminal",
+      "ai-vulnerability-analysis",
+      "nmap-vulnerability",
+      "nmap-vulnerability-analysis-ai",
+      "vulnerability-analysis",
+      "dns",
+      "dns-enumeration",
+      "dns-record",
+      "dns-enumeration-ai",
+      "hacking-tools",
+      "bard-ai",
+      "bard-api",
+      "llama2",
+      "runpod"
+    ],
+    "owner": "https://github.com/morpheuslord"
+  },
+  {
+    "full_name": "redhuntlabs/Octopii",
+    "stars": 703,
+    "svn_url": "https://github.com/redhuntlabs/Octopii",
+    "description": "An AI-powered Personal Identifiable Information (PII) scanner.",
+    "topics": [
+      "cybersecurity",
+      "image-processing",
+      "machine-learning",
+      "ocr",
+      "optical-character-recognition",
+      "pii",
+      "pii-detection",
+      "nlp",
+      "python",
+      "blackhat",
+      "cloud"
+    ],
+    "owner": "https://github.com/redhuntlabs"
+  },
+  {
+    "full_name": "vinayakumarr/Network-Intrusion-Detection",
+    "stars": 750,
+    "svn_url": "https://github.com/vinayakumarr/Network-Intrusion-Detection",
+    "description": "Network Intrusion Detection KDDCup '99', NSL-KDD and UNSW-NB15",
+    "topics": [
+      "intrusion-detection",
+      "cybersecurity",
+      "nsl-kdd",
+      "unsw-nb15",
+      "kdd99",
+      "network-security",
+      "machine-learning",
+      "deep-learning",
+      "network-intrusion-detection"
+    ],
+    "owner": "https://github.com/vinayakumarr"
+  },
+  {
+    "full_name": "motional/nuplan-devkit",
+    "stars": 885,
+    "svn_url": "https://github.com/motional/nuplan-devkit",
+    "description": "The devkit of the nuPlan dataset.",
+    "topics": [
+      "planning",
+      "machine-learning",
+      "autonomous-driving",
+      "simulation"
+    ],
+    "owner": "https://github.com/motional"
+  },
+  {
+    "full_name": "MorDavid/BruteForceAI",
+    "stars": 905,
+    "svn_url": "https://github.com/MorDavid/BruteForceAI",
+    "description": "Advanced LLM-powered brute-force tool combining AI intelligence with automated login attacks",
+    "topics": [
+      "ai",
+      "bruteforce",
+      "bugbounty",
+      "llm",
+      "loginpages"
+    ],
+    "owner": "https://github.com/MorDavid"
+  },
+  {
+    "full_name": "LucasAlegre/sumo-rl",
+    "stars": 911,
+    "svn_url": "https://github.com/LucasAlegre/sumo-rl",
+    "description": "Reinforcement Learning environments for Traffic Signal Control with SUMO. Compatible with Gymnasium, PettingZoo, and popular RL libraries.",
+    "topics": [
+      "sumo",
+      "rl-algorithms",
+      "reinforcement-learning",
+      "gym",
+      "traffic-signal-control",
+      "gym-env",
+      "pettingzoo",
+      "machine-learning",
+      "deep-reinforcement-learning",
+      "python",
+      "gymnasium"
+    ],
+    "owner": "https://github.com/LucasAlegre"
+  }
+]

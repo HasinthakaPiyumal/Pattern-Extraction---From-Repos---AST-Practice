@@ -1,0 +1,4280 @@
+{
+    "src/org/apache/tools/ant/DesirableFilter.java": {
+        "file_name": "/src/org/apache/tools/ant/DesirableFilter.java",
+        "imports": [
+            "java.io.File",
+            "java.io.IOException",
+            "java.io.FilenameFilter"
+        ],
+        "classes": [
+            {
+                "class_name": "DesirableFilter",
+                "methods": [
+                    "accept"
+                ]
+            }
+        ],
+        "functions": {
+            "accept": [
+                "endsWith",
+                "startsWith",
+                "equals"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/EnumeratedAttribute.java": {
+        "file_name": "/src/org/apache/tools/ant/EnumeratedAttribute.java",
+        "imports": [],
+        "classes": [
+            {
+                "class_name": "EnumeratedAttribute",
+                "methods": [
+                    "getValues",
+                    "setValue",
+                    "containsValue",
+                    "getValue"
+                ]
+            }
+        ],
+        "functions": {
+            "getValues": [],
+            "setValue": [
+                "containsValue"
+            ],
+            "containsValue": [
+                "getValues",
+                "equals"
+            ],
+            "getValue": []
+        }
+    },
+    "src/org/apache/tools/ant/DefaultLogger.java": {
+        "file_name": "/src/org/apache/tools/ant/DefaultLogger.java",
+        "imports": [
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "DefaultLogger",
+                "methods": [
+                    "buildStarted",
+                    "buildFinished",
+                    "targetStarted",
+                    "targetFinished",
+                    "taskStarted",
+                    "taskFinished",
+                    "messageLogged",
+                    "formatTime"
+                ]
+            }
+        ],
+        "functions": {
+            "buildStarted": [
+                "currentTimeMillis"
+            ],
+            "buildFinished": [
+                "getException",
+                "println",
+                "toString",
+                "printStackTrace",
+                "formatTime",
+                "currentTimeMillis"
+            ],
+            "targetStarted": [
+                "println",
+                "getTarget",
+                "getName"
+            ],
+            "targetFinished": [],
+            "taskStarted": [],
+            "taskFinished": [],
+            "messageLogged": [
+                "getPriority",
+                "getTask",
+                "getTaskName",
+                "length",
+                "print",
+                "println",
+                "getMessage"
+            ],
+            "formatTime": [
+                "toString"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/BuildListener.java": {
+        "file_name": "/src/org/apache/tools/ant/BuildListener.java",
+        "imports": [
+            "java.util.EventListener"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "src/org/apache/tools/ant/Location.java": {
+        "file_name": "/src/org/apache/tools/ant/Location.java",
+        "imports": [],
+        "classes": [
+            {
+                "class_name": "Location",
+                "methods": [
+                    "toString"
+                ]
+            }
+        ],
+        "functions": {
+            "toString": [
+                "append",
+                "toString"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/ProjectHelper.java": {
+        "file_name": "/src/org/apache/tools/ant/ProjectHelper.java",
+        "imports": [
+            "java.io",
+            "java.util",
+            "org.xml.sax",
+            "org.w3c.dom",
+            "org.apache.tools.ant.taskdefs",
+            "javax.xml.parsers"
+        ],
+        "classes": [
+            {
+                "class_name": "ProjectHelper",
+                "methods": [
+                    "configureProject",
+                    "parse",
+                    "configure",
+                    "replaceProperties",
+                    "getParserFactory"
+                ]
+            },
+            {
+                "class_name": "AbstractHandler",
+                "methods": [
+                    "startElement",
+                    "characters",
+                    "endElement"
+                ]
+            },
+            {
+                "class_name": "RootHandler",
+                "methods": [
+                    "startElement",
+                    "setDocumentLocator"
+                ]
+            },
+            {
+                "class_name": "ProjectHandler",
+                "methods": [
+                    "init",
+                    "startElement",
+                    "handleTaskdef",
+                    "handleProperty",
+                    "handleTarget"
+                ]
+            },
+            {
+                "class_name": "TargetHandler",
+                "methods": [
+                    "init",
+                    "startElement"
+                ]
+            },
+            {
+                "class_name": "TaskHandler",
+                "methods": [
+                    "init",
+                    "characters",
+                    "startElement"
+                ]
+            },
+            {
+                "class_name": "NestedElementHandler",
+                "methods": [
+                    "init",
+                    "characters",
+                    "startElement"
+                ]
+            }
+        ],
+        "functions": {
+            "configureProject": [
+                "parse"
+            ],
+            "parse": [
+                "getParserFactory",
+                "newSAXParser",
+                "getParser",
+                "setDocumentHandler",
+                "parse",
+                "toString",
+                "getLineNumber",
+                "getColumnNumber",
+                "getException",
+                "getLocation",
+                "setLocation",
+                "getMessage"
+            ],
+            "configure": [
+                "getHelper",
+                "getClass",
+                "getLength",
+                "replaceProperties",
+                "getValue",
+                "getProperties",
+                "setAttribute",
+                "getName",
+                "toLowerCase",
+                "equals",
+                "addReference",
+                "setLocation",
+                "toString",
+                "getLineNumber",
+                "getColumnNumber"
+            ],
+            "replaceProperties": [
+                "indexOf",
+                "append",
+                "substring",
+                "length",
+                "charAt",
+                "containsKey",
+                "get",
+                "toString"
+            ],
+            "getParserFactory": [
+                "newInstance"
+            ],
+            "startElement": [
+                "init"
+            ],
+            "characters": [
+                "trim",
+                "length",
+                "getHelper",
+                "getClass",
+                "addText",
+                "getMessage"
+            ],
+            "endElement": [
+                "setDocumentHandler"
+            ],
+            "setDocumentLocator": [],
+            "init": [
+                "getClass",
+                "getHelper",
+                "createElement",
+                "toLowerCase",
+                "configure",
+                "getMessage"
+            ],
+            "handleTaskdef": [
+                "init"
+            ],
+            "handleProperty": [
+                "init"
+            ],
+            "handleTarget": [
+                "init"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/Main.java": {
+        "file_name": "/src/org/apache/tools/ant/Main.java",
+        "imports": [
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Main",
+                "methods": [
+                    "main",
+                    "runBuild",
+                    "addBuildListeners",
+                    "createDefaultBuildListener",
+                    "printUsage",
+                    "printVersion"
+                ]
+            }
+        ],
+        "functions": {
+            "main": [
+                "runBuild",
+                "exit"
+            ],
+            "runBuild": [
+                "println",
+                "addBuildListeners",
+                "fireBuildStarted",
+                "init",
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "get",
+                "setUserProperty",
+                "getAbsolutePath",
+                "forName",
+                "configureProject",
+                "size",
+                "addElement",
+                "getDefaultTarget",
+                "executeTargets",
+                "fireBuildFinished"
+            ],
+            "addBuildListeners": [
+                "addBuildListener",
+                "createDefaultBuildListener",
+                "size",
+                "elementAt",
+                "forName",
+                "newInstance"
+            ],
+            "createDefaultBuildListener": [],
+            "printUsage": [
+                "getProperty",
+                "append",
+                "println",
+                "toString"
+            ],
+            "printVersion": [
+                "getResourceAsStream",
+                "load",
+                "close",
+                "getProperty",
+                "append",
+                "println",
+                "toString",
+                "getMessage"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/XmlLogger.java": {
+        "file_name": "/src/org/apache/tools/ant/XmlLogger.java",
+        "imports": [
+            "java.io",
+            "javax.xml.parsers",
+            "org.w3c.dom"
+        ],
+        "classes": [
+            {
+                "class_name": "XmlLogger",
+                "methods": [
+                    "getDocumentBuilder",
+                    "buildStarted",
+                    "buildFinished",
+                    "targetStarted",
+                    "targetFinished",
+                    "taskStarted",
+                    "taskFinished",
+                    "messageLogged",
+                    "write",
+                    "formatTime"
+                ]
+            }
+        ],
+        "functions": {
+            "getDocumentBuilder": [
+                "newInstance",
+                "newDocumentBuilder"
+            ],
+            "buildStarted": [
+                "currentTimeMillis",
+                "newDocument",
+                "createElement"
+            ],
+            "buildFinished": [
+                "currentTimeMillis",
+                "setAttribute",
+                "formatTime",
+                "getException",
+                "toString",
+                "write",
+                "flush",
+                "close"
+            ],
+            "targetStarted": [
+                "currentTimeMillis",
+                "createElement",
+                "setAttribute",
+                "getTarget",
+                "getName"
+            ],
+            "targetFinished": [
+                "currentTimeMillis",
+                "setAttribute",
+                "formatTime",
+                "appendChild"
+            ],
+            "taskStarted": [
+                "currentTimeMillis",
+                "createElement",
+                "getTask",
+                "getClass",
+                "getName",
+                "lastIndexOf",
+                "substring",
+                "setAttribute",
+                "getLocation",
+                "toString"
+            ],
+            "taskFinished": [
+                "currentTimeMillis",
+                "setAttribute",
+                "formatTime",
+                "appendChild"
+            ],
+            "messageLogged": [
+                "createElement",
+                "getPriority",
+                "setAttribute",
+                "createTextNode",
+                "getMessage",
+                "appendChild"
+            ],
+            "write": [
+                "write",
+                "getTagName",
+                "getAttributes",
+                "getLength",
+                "item",
+                "getName",
+                "getValue",
+                "getChildNodes",
+                "getNodeType"
+            ],
+            "formatTime": [
+                "toString"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/PathTokenizer.java": {
+        "file_name": "/src/org/apache/tools/ant/PathTokenizer.java",
+        "imports": [
+            "java.util",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "PathTokenizer",
+                "methods": [
+                    "hasMoreTokens",
+                    "nextToken"
+                ]
+            }
+        ],
+        "functions": {
+            "hasMoreTokens": [
+                "hasMoreTokens"
+            ],
+            "nextToken": [
+                "nextToken",
+                "trim",
+                "length",
+                "isLetter",
+                "charAt",
+                "hasMoreTokens",
+                "startsWith"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/IntrospectionHelper.java": {
+        "file_name": "/src/org/apache/tools/ant/IntrospectionHelper.java",
+        "imports": [
+            "java.lang.reflect",
+            "java.io.File",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "IntrospectionHelper",
+                "methods": [
+                    "getHelper",
+                    "setAttribute",
+                    "addText",
+                    "createElement",
+                    "getElementType",
+                    "getAttributeType",
+                    "supportsCharacters",
+                    "getAttributes",
+                    "getNestedElements",
+                    "createAttributeSetter",
+                    "getPropertyName"
+                ]
+            }
+        ],
+        "functions": {
+            "getHelper": [
+                "get",
+                "put"
+            ],
+            "setAttribute": [
+                "get",
+                "getClass",
+                "set",
+                "getTargetException"
+            ],
+            "addText": [
+                "getClass",
+                "invoke",
+                "getTargetException"
+            ],
+            "createElement": [
+                "get",
+                "getClass",
+                "create",
+                "getTargetException"
+            ],
+            "getElementType": [
+                "get"
+            ],
+            "getAttributeType": [
+                "get"
+            ],
+            "supportsCharacters": [],
+            "getAttributes": [
+                "keys"
+            ],
+            "getNestedElements": [
+                "keys"
+            ],
+            "createAttributeSetter": [
+                "equals",
+                "invoke",
+                "charAt",
+                "toBoolean",
+                "forName",
+                "resolveFile",
+                "isAssignableFrom",
+                "newInstance",
+                "setValue",
+                "getConstructor"
+            ],
+            "getPropertyName": [
+                "length",
+                "substring",
+                "toLowerCase"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/TaskAdapter.java": {
+        "file_name": "/src/org/apache/tools/ant/TaskAdapter.java",
+        "imports": [
+            "java.lang.reflect",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "TaskAdapter",
+                "methods": [
+                    "execute",
+                    "setProxy",
+                    "getProxy"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "getClass",
+                "getMethod",
+                "log",
+                "invoke"
+            ],
+            "setProxy": [],
+            "getProxy": []
+        }
+    },
+    "src/org/apache/tools/ant/Task.java": {
+        "file_name": "/src/org/apache/tools/ant/Task.java",
+        "imports": [],
+        "classes": [
+            {
+                "class_name": "Task",
+                "methods": [
+                    "setProject",
+                    "getProject",
+                    "setOwningTarget",
+                    "getOwningTarget",
+                    "setTaskName",
+                    "getTaskName",
+                    "setTaskType",
+                    "log",
+                    "log",
+                    "setDescription",
+                    "getDescription",
+                    "init",
+                    "execute",
+                    "getLocation",
+                    "setLocation"
+                ]
+            }
+        ],
+        "functions": {
+            "setProject": [],
+            "getProject": [],
+            "setOwningTarget": [],
+            "getOwningTarget": [],
+            "setTaskName": [],
+            "getTaskName": [],
+            "setTaskType": [],
+            "log": [
+                "log"
+            ],
+            "setDescription": [],
+            "getDescription": [],
+            "init": [],
+            "execute": [],
+            "getLocation": [],
+            "setLocation": []
+        }
+    },
+    "src/org/apache/tools/ant/DirectoryScanner.java": {
+        "file_name": "/src/org/apache/tools/ant/DirectoryScanner.java",
+        "imports": [
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "DirectoryScanner",
+                "methods": [
+                    "matchPath",
+                    "match",
+                    "setBasedir",
+                    "setBasedir",
+                    "getBasedir",
+                    "setIncludes",
+                    "setExcludes",
+                    "scan",
+                    "scandir",
+                    "isIncluded",
+                    "isExcluded",
+                    "getIncludedFiles",
+                    "getNotIncludedFiles",
+                    "getExcludedFiles",
+                    "getIncludedDirectories",
+                    "getNotIncludedDirectories",
+                    "getExcludedDirectories",
+                    "addDefaultExcludes"
+                ]
+            }
+        ],
+        "functions": {
+            "matchPath": [
+                "startsWith",
+                "hasMoreTokens",
+                "addElement",
+                "nextToken",
+                "size",
+                "elementAt",
+                "equals",
+                "match"
+            ],
+            "match": [
+                "toCharArray"
+            ],
+            "setBasedir": [
+                "setBasedir",
+                "replace"
+            ],
+            "getBasedir": [],
+            "setIncludes": [
+                "replace",
+                "endsWith"
+            ],
+            "setExcludes": [
+                "replace",
+                "endsWith"
+            ],
+            "scan": [
+                "exists",
+                "isDirectory",
+                "scandir"
+            ],
+            "scandir": [
+                "list",
+                "isDirectory",
+                "isIncluded",
+                "isExcluded",
+                "addElement",
+                "scandir",
+                "isFile"
+            ],
+            "isIncluded": [
+                "matchPath"
+            ],
+            "isExcluded": [
+                "matchPath"
+            ],
+            "getIncludedFiles": [
+                "size",
+                "elementAt"
+            ],
+            "getNotIncludedFiles": [
+                "size",
+                "elementAt"
+            ],
+            "getExcludedFiles": [
+                "size",
+                "elementAt"
+            ],
+            "getIncludedDirectories": [
+                "size",
+                "elementAt"
+            ],
+            "getNotIncludedDirectories": [
+                "size",
+                "elementAt"
+            ],
+            "getExcludedDirectories": [
+                "size",
+                "elementAt"
+            ],
+            "addDefaultExcludes": [
+                "arraycopy",
+                "replace"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/BuildException.java": {
+        "file_name": "/src/org/apache/tools/ant/BuildException.java",
+        "imports": [],
+        "classes": [
+            {
+                "class_name": "BuildException",
+                "methods": [
+                    "getException",
+                    "toString",
+                    "setLocation",
+                    "getLocation"
+                ]
+            }
+        ],
+        "functions": {
+            "getException": [],
+            "toString": [
+                "toString",
+                "getMessage"
+            ],
+            "setLocation": [],
+            "getLocation": []
+        }
+    },
+    "src/org/apache/tools/ant/BuildEvent.java": {
+        "file_name": "/src/org/apache/tools/ant/BuildEvent.java",
+        "imports": [
+            "java.util.EventObject"
+        ],
+        "classes": [
+            {
+                "class_name": "BuildEvent",
+                "methods": [
+                    "setMessage",
+                    "setException",
+                    "getProject",
+                    "getTarget",
+                    "getTask",
+                    "getMessage",
+                    "getPriority",
+                    "getException"
+                ]
+            }
+        ],
+        "functions": {
+            "setMessage": [],
+            "setException": [],
+            "getProject": [],
+            "getTarget": [],
+            "getTask": [],
+            "getMessage": [],
+            "getPriority": [],
+            "getException": []
+        }
+    },
+    "src/org/apache/tools/ant/Path.java": {
+        "file_name": "/src/org/apache/tools/ant/Path.java",
+        "imports": [
+            "java.io.File",
+            "java.util.Vector",
+            "java.util.StringTokenizer",
+            "java.text.CharacterIterator",
+            "java.text.StringCharacterIterator"
+        ],
+        "classes": [
+            {
+                "class_name": "Path",
+                "methods": [
+                    "setLocation",
+                    "append",
+                    "setPath",
+                    "createPathElement",
+                    "list",
+                    "toString",
+                    "translatePath",
+                    "translateFile",
+                    "translateFileSep"
+                ]
+            }
+        ],
+        "functions": {
+            "setLocation": [
+                "length",
+                "translateFile",
+                "indexOf",
+                "addElement"
+            ],
+            "append": [
+                "list",
+                "indexOf",
+                "addElement"
+            ],
+            "setPath": [
+                "translatePath",
+                "size",
+                "elementAt",
+                "indexOf",
+                "addElement"
+            ],
+            "createPathElement": [],
+            "list": [
+                "size",
+                "copyInto"
+            ],
+            "toString": [
+                "list",
+                "toString",
+                "append"
+            ],
+            "translatePath": [
+                "hasMoreTokens",
+                "setLength",
+                "append",
+                "nextToken",
+                "length",
+                "translateFileSep",
+                "addElement",
+                "toString"
+            ],
+            "translateFile": [
+                "length",
+                "translateFileSep",
+                "toString"
+            ],
+            "translateFileSep": [
+                "charAt",
+                "setCharAt"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/Map.java": {
+        "file_name": "/src/org/apache/tools/ant/Map.java",
+        "imports": [
+            "java.util"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "src/org/apache/tools/ant/taskdefs/Expand.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Expand.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util.zip"
+        ],
+        "classes": [
+            {
+                "class_name": "Expand",
+                "methods": [
+                    "execute",
+                    "setDest",
+                    "setSrc"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "equals",
+                "log",
+                "createTask",
+                "setOwningTarget",
+                "resolveFile",
+                "getNextEntry",
+                "translatePath",
+                "getName",
+                "getParent",
+                "mkdirs",
+                "isDirectory",
+                "read",
+                "write",
+                "close",
+                "getJavaVersion",
+                "setFile",
+                "getAbsolutePath",
+                "setMillis",
+                "getTime",
+                "touch",
+                "getPath"
+            ],
+            "setDest": [],
+            "setSrc": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/GZip.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/GZip.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util.zip"
+        ],
+        "classes": [
+            {
+                "class_name": "GZip",
+                "methods": [
+                    "setZipfile",
+                    "setSrc",
+                    "execute",
+                    "zipFile",
+                    "zipFile"
+                ]
+            }
+        ],
+        "functions": {
+            "setZipfile": [
+                "resolveFile"
+            ],
+            "setSrc": [
+                "resolveFile"
+            ],
+            "execute": [
+                "log",
+                "getAbsolutePath",
+                "isDirectory",
+                "zipFile",
+                "getMessage",
+                "close"
+            ],
+            "zipFile": [
+                "write",
+                "read",
+                "zipFile",
+                "close"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Get.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Get.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.net"
+        ],
+        "classes": [
+            {
+                "class_name": "Get",
+                "methods": [
+                    "execute",
+                    "setSrc",
+                    "setDest",
+                    "setVerbose",
+                    "setIgnoreErrors"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "toString",
+                "log",
+                "openStream",
+                "read",
+                "write",
+                "equals",
+                "print",
+                "println",
+                "close"
+            ],
+            "setSrc": [],
+            "setDest": [],
+            "setVerbose": [],
+            "setIgnoreErrors": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/TaskOutputStream.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/TaskOutputStream.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "TaskOutputStream",
+                "methods": [
+                    "write",
+                    "processLine"
+                ]
+            }
+        ],
+        "functions": {
+            "write": [
+                "length",
+                "processLine",
+                "append"
+            ],
+            "processLine": [
+                "toString",
+                "log"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/MatchingTask.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/MatchingTask.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "MatchingTask",
+                "methods": [
+                    "getProperty",
+                    "createInclude",
+                    "createExclude",
+                    "setIncludes",
+                    "setItems",
+                    "setExcludes",
+                    "setIgnore",
+                    "setDefaultexcludes",
+                    "makeArray",
+                    "getDirectoryScanner",
+                    "addPatternToList",
+                    "readPatterns",
+                    "setIncludesfile",
+                    "setExcludesfile"
+                ]
+            },
+            {
+                "class_name": "NameEntry",
+                "methods": [
+                    "getName",
+                    "setName",
+                    "setIf",
+                    "setUnless"
+                ]
+            }
+        ],
+        "functions": {
+            "getProperty": [
+                "getProperty"
+            ],
+            "createInclude": [
+                "addPatternToList"
+            ],
+            "createExclude": [
+                "addPatternToList"
+            ],
+            "setIncludes": [
+                "length",
+                "createInclude",
+                "setName"
+            ],
+            "setItems": [
+                "log",
+                "equals",
+                "createInclude",
+                "setName",
+                "hasMoreTokens",
+                "nextToken",
+                "trim",
+                "length"
+            ],
+            "setExcludes": [
+                "length",
+                "createExclude",
+                "setName"
+            ],
+            "setIgnore": [
+                "log",
+                "length",
+                "hasMoreTokens",
+                "createExclude",
+                "setName",
+                "nextToken",
+                "trim"
+            ],
+            "setDefaultexcludes": [
+                "toBoolean"
+            ],
+            "makeArray": [
+                "size",
+                "elements",
+                "hasMoreElements",
+                "nextElement",
+                "hasMoreTokens",
+                "nextToken",
+                "trim",
+                "length",
+                "addElement",
+                "elementAt"
+            ],
+            "getDirectoryScanner": [
+                "setBasedir",
+                "setIncludes",
+                "makeArray",
+                "setExcludes",
+                "addDefaultExcludes",
+                "scan"
+            ],
+            "addPatternToList": [
+                "addElement"
+            ],
+            "readPatterns": [
+                "readLine",
+                "length",
+                "addPatternToList",
+                "setName",
+                "log"
+            ],
+            "setIncludesfile": [
+                "length",
+                "resolveFile",
+                "exists",
+                "log",
+                "readPatterns"
+            ],
+            "setExcludesfile": [
+                "length",
+                "resolveFile",
+                "exists",
+                "log",
+                "readPatterns"
+            ],
+            "getName": [],
+            "setName": [],
+            "setIf": [
+                "getProperty"
+            ],
+            "setUnless": [
+                "getProperty"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Exec.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Exec.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "Exec",
+                "methods": [
+                    "execute",
+                    "run",
+                    "setDir",
+                    "setOs",
+                    "setCommand",
+                    "setOutput",
+                    "setFailonerror",
+                    "outputLog",
+                    "logFlush"
+                ]
+            },
+            {
+                "class_name": "StreamPumper",
+                "methods": [
+                    "pumpStream",
+                    "run"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "run"
+            ],
+            "run": [
+                "pumpStream",
+                "sleep",
+                "close"
+            ],
+            "setDir": [
+                "resolveFile"
+            ],
+            "setOs": [],
+            "setCommand": [],
+            "setOutput": [],
+            "setFailonerror": [
+                "toBoolean"
+            ],
+            "outputLog": [
+                "log",
+                "println"
+            ],
+            "logFlush": [
+                "close"
+            ],
+            "pumpStream": [
+                "readLine",
+                "outputLog"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Mkdir.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Mkdir.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "Mkdir",
+                "methods": [
+                    "execute",
+                    "setDir"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "resolveFile",
+                "exists",
+                "mkdirs",
+                "log",
+                "getAbsolutePath"
+            ],
+            "setDir": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Cvs.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Cvs.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "Cvs",
+                "methods": [
+                    "execute",
+                    "setCvsRoot",
+                    "setDest",
+                    "setPackage",
+                    "setTag",
+                    "setDate",
+                    "setCommand",
+                    "setQuiet",
+                    "setNoexec"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "append",
+                "run",
+                "toString"
+            ],
+            "setCvsRoot": [
+                "trim",
+                "equals"
+            ],
+            "setDest": [
+                "setDir"
+            ],
+            "setPackage": [],
+            "setTag": [
+                "trim",
+                "equals"
+            ],
+            "setDate": [
+                "trim",
+                "length"
+            ],
+            "setCommand": [],
+            "setQuiet": [],
+            "setNoexec": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Zip.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Zip.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util.Enumeration",
+            "java.util.StringTokenizer",
+            "java.util.Vector",
+            "java.util.zip"
+        ],
+        "classes": [
+            {
+                "class_name": "Zip",
+                "methods": [
+                    "setZipfile",
+                    "setBasedir",
+                    "setCompress",
+                    "execute",
+                    "initZipOutputStream",
+                    "zipDir",
+                    "zipFile",
+                    "zipFile"
+                ]
+            }
+        ],
+        "functions": {
+            "setZipfile": [
+                "resolveFile"
+            ],
+            "setBasedir": [
+                "resolveFile"
+            ],
+            "setCompress": [
+                "toBoolean"
+            ],
+            "execute": [
+                "exists",
+                "getIncludedFiles",
+                "getIncludedDirectories",
+                "lastModified",
+                "log",
+                "getAbsolutePath",
+                "setMethod",
+                "initZipOutputStream",
+                "replace",
+                "zipDir",
+                "zipFile",
+                "getMessage",
+                "close"
+            ],
+            "initZipOutputStream": [],
+            "zipDir": [],
+            "zipFile": [
+                "setTime",
+                "markSupported",
+                "update",
+                "write",
+                "read",
+                "toByteArray",
+                "mark",
+                "reset",
+                "setSize",
+                "setCrc",
+                "getValue",
+                "putNextEntry",
+                "zipFile",
+                "lastModified",
+                "close"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Filter.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Filter.java",
+        "imports": [
+            "org.apache.tools.ant"
+        ],
+        "classes": [
+            {
+                "class_name": "Filter",
+                "methods": [
+                    "setToken",
+                    "setValue",
+                    "init"
+                ]
+            }
+        ],
+        "functions": {
+            "setToken": [],
+            "setValue": [],
+            "init": [
+                "addFilter"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Deltree.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Deltree.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "Deltree",
+                "methods": [
+                    "setDir",
+                    "execute",
+                    "removeDir"
+                ]
+            }
+        ],
+        "functions": {
+            "setDir": [
+                "resolveFile"
+            ],
+            "execute": [
+                "log",
+                "getAbsolutePath",
+                "exists",
+                "isDirectory",
+                "delete",
+                "removeDir"
+            ],
+            "removeDir": [
+                "list",
+                "isDirectory",
+                "removeDir",
+                "delete",
+                "getAbsolutePath"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Rename.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Rename.java",
+        "imports": [
+            "org.apache.tools.ant.BuildException",
+            "org.apache.tools.ant.Task",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "Rename",
+                "methods": [
+                    "setSrc",
+                    "setDest",
+                    "setReplace",
+                    "execute"
+                ]
+            }
+        ],
+        "functions": {
+            "setSrc": [
+                "resolveFile"
+            ],
+            "setDest": [
+                "resolveFile"
+            ],
+            "setReplace": [
+                "toBoolean"
+            ],
+            "execute": [
+                "exists",
+                "delete",
+                "renameTo"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Available.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Available.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Available",
+                "methods": [
+                    "setProperty",
+                    "setClass",
+                    "setClassname",
+                    "setFile",
+                    "setResource",
+                    "init",
+                    "checkFile",
+                    "checkResource",
+                    "checkClass"
+                ]
+            }
+        ],
+        "functions": {
+            "setProperty": [],
+            "setClass": [
+                "log"
+            ],
+            "setClassname": [],
+            "setFile": [],
+            "setResource": [],
+            "init": [
+                "checkClass",
+                "checkFile",
+                "checkResource",
+                "setProperty"
+            ],
+            "checkFile": [
+                "exists",
+                "log",
+                "toString"
+            ],
+            "checkResource": [
+                "getSystemResource"
+            ],
+            "checkClass": [
+                "forName",
+                "log",
+                "toString"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Tar.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Tar.java",
+        "imports": [
+            "java.io",
+            "org.apache.tools.ant",
+            "org.apache.tools.tar"
+        ],
+        "classes": [
+            {
+                "class_name": "Tar",
+                "methods": [
+                    "setTarfile",
+                    "setBasedir",
+                    "execute",
+                    "tarFile"
+                ]
+            }
+        ],
+        "functions": {
+            "setTarfile": [
+                "resolveFile"
+            ],
+            "setBasedir": [
+                "resolveFile"
+            ],
+            "execute": [
+                "log",
+                "getAbsolutePath",
+                "exists",
+                "getIncludedFiles",
+                "setDebug",
+                "replace",
+                "tarFile",
+                "getMessage",
+                "close"
+            ],
+            "tarFile": [
+                "setSize",
+                "length",
+                "setModTime",
+                "lastModified",
+                "putNextEntry",
+                "write",
+                "read",
+                "closeEntry",
+                "close"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Delete.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Delete.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "Delete",
+                "methods": [
+                    "setFile",
+                    "setDir",
+                    "setVerbose",
+                    "execute"
+                ]
+            }
+        ],
+        "functions": {
+            "setFile": [
+                "resolveFile"
+            ],
+            "setDir": [
+                "resolveFile"
+            ],
+            "setVerbose": [
+                "equalsIgnoreCase",
+                "trim"
+            ],
+            "execute": [
+                "exists",
+                "isDirectory",
+                "log",
+                "getAbsolutePath",
+                "delete",
+                "getIncludedFiles"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Property.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Property.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Property",
+                "methods": [
+                    "setName",
+                    "getName",
+                    "setValue",
+                    "getValue",
+                    "setFile",
+                    "setResource",
+                    "init",
+                    "loadFile",
+                    "loadResource",
+                    "addProperties",
+                    "setUserProperty",
+                    "addProperty",
+                    "resolveAllProperties",
+                    "extractProperties"
+                ]
+            }
+        ],
+        "functions": {
+            "setName": [],
+            "getName": [],
+            "setValue": [],
+            "getValue": [],
+            "setFile": [],
+            "setResource": [],
+            "init": [
+                "addProperty",
+                "loadFile",
+                "loadResource"
+            ],
+            "loadFile": [
+                "log",
+                "exists",
+                "load",
+                "addProperties",
+                "getMessage"
+            ],
+            "loadResource": [
+                "log",
+                "getClass",
+                "getResourceAsStream",
+                "load",
+                "addProperties",
+                "printStackTrace"
+            ],
+            "addProperties": [
+                "resolveAllProperties",
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "getProperty",
+                "replaceProperties",
+                "getProperties",
+                "addProperty"
+            ],
+            "setUserProperty": [],
+            "addProperty": [
+                "getUserProperty",
+                "setUserProperty",
+                "log",
+                "getProperty",
+                "setProperty"
+            ],
+            "resolveAllProperties": [
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "get",
+                "extractProperties",
+                "size",
+                "elementAt",
+                "getProperties",
+                "containsKey",
+                "put",
+                "replaceProperties",
+                "clear"
+            ],
+            "extractProperties": [
+                "indexOf",
+                "length",
+                "charAt",
+                "substring",
+                "addElement",
+                "size"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Ant.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Ant.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Ant",
+                "methods": [
+                    "init",
+                    "execute",
+                    "setDir",
+                    "setAntfile",
+                    "setTarget",
+                    "setOutput",
+                    "createProperty"
+                ]
+            }
+        ],
+        "functions": {
+            "init": [
+                "getBuildListeners",
+                "size",
+                "addBuildListener",
+                "elementAt",
+                "log",
+                "init",
+                "getTaskDefinitions",
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "get",
+                "addTaskDefinition",
+                "getProperties",
+                "setProperty"
+            ],
+            "execute": [
+                "setBasedir",
+                "setUserProperty",
+                "elements",
+                "hasMoreElements",
+                "nextElement",
+                "init",
+                "configureProject",
+                "getDefaultTarget",
+                "executeTarget"
+            ],
+            "setDir": [],
+            "setAntfile": [],
+            "setTarget": [],
+            "setOutput": [],
+            "createProperty": [
+                "createTask",
+                "setUserProperty",
+                "addElement"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/FixCRLF.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/FixCRLF.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util",
+            "java.text"
+        ],
+        "classes": [
+            {
+                "class_name": "FixCRLF",
+                "methods": [
+                    "setSrcdir",
+                    "setDestdir",
+                    "setCr",
+                    "setTab",
+                    "setTablength",
+                    "setEof",
+                    "execute"
+                ]
+            },
+            {
+                "class_name": "AddAsisRemove",
+                "methods": [
+                    "getValues"
+                ]
+            }
+        ],
+        "functions": {
+            "setSrcdir": [],
+            "setDestdir": [],
+            "setCr": [
+                "getValue",
+                "equals"
+            ],
+            "setTab": [
+                "getValue",
+                "equals"
+            ],
+            "setTablength": [],
+            "setEof": [
+                "getValue",
+                "equals"
+            ],
+            "execute": [
+                "exists",
+                "isDirectory",
+                "log",
+                "getIncludedFiles",
+                "length",
+                "read",
+                "close",
+                "write"
+            ],
+            "getValues": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Chmod.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Chmod.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Chmod",
+                "methods": [
+                    "setFile",
+                    "setDir",
+                    "setSrc",
+                    "setPerm",
+                    "execute",
+                    "chmod"
+                ]
+            }
+        ],
+        "functions": {
+            "setFile": [
+                "resolveFile"
+            ],
+            "setDir": [
+                "resolveFile"
+            ],
+            "setSrc": [
+                "log",
+                "setFile"
+            ],
+            "setPerm": [],
+            "execute": [
+                "getProperty",
+                "equals",
+                "startsWith",
+                "chmod",
+                "toString",
+                "log",
+                "getDirectoryScanner",
+                "getIncludedFiles"
+            ],
+            "chmod": [
+                "getRuntime",
+                "exec"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Copyfile.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Copyfile.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Copyfile",
+                "methods": [
+                    "setSrc",
+                    "setDest",
+                    "setFiltering",
+                    "execute"
+                ]
+            }
+        ],
+        "functions": {
+            "setSrc": [
+                "resolveFile"
+            ],
+            "setDest": [
+                "resolveFile"
+            ],
+            "setFiltering": [
+                "toBoolean"
+            ],
+            "execute": [
+                "lastModified",
+                "copyFile",
+                "getAbsolutePath",
+                "getMessage"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/GUnzip.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/GUnzip.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util.zip"
+        ],
+        "classes": [
+            {
+                "class_name": "GUnzip",
+                "methods": [
+                    "setSrc",
+                    "setDest",
+                    "execute"
+                ]
+            }
+        ],
+        "functions": {
+            "setSrc": [
+                "resolveFile"
+            ],
+            "setDest": [
+                "resolveFile"
+            ],
+            "execute": [
+                "exists",
+                "isDirectory",
+                "getParent",
+                "getName",
+                "length",
+                "equalsIgnoreCase",
+                "substring",
+                "lastModified",
+                "log",
+                "getAbsolutePath",
+                "write",
+                "read",
+                "getMessage",
+                "close"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Jikes.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Jikes.java",
+        "imports": [
+            "java.io",
+            "org.apache.tools.ant"
+        ],
+        "classes": [
+            {
+                "class_name": "Jikes",
+                "methods": [
+                    "compile"
+                ]
+            }
+        ],
+        "functions": {
+            "compile": [
+                "arraycopy",
+                "getRuntime",
+                "exec",
+                "getInputStream",
+                "parseOutput"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/XSLTProcess.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/XSLTProcess.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util.Enumeration",
+            "java.util.Hashtable",
+            "java.util.StringTokenizer",
+            "java.util.Vector"
+        ],
+        "classes": [
+            {
+                "class_name": "XSLTProcess",
+                "methods": [
+                    "execute",
+                    "setBasedir",
+                    "setDestdir",
+                    "setExtension",
+                    "setStyle",
+                    "setProcessor",
+                    "process"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "resolveFile",
+                "getDirectoryScanner",
+                "log",
+                "setProcessor",
+                "getClass",
+                "toString",
+                "setStylesheet",
+                "getIncludedFiles",
+                "process",
+                "getIncludedDirectories",
+                "list"
+            ],
+            "setBasedir": [
+                "resolveFile"
+            ],
+            "setDestdir": [
+                "resolveFile"
+            ],
+            "setExtension": [],
+            "setStyle": [],
+            "setProcessor": [
+                "equals",
+                "forName",
+                "newInstance"
+            ],
+            "process": [
+                "substring",
+                "lastIndexOf",
+                "lastModified",
+                "log",
+                "transform",
+                "toString",
+                "delete"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Echo.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Echo.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.net"
+        ],
+        "classes": [
+            {
+                "class_name": "Echo",
+                "methods": [
+                    "execute",
+                    "setMessage"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "println"
+            ],
+            "setMessage": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/JavacOutputStream.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/JavacOutputStream.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "JavacOutputStream",
+                "methods": [
+                    "write",
+                    "processLine",
+                    "getErrorFlag"
+                ]
+            }
+        ],
+        "functions": {
+            "write": [
+                "length",
+                "processLine",
+                "append"
+            ],
+            "processLine": [
+                "toString",
+                "indexOf",
+                "log"
+            ],
+            "getErrorFlag": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Taskdef.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Taskdef.java",
+        "imports": [
+            "org.apache.tools.ant"
+        ],
+        "classes": [
+            {
+                "class_name": "Taskdef",
+                "methods": [
+                    "init",
+                    "setName",
+                    "setClass",
+                    "getClassname",
+                    "setClassname"
+                ]
+            }
+        ],
+        "functions": {
+            "init": [
+                "forName",
+                "addTaskDefinition",
+                "printStackTrace"
+            ],
+            "setName": [],
+            "setClass": [
+                "log"
+            ],
+            "getClassname": [],
+            "setClassname": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Patch.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Patch.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "Patch",
+                "methods": [
+                    "setOriginalfile",
+                    "setPatchfile",
+                    "setBackups",
+                    "setIgnorewhitespace",
+                    "setStrip",
+                    "setQuiet",
+                    "setReverse",
+                    "setCommand",
+                    "execute"
+                ]
+            }
+        ],
+        "functions": {
+            "setOriginalfile": [],
+            "setPatchfile": [],
+            "setBackups": [],
+            "setIgnorewhitespace": [],
+            "setStrip": [],
+            "setQuiet": [],
+            "setReverse": [],
+            "setCommand": [],
+            "execute": [
+                "exists",
+                "append",
+                "run",
+                "toString"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Java.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Java.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.lang.reflect",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Java",
+                "methods": [
+                    "execute",
+                    "executeJava",
+                    "setClasspath",
+                    "createClasspath",
+                    "setClass",
+                    "setClassname",
+                    "setArgs",
+                    "setFork",
+                    "setJvmargs",
+                    "run",
+                    "tokenize",
+                    "array"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "executeJava"
+            ],
+            "executeJava": [
+                "log",
+                "append",
+                "toString",
+                "run",
+                "tokenize"
+            ],
+            "setClasspath": [
+                "append"
+            ],
+            "createClasspath": [],
+            "setClass": [
+                "log"
+            ],
+            "setClassname": [],
+            "setArgs": [],
+            "setFork": [
+                "toBoolean"
+            ],
+            "setJvmargs": [],
+            "run": [
+                "forName",
+                "getMethod",
+                "array",
+                "invoke",
+                "getTargetException",
+                "toString"
+            ],
+            "tokenize": [
+                "hasMoreTokens",
+                "addElement",
+                "nextToken"
+            ],
+            "array": [
+                "size",
+                "elements",
+                "hasMoreElements",
+                "nextElement"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Rmic.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Rmic.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util.StringTokenizer",
+            "java.util.Vector",
+            "java.util.Date"
+        ],
+        "classes": [
+            {
+                "class_name": "Rmic",
+                "methods": [
+                    "setBase",
+                    "setClass",
+                    "setClassname",
+                    "setSourceBase",
+                    "setStubVersion",
+                    "setFiltering",
+                    "setClasspath",
+                    "createClasspath",
+                    "setVerify",
+                    "execute",
+                    "moveGeneratedFile",
+                    "scanDir",
+                    "isValidRmiRemote",
+                    "shouldCompile",
+                    "getCompileClasspath",
+                    "addExistingToClasspath"
+                ]
+            }
+        ],
+        "functions": {
+            "setBase": [],
+            "setClass": [
+                "log"
+            ],
+            "setClassname": [],
+            "setSourceBase": [],
+            "setStubVersion": [],
+            "setFiltering": [
+                "toBoolean"
+            ],
+            "setClasspath": [
+                "append"
+            ],
+            "createClasspath": [],
+            "setVerify": [
+                "toBoolean"
+            ],
+            "execute": [
+                "resolveFile",
+                "exists",
+                "log",
+                "getCompileClasspath",
+                "getDirectoryScanner",
+                "getIncludedFiles",
+                "scanDir",
+                "size",
+                "getAbsolutePath",
+                "equals",
+                "shouldCompile",
+                "replace",
+                "compile",
+                "elementAt",
+                "moveGeneratedFile"
+            ],
+            "moveGeneratedFile": [
+                "replace",
+                "copyFile",
+                "delete",
+                "getMessage",
+                "equals"
+            ],
+            "scanDir": [
+                "removeAllElements",
+                "endsWith",
+                "shouldCompile",
+                "replace",
+                "substring",
+                "indexOf",
+                "forName",
+                "isInterface",
+                "isValidRmiRemote",
+                "log",
+                "addElement"
+            ],
+            "isValidRmiRemote": [
+                "equals",
+                "getInterfaces",
+                "isValidRmiRemote"
+            ],
+            "shouldCompile": [
+                "getTime",
+                "getAbsolutePath",
+                "substring",
+                "indexOf",
+                "exists",
+                "lastModified",
+                "log"
+            ],
+            "getCompileClasspath": [
+                "getAbsolutePath",
+                "addExistingToClasspath",
+                "getJavaVersion",
+                "startsWith",
+                "getProperty",
+                "toString"
+            ],
+            "addExistingToClasspath": [
+                "list",
+                "resolveFile",
+                "exists",
+                "setLocation",
+                "getAbsolutePath",
+                "log"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/XSLTLiaison.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/XSLTLiaison.java",
+        "imports": [
+            "org.apache.tools.ant"
+        ],
+        "classes": [],
+        "functions": {}
+    },
+    "src/org/apache/tools/ant/taskdefs/Replace.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Replace.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Replace",
+                "methods": [
+                    "execute",
+                    "processFile",
+                    "setFile",
+                    "setDir",
+                    "setToken",
+                    "setValue",
+                    "replace"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "log",
+                "processFile",
+                "getIncludedFiles"
+            ],
+            "processFile": [
+                "getPath",
+                "exists",
+                "readLine",
+                "length",
+                "write",
+                "replace",
+                "newLine",
+                "flush",
+                "close",
+                "delete",
+                "renameTo",
+                "printStackTrace"
+            ],
+            "setFile": [
+                "resolveFile"
+            ],
+            "setDir": [
+                "resolveFile"
+            ],
+            "setToken": [],
+            "setValue": [],
+            "replace": [
+                "indexOf",
+                "append",
+                "substring",
+                "length",
+                "toString"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/SignJar.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/SignJar.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "SignJar",
+                "methods": [
+                    "setJar",
+                    "setAlias",
+                    "setKeystore",
+                    "setStorepass",
+                    "setStoretype",
+                    "setKeypass",
+                    "setSigfile",
+                    "setSignedjar",
+                    "setVerbose",
+                    "setInternalsf",
+                    "setSectionsonly",
+                    "execute"
+                ]
+            }
+        ],
+        "functions": {
+            "setJar": [],
+            "setAlias": [],
+            "setKeystore": [],
+            "setStorepass": [],
+            "setStoretype": [],
+            "setKeypass": [],
+            "setSigfile": [],
+            "setSignedjar": [],
+            "setVerbose": [
+                "toBoolean"
+            ],
+            "setInternalsf": [
+                "toBoolean"
+            ],
+            "setSectionsonly": [
+                "toBoolean"
+            ],
+            "execute": [
+                "getJavaVersion",
+                "equals",
+                "append",
+                "log",
+                "getAbsolutePath",
+                "createTask",
+                "setCommand",
+                "toString",
+                "setFailonerror",
+                "setTaskName",
+                "getTaskName",
+                "execute"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Tstamp.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Tstamp.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util",
+            "java.text"
+        ],
+        "classes": [
+            {
+                "class_name": "Tstamp",
+                "methods": [
+                    "init"
+                ]
+            }
+        ],
+        "functions": {
+            "init": [
+                "setProperty",
+                "format"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Touch.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Touch.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io.File",
+            "java.io.FileOutputStream",
+            "java.io.IOException",
+            "java.lang.reflect.InvocationTargetException",
+            "java.lang.reflect.Method",
+            "java.text.DateFormat",
+            "java.text.ParseException",
+            "java.util.Date",
+            "java.util.Locale"
+        ],
+        "classes": [
+            {
+                "class_name": "Touch",
+                "methods": [
+                    "setFile",
+                    "setMillis",
+                    "setDatetime",
+                    "execute",
+                    "touch"
+                ]
+            }
+        ],
+        "functions": {
+            "setFile": [
+                "resolveFile"
+            ],
+            "setMillis": [],
+            "setDatetime": [],
+            "execute": [
+                "exists",
+                "getJavaVersion",
+                "log",
+                "getDateTimeInstance",
+                "setMillis",
+                "parse",
+                "getTime",
+                "getMessage",
+                "touch"
+            ],
+            "touch": [
+                "exists",
+                "log",
+                "write",
+                "close",
+                "getJavaVersion",
+                "getMethod",
+                "currentTimeMillis",
+                "invoke",
+                "getTargetException"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Untar.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Untar.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "org.apache.tools.tar",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "Untar",
+                "methods": [
+                    "execute",
+                    "setDest",
+                    "setSrc"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "createTask",
+                "setOwningTarget",
+                "resolveFile",
+                "exists",
+                "log",
+                "getNextEntry",
+                "translatePath",
+                "getName",
+                "getParent",
+                "mkdirs",
+                "isDirectory",
+                "read",
+                "write",
+                "close",
+                "getJavaVersion",
+                "setFile",
+                "getAbsolutePath",
+                "setMillis",
+                "getModTime",
+                "getTime",
+                "touch",
+                "getPath"
+            ],
+            "setDest": [],
+            "setSrc": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Javadoc.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Javadoc.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "Javadoc",
+                "methods": [
+                    "setMaxmemory",
+                    "setadditionalParam",
+                    "setSourcepath",
+                    "createSourcepath",
+                    "setDestdir",
+                    "setSourcefiles",
+                    "setPackagenames",
+                    "setOverview",
+                    "setPublic",
+                    "setProtected",
+                    "setPackage",
+                    "setPrivate",
+                    "setDoclet",
+                    "setDocletPath",
+                    "createDoclet",
+                    "setOld",
+                    "setClasspath",
+                    "createClasspath",
+                    "setBootclasspath",
+                    "createBootclasspath",
+                    "setExtdirs",
+                    "setVerbose",
+                    "setLocale",
+                    "setEncoding",
+                    "setVersion",
+                    "setUse",
+                    "setAuthor",
+                    "setSplitindex",
+                    "setWindowtitle",
+                    "setDoctitle",
+                    "setHeader",
+                    "setFooter",
+                    "setBottom",
+                    "setLinkoffline",
+                    "setGroup",
+                    "setLink",
+                    "setNodeprecated",
+                    "setNodeprecatedlist",
+                    "setNotree",
+                    "setNoindex",
+                    "setNohelp",
+                    "setNonavbar",
+                    "setSerialwarn",
+                    "setStylesheetfile",
+                    "setDocencoding",
+                    "setPackageList",
+                    "createLink",
+                    "createGroup",
+                    "setCharset",
+                    "execute",
+                    "evaluatePackages",
+                    "matches",
+                    "mapClasses",
+                    "getFiles",
+                    "getPackageName",
+                    "outputLog",
+                    "logFlush"
+                ]
+            },
+            {
+                "class_name": "DocletParam",
+                "methods": [
+                    "setName",
+                    "getName",
+                    "setValue",
+                    "getValue"
+                ]
+            },
+            {
+                "class_name": "DocletInfo",
+                "methods": [
+                    "setName",
+                    "getName",
+                    "setPath",
+                    "getPath",
+                    "createPath",
+                    "createParam",
+                    "getParams"
+                ]
+            },
+            {
+                "class_name": "LinkArgument",
+                "methods": [
+                    "setHref",
+                    "getHref",
+                    "setPackagelistLoc",
+                    "getPackagelistLoc",
+                    "setOffline",
+                    "isLinkOffline"
+                ]
+            },
+            {
+                "class_name": "GroupArgument",
+                "methods": [
+                    "setTitle",
+                    "getTitle",
+                    "setPackages",
+                    "getPackages"
+                ]
+            },
+            {
+                "class_name": "JavaReader",
+                "methods": [
+                    "read",
+                    "read",
+                    "skip"
+                ]
+            }
+        ],
+        "functions": {
+            "setMaxmemory": [],
+            "setadditionalParam": [],
+            "setSourcepath": [
+                "append"
+            ],
+            "createSourcepath": [],
+            "setDestdir": [
+                "resolveFile"
+            ],
+            "setSourcefiles": [],
+            "setPackagenames": [],
+            "setOverview": [
+                "resolveFile"
+            ],
+            "setPublic": [
+                "toBoolean"
+            ],
+            "setProtected": [
+                "toBoolean"
+            ],
+            "setPackage": [
+                "toBoolean"
+            ],
+            "setPrivate": [
+                "toBoolean"
+            ],
+            "setDoclet": [
+                "setName"
+            ],
+            "setDocletPath": [
+                "setPath"
+            ],
+            "createDoclet": [],
+            "setOld": [
+                "toBoolean"
+            ],
+            "setClasspath": [
+                "append"
+            ],
+            "createClasspath": [],
+            "setBootclasspath": [
+                "append"
+            ],
+            "createBootclasspath": [],
+            "setExtdirs": [],
+            "setVerbose": [
+                "toBoolean"
+            ],
+            "setLocale": [],
+            "setEncoding": [],
+            "setVersion": [
+                "toBoolean"
+            ],
+            "setUse": [
+                "toBoolean"
+            ],
+            "setAuthor": [
+                "toBoolean"
+            ],
+            "setSplitindex": [
+                "toBoolean"
+            ],
+            "setWindowtitle": [],
+            "setDoctitle": [],
+            "setHeader": [],
+            "setFooter": [],
+            "setBottom": [],
+            "setLinkoffline": [],
+            "setGroup": [],
+            "setLink": [],
+            "setNodeprecated": [
+                "toBoolean"
+            ],
+            "setNodeprecatedlist": [
+                "toBoolean"
+            ],
+            "setNotree": [
+                "toBoolean"
+            ],
+            "setNoindex": [
+                "toBoolean"
+            ],
+            "setNohelp": [
+                "toBoolean"
+            ],
+            "setNonavbar": [
+                "toBoolean"
+            ],
+            "setSerialwarn": [
+                "toBoolean"
+            ],
+            "setStylesheetfile": [
+                "resolveFile"
+            ],
+            "setDocencoding": [],
+            "setPackageList": [],
+            "createLink": [
+                "addElement"
+            ],
+            "createGroup": [
+                "addElement"
+            ],
+            "setCharset": [],
+            "execute": [
+                "getJavaVersion",
+                "log",
+                "addElement",
+                "toString",
+                "getProperty",
+                "getAbsolutePath",
+                "getName",
+                "getPath",
+                "getParams",
+                "hasMoreElements",
+                "nextElement",
+                "getValue",
+                "size",
+                "elements",
+                "getHref",
+                "isLinkOffline",
+                "getPackagelistLoc",
+                "hasMoreTokens",
+                "nextToken",
+                "trim",
+                "indexOf",
+                "substring",
+                "getTitle",
+                "getPackages",
+                "length",
+                "endsWith",
+                "evaluatePackages",
+                "append",
+                "startsWith",
+                "run"
+            ],
+            "evaluatePackages": [
+                "log",
+                "toString",
+                "list",
+                "resolveFile",
+                "mapClasses",
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "size",
+                "matches",
+                "elementAt",
+                "contains",
+                "addElement"
+            ],
+            "matches": [
+                "startsWith",
+                "substring",
+                "length"
+            ],
+            "mapClasses": [
+                "getFiles",
+                "elements",
+                "hasMoreElements",
+                "nextElement",
+                "getPackageName",
+                "put"
+            ],
+            "getFiles": [
+                "exists",
+                "list",
+                "getPath",
+                "getProperty",
+                "isDirectory",
+                "getFiles",
+                "endsWith",
+                "addElement",
+                "log"
+            ],
+            "getPackageName": [
+                "readLine",
+                "log",
+                "trim",
+                "startsWith",
+                "substring",
+                "indexOf",
+                "close"
+            ],
+            "outputLog": [
+                "startsWith"
+            ],
+            "logFlush": [],
+            "setName": [],
+            "getName": [],
+            "setValue": [],
+            "getValue": [],
+            "setPath": [
+                "append"
+            ],
+            "getPath": [],
+            "createPath": [],
+            "createParam": [
+                "addElement"
+            ],
+            "getParams": [
+                "elements"
+            ],
+            "setHref": [],
+            "getHref": [],
+            "setPackagelistLoc": [],
+            "getPackagelistLoc": [],
+            "setOffline": [
+                "toBoolean"
+            ],
+            "isLinkOffline": [],
+            "setTitle": [],
+            "getTitle": [],
+            "setPackages": [],
+            "getPackages": [],
+            "read": [
+                "read"
+            ],
+            "skip": [
+                "read"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/CompileTask.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/CompileTask.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "CompileTask",
+                "methods": [
+                    "createTaskdef",
+                    "init",
+                    "execute"
+                ]
+            }
+        ],
+        "functions": {
+            "createTaskdef": [
+                "addElement"
+            ],
+            "init": [
+                "elements",
+                "hasMoreElements",
+                "nextElement",
+                "getClassname",
+                "replace",
+                "setName",
+                "init"
+            ],
+            "execute": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/Jar.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/Jar.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util.zip"
+        ],
+        "classes": [
+            {
+                "class_name": "Jar",
+                "methods": [
+                    "setJarfile",
+                    "setManifest",
+                    "initZipOutputStream",
+                    "zipDir",
+                    "zipFile"
+                ]
+            }
+        ],
+        "functions": {
+            "setJarfile": [],
+            "setManifest": [
+                "resolveFile"
+            ],
+            "initZipOutputStream": [
+                "getParent",
+                "getClass",
+                "getResourceAsStream",
+                "zipFile",
+                "currentTimeMillis"
+            ],
+            "zipDir": [
+                "equals"
+            ],
+            "zipFile": [
+                "equals"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/JikesOutputParser.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/JikesOutputParser.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "JikesOutputParser",
+                "methods": [
+                    "parseOutput",
+                    "parseStandardOutput",
+                    "parseEmacsOutput",
+                    "setError",
+                    "log",
+                    "getErrorFlag"
+                ]
+            }
+        ],
+        "functions": {
+            "parseOutput": [
+                "parseEmacsOutput",
+                "parseStandardOutput"
+            ],
+            "parseStandardOutput": [
+                "readLine",
+                "toLowerCase",
+                "trim",
+                "equals",
+                "indexOf",
+                "setError",
+                "log"
+            ],
+            "parseEmacsOutput": [
+                "parseStandardOutput"
+            ],
+            "setError": [],
+            "log": [
+                "log"
+            ],
+            "getErrorFlag": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/KeySubst.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/KeySubst.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "KeySubst",
+                "methods": [
+                    "execute",
+                    "setSrc",
+                    "setDest",
+                    "setSep",
+                    "setKeys",
+                    "main",
+                    "replace"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "log",
+                "delete",
+                "readLine",
+                "length",
+                "newLine",
+                "replace",
+                "write",
+                "flush",
+                "close",
+                "printStackTrace"
+            ],
+            "setSrc": [
+                "resolveFile"
+            ],
+            "setDest": [
+                "resolveFile"
+            ],
+            "setSep": [],
+            "setKeys": [
+                "length",
+                "hasMoreTokens",
+                "nextToken",
+                "trim",
+                "put"
+            ],
+            "main": [
+                "put",
+                "println",
+                "replace",
+                "printStackTrace"
+            ],
+            "replace": [
+                "indexOf",
+                "substring",
+                "append",
+                "containsKey",
+                "get",
+                "length",
+                "toString"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/XalanLiaison.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/XalanLiaison.java",
+        "imports": [
+            "org.apache.tools.ant.taskdefs.XSLTLiaison",
+            "org.apache.xalan.xslt.XSLTProcessorFactory",
+            "org.apache.xalan.xslt.XSLTProcessor",
+            "org.apache.xalan.xslt.XSLTInputSource",
+            "org.apache.xalan.xslt.XSLTResultTarget"
+        ],
+        "classes": [
+            {
+                "class_name": "XalanLiaison",
+                "methods": [
+                    "setStylesheet",
+                    "transform"
+                ]
+            }
+        ],
+        "functions": {
+            "setStylesheet": [],
+            "transform": [
+                "process"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/XslpLiaison.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/XslpLiaison.java",
+        "imports": [
+            "java.io.FileWriter",
+            "org.apache.tools.ant.taskdefs.XSLTLiaison",
+            "com.kvisco.xsl.XSLProcessor",
+            "com.kvisco.xsl.XSLReader",
+            "com.kvisco.xsl.XSLStylesheet"
+        ],
+        "classes": [
+            {
+                "class_name": "XslpLiaison",
+                "methods": [
+                    "setStylesheet",
+                    "transform"
+                ]
+            }
+        ],
+        "functions": {
+            "setStylesheet": [
+                "read"
+            ],
+            "transform": [
+                "process"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/RenameExtensions.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/RenameExtensions.java",
+        "imports": [
+            "java.io",
+            "java.util",
+            "org.apache.tools.ant",
+            "org.apache.tools.ant.taskdefs"
+        ],
+        "classes": [
+            {
+                "class_name": "RenameExtensions",
+                "methods": [
+                    "setFromExtension",
+                    "setToExtension",
+                    "setReplace",
+                    "setSrcDir",
+                    "execute",
+                    "scanDir"
+                ]
+            }
+        ],
+        "functions": {
+            "setFromExtension": [],
+            "setToExtension": [],
+            "setReplace": [
+                "toBoolean"
+            ],
+            "setSrcDir": [
+                "resolveFile"
+            ],
+            "execute": [
+                "getDirectoryScanner",
+                "getIncludedFiles",
+                "scanDir",
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "get",
+                "exists",
+                "delete",
+                "renameTo"
+            ],
+            "scanDir": [
+                "toLowerCase",
+                "endsWith",
+                "substring",
+                "lastIndexOf",
+                "exists",
+                "put",
+                "log"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/Script.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/Script.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io",
+            "java.util",
+            "com.ibm.bsf"
+        ],
+        "classes": [
+            {
+                "class_name": "Script",
+                "methods": [
+                    "addBeans",
+                    "execute",
+                    "setLanguage",
+                    "setSrc",
+                    "addText"
+                ]
+            }
+        ],
+        "functions": {
+            "addBeans": [
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "length",
+                "isJavaIdentifierStart",
+                "charAt",
+                "isJavaIdentifierPart",
+                "put",
+                "get"
+            ],
+            "execute": [
+                "addBeans",
+                "getProperties",
+                "getUserProperties",
+                "getTargets",
+                "getReferences",
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "get",
+                "declareBean",
+                "getClass",
+                "exec",
+                "getTargetException"
+            ],
+            "setLanguage": [],
+            "setSrc": [
+                "exists",
+                "length",
+                "read",
+                "close"
+            ],
+            "addText": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/ejb/EjbJar.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/ejb/EjbJar.java",
+        "imports": [
+            "java.io.FileInputStream",
+            "java.io.FileOutputStream",
+            "java.io.PrintWriter",
+            "java.io.File",
+            "java.io.IOException",
+            "java.util.jar",
+            "java.util.zip",
+            "java.util.ArrayList",
+            "java.util.Hashtable",
+            "java.util.Iterator",
+            "javax.xml.parsers.SAXParser",
+            "javax.xml.parsers.SAXParserFactory",
+            "javax.xml.parsers.ParserConfigurationException",
+            "org.xml.sax.Parser",
+            "org.xml.sax.Locator",
+            "org.xml.sax.InputSource",
+            "org.xml.sax.AttributeList",
+            "org.xml.sax.DocumentHandler",
+            "org.xml.sax.SAXException",
+            "org.xml.sax.SAXParseException",
+            "org.xml.sax.helpers.ParserFactory",
+            "org.apache.tools.ant.BuildException",
+            "org.apache.tools.ant.Task",
+            "org.apache.tools.ant.Project",
+            "org.apache.tools.ant.DirectoryScanner",
+            "org.apache.tools.ant.taskdefs.MatchingTask",
+            "org.apache.tools.ant.taskdefs.Java"
+        ],
+        "classes": [
+            {
+                "class_name": "EjbJar",
+                "methods": [
+                    "setSrcdir",
+                    "setDestdir",
+                    "setGenericjarsuffix",
+                    "setWeblogicjarsuffix",
+                    "setGenerateweblogic",
+                    "setKeepgeneric",
+                    "setBasenameterminator",
+                    "addFileToJar",
+                    "writeJar",
+                    "buildWeblogicJar",
+                    "execute"
+                ]
+            },
+            {
+                "class_name": "DescriptorHandler",
+                "methods": [
+                    "getFiles",
+                    "startDocument",
+                    "startElement",
+                    "endElement",
+                    "characters"
+                ]
+            }
+        ],
+        "functions": {
+            "setSrcdir": [
+                "resolveFile"
+            ],
+            "setDestdir": [
+                "resolveFile"
+            ],
+            "setGenericjarsuffix": [],
+            "setWeblogicjarsuffix": [],
+            "setGenerateweblogic": [
+                "valueOf",
+                "booleanValue"
+            ],
+            "setKeepgeneric": [
+                "valueOf",
+                "booleanValue"
+            ],
+            "setBasenameterminator": [],
+            "addFileToJar": [
+                "putNextEntry",
+                "write",
+                "read",
+                "close",
+                "getMessage"
+            ],
+            "writeJar": [
+                "exists",
+                "delete",
+                "getParentFile",
+                "mkdirs",
+                "createNewFile",
+                "setMethod",
+                "keySet",
+                "iterator",
+                "hasNext",
+                "next",
+                "get",
+                "log",
+                "addFileToJar",
+                "close",
+                "toString",
+                "getMessage"
+            ],
+            "buildWeblogicJar": [
+                "createTask",
+                "setClassname",
+                "setArgs",
+                "setFork",
+                "log",
+                "toString",
+                "execute"
+            ],
+            "execute": [
+                "append",
+                "toString",
+                "newInstance",
+                "setValidating",
+                "newSAXParser",
+                "getDirectoryScanner",
+                "scan",
+                "getIncludedFiles",
+                "log",
+                "indexOf",
+                "lastIndexOf",
+                "substring",
+                "parse",
+                "getFiles",
+                "put",
+                "exists",
+                "lastModified",
+                "values",
+                "iterator",
+                "hasNext",
+                "next",
+                "getName",
+                "valueOf",
+                "size",
+                "writeJar",
+                "buildWeblogicJar",
+                "delete",
+                "getMessage"
+            ],
+            "getFiles": [],
+            "startDocument": [],
+            "startElement": [],
+            "endElement": [],
+            "characters": [
+                "equals",
+                "startsWith",
+                "replace",
+                "put"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/ejb/Ejbc.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/ejb/Ejbc.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "org.apache.tools.ant.taskdefs",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "Ejbc",
+                "methods": [
+                    "execute",
+                    "setDescriptors",
+                    "setDest",
+                    "setManifest",
+                    "setClasspath",
+                    "setSrc"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "isDirectory",
+                "getPath",
+                "getProperty",
+                "translatePath",
+                "getIncludedFiles",
+                "createTask",
+                "setFork",
+                "setClassname",
+                "setArgs",
+                "setClasspath",
+                "executeJava"
+            ],
+            "setDescriptors": [],
+            "setDest": [],
+            "setManifest": [],
+            "setClasspath": [
+                "translatePath"
+            ],
+            "setSrc": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/ejb/DDCreator.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/ejb/DDCreator.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "org.apache.tools.ant.taskdefs",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "DDCreator",
+                "methods": [
+                    "execute",
+                    "setDescriptors",
+                    "setDest",
+                    "setClasspath"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "isDirectory",
+                "getPath",
+                "getIncludedFiles",
+                "getProperty",
+                "translatePath",
+                "createTask",
+                "setFork",
+                "setClassname",
+                "setArgs",
+                "setClasspath",
+                "executeJava"
+            ],
+            "setDescriptors": [],
+            "setDest": [],
+            "setClasspath": [
+                "translatePath"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/ejb/EjbcHelper.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/ejb/EjbcHelper.java",
+        "imports": [
+            "java.io.File",
+            "java.io.FileInputStream",
+            "java.io.ObjectInputStream",
+            "java.io.IOException",
+            "java.io.PrintWriter",
+            "java.io.FileWriter",
+            "javax.ejb.deployment.EntityDescriptor",
+            "javax.ejb.deployment.DeploymentDescriptor"
+        ],
+        "classes": [
+            {
+                "class_name": "EjbcHelper",
+                "methods": [
+                    "main",
+                    "isRegenRequired",
+                    "process",
+                    "regenerateSupportClasses"
+                ]
+            }
+        ],
+        "functions": {
+            "main": [
+                "process"
+            ],
+            "isRegenRequired": [
+                "readObject",
+                "close",
+                "getHomeInterfaceClassName",
+                "replace",
+                "getRemoteInterfaceClassName",
+                "getEnterpriseBeanClassName",
+                "exists",
+                "lastModified",
+                "println",
+                "getName"
+            ],
+            "process": [
+                "isRegenRequired",
+                "println",
+                "getName",
+                "regenerateSupportClasses",
+                "print",
+                "flush",
+                "close"
+            ],
+            "regenerateSupportClasses": [
+                "getPath",
+                "main"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/ejb/WLStop.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/ejb/WLStop.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "org.apache.tools.ant.taskdefs",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "WLStop",
+                "methods": [
+                    "execute",
+                    "setClasspath",
+                    "setUser",
+                    "setPassword",
+                    "setUrl",
+                    "setDelay"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "translatePath",
+                "createTask",
+                "setFork",
+                "setClassname",
+                "setArgs",
+                "setClasspath",
+                "execute"
+            ],
+            "setClasspath": [
+                "translatePath"
+            ],
+            "setUser": [],
+            "setPassword": [],
+            "setUrl": [],
+            "setDelay": [
+                "parseInt"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/ejb/DDCreatorHelper.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/ejb/DDCreatorHelper.java",
+        "imports": [
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "DDCreatorHelper",
+                "methods": [
+                    "main",
+                    "process"
+                ]
+            }
+        ],
+        "functions": {
+            "main": [
+                "process"
+            ],
+            "process": [
+                "lastIndexOf",
+                "substring",
+                "exists",
+                "lastModified",
+                "getPath",
+                "getName",
+                "main"
+            ]
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/ejb/WLRun.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/ejb/WLRun.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "org.apache.tools.ant.taskdefs",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "WLRun",
+                "methods": [
+                    "execute",
+                    "setClasspath",
+                    "setWlclasspath",
+                    "setPolicy",
+                    "setHome",
+                    "setName",
+                    "setProperties"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "isDirectory",
+                "getPath",
+                "exists",
+                "translatePath",
+                "createTask",
+                "setFork",
+                "setClassname",
+                "setJvmargs",
+                "setClasspath",
+                "executeJava"
+            ],
+            "setClasspath": [
+                "translatePath"
+            ],
+            "setWlclasspath": [],
+            "setPolicy": [],
+            "setHome": [],
+            "setName": [],
+            "setProperties": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/vss/MSVSS.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/vss/MSVSS.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "org.apache.tools.ant.taskdefs.Exec",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "MSVSS",
+                "methods": [
+                    "setSsdir",
+                    "getSSCommand",
+                    "setLogin",
+                    "getLoginCommand",
+                    "setVsspath",
+                    "getVsspath"
+                ]
+            }
+        ],
+        "functions": {
+            "setSsdir": [
+                "translatePath"
+            ],
+            "getSSCommand": [
+                "equals",
+                "endsWith"
+            ],
+            "setLogin": [],
+            "getLoginCommand": [],
+            "setVsspath": [
+                "startsWith",
+                "substring"
+            ],
+            "getVsspath": []
+        }
+    },
+    "src/org/apache/tools/ant/taskdefs/optional/vss/MSVSSGET.java": {
+        "file_name": "/src/org/apache/tools/ant/taskdefs/optional/vss/MSVSSGET.java",
+        "imports": [
+            "org.apache.tools.ant",
+            "java.io.File"
+        ],
+        "classes": [
+            {
+                "class_name": "MSVSSGET",
+                "methods": [
+                    "execute",
+                    "setLocalpath",
+                    "getLocalpathCommand",
+                    "setRecursive",
+                    "getRecursiveCommand",
+                    "setWritable",
+                    "getWritableCommand",
+                    "setVersion",
+                    "setDate",
+                    "setLabel",
+                    "getVersionCommand"
+                ]
+            }
+        ],
+        "functions": {
+            "execute": [
+                "getVsspath",
+                "append",
+                "getSSCommand",
+                "getLocalpathCommand",
+                "getRecursiveCommand",
+                "getVersionCommand",
+                "getWritableCommand",
+                "getLoginCommand",
+                "run",
+                "toString"
+            ],
+            "setLocalpath": [
+                "translatePath"
+            ],
+            "getLocalpathCommand": [
+                "resolveFile",
+                "exists",
+                "mkdirs",
+                "log",
+                "getAbsolutePath"
+            ],
+            "setRecursive": [
+                "toBoolean"
+            ],
+            "getRecursiveCommand": [],
+            "setWritable": [
+                "toBoolean"
+            ],
+            "getWritableCommand": [],
+            "setVersion": [
+                "equals"
+            ],
+            "setDate": [
+                "equals"
+            ],
+            "setLabel": [
+                "equals"
+            ],
+            "getVersionCommand": []
+        }
+    },
+    "src/org/apache/tools/tar/TarBuffer.java": {
+        "file_name": "/src/org/apache/tools/tar/TarBuffer.java",
+        "imports": [
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "TarBuffer",
+                "methods": [
+                    "initialize",
+                    "getBlockSize",
+                    "getRecordSize",
+                    "setDebug",
+                    "isEOFRecord",
+                    "skipRecord",
+                    "readRecord",
+                    "readBlock",
+                    "getCurrentBlockNum",
+                    "getCurrentRecordNum",
+                    "writeRecord",
+                    "writeRecord",
+                    "writeBlock",
+                    "flushBlock",
+                    "close"
+                ]
+            }
+        ],
+        "functions": {
+            "initialize": [],
+            "getBlockSize": [],
+            "getRecordSize": [],
+            "setDebug": [],
+            "isEOFRecord": [
+                "getRecordSize"
+            ],
+            "skipRecord": [
+                "println",
+                "readBlock"
+            ],
+            "readRecord": [
+                "println",
+                "readBlock",
+                "arraycopy"
+            ],
+            "readBlock": [
+                "println",
+                "read"
+            ],
+            "getCurrentBlockNum": [],
+            "getCurrentRecordNum": [],
+            "writeRecord": [
+                "println",
+                "writeBlock",
+                "arraycopy"
+            ],
+            "writeBlock": [
+                "println",
+                "write",
+                "flush"
+            ],
+            "flushBlock": [
+                "println",
+                "writeBlock"
+            ],
+            "close": [
+                "println",
+                "flushBlock",
+                "close"
+            ]
+        }
+    },
+    "src/org/apache/tools/tar/TarConstants.java": {
+        "file_name": "/src/org/apache/tools/tar/TarConstants.java",
+        "imports": [],
+        "classes": [],
+        "functions": {}
+    },
+    "src/org/apache/tools/tar/TarOutputStream.java": {
+        "file_name": "/src/org/apache/tools/tar/TarOutputStream.java",
+        "imports": [
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "TarOutputStream",
+                "methods": [
+                    "setDebug",
+                    "setBufferDebug",
+                    "finish",
+                    "close",
+                    "getRecordSize",
+                    "putNextEntry",
+                    "closeEntry",
+                    "write",
+                    "write",
+                    "write",
+                    "writeEOFRecord"
+                ]
+            }
+        ],
+        "functions": {
+            "setDebug": [],
+            "setBufferDebug": [
+                "setDebug"
+            ],
+            "finish": [
+                "writeEOFRecord"
+            ],
+            "close": [
+                "finish",
+                "close"
+            ],
+            "getRecordSize": [
+                "getRecordSize"
+            ],
+            "putNextEntry": [
+                "writeEntryHeader",
+                "writeRecord",
+                "isDirectory",
+                "getSize"
+            ],
+            "closeEntry": [
+                "writeRecord"
+            ],
+            "write": [
+                "write",
+                "arraycopy",
+                "writeRecord"
+            ],
+            "writeEOFRecord": [
+                "writeRecord"
+            ]
+        }
+    },
+    "src/org/apache/tools/tar/TarInputStream.java": {
+        "file_name": "/src/org/apache/tools/tar/TarInputStream.java",
+        "imports": [
+            "java.io"
+        ],
+        "classes": [
+            {
+                "class_name": "TarInputStream",
+                "methods": [
+                    "setDebug",
+                    "close",
+                    "getRecordSize",
+                    "available",
+                    "skip",
+                    "markSupported",
+                    "mark",
+                    "reset",
+                    "getNextEntry",
+                    "read",
+                    "read",
+                    "read",
+                    "copyEntryContents"
+                ]
+            }
+        ],
+        "functions": {
+            "setDebug": [
+                "setDebug"
+            ],
+            "close": [
+                "close"
+            ],
+            "getRecordSize": [
+                "getRecordSize"
+            ],
+            "available": [],
+            "skip": [
+                "read"
+            ],
+            "markSupported": [],
+            "mark": [],
+            "reset": [],
+            "getNextEntry": [
+                "println",
+                "getName",
+                "skip",
+                "readRecord",
+                "isEOFRecord",
+                "getCurrentBlockNum",
+                "getCurrentRecordNum",
+                "getSize"
+            ],
+            "read": [
+                "read",
+                "arraycopy",
+                "readRecord"
+            ],
+            "copyEntryContents": [
+                "read",
+                "write"
+            ]
+        }
+    },
+    "src/org/apache/tools/tar/TarUtils.java": {
+        "file_name": "/src/org/apache/tools/tar/TarUtils.java",
+        "imports": [],
+        "classes": [
+            {
+                "class_name": "TarUtils",
+                "methods": [
+                    "parseOctal",
+                    "parseName",
+                    "getNameBytes",
+                    "getOctalBytes",
+                    "getLongOctalBytes",
+                    "getCheckSumOctalBytes",
+                    "computeCheckSum"
+                ]
+            }
+        ],
+        "functions": {
+            "parseOctal": [],
+            "parseName": [
+                "append"
+            ],
+            "getNameBytes": [
+                "length",
+                "charAt"
+            ],
+            "getOctalBytes": [],
+            "getLongOctalBytes": [
+                "getOctalBytes",
+                "arraycopy"
+            ],
+            "getCheckSumOctalBytes": [
+                "getOctalBytes"
+            ],
+            "computeCheckSum": []
+        }
+    },
+    "src/org/apache/tools/tar/TarEntry.java": {
+        "file_name": "/src/org/apache/tools/tar/TarEntry.java",
+        "imports": [
+            "java.io",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "TarEntry",
+                "methods": [
+                    "equals",
+                    "isDescendent",
+                    "getName",
+                    "setName",
+                    "getUserId",
+                    "setUserId",
+                    "getGroupId",
+                    "setGroupId",
+                    "getUserName",
+                    "setUserName",
+                    "getGroupName",
+                    "setGroupName",
+                    "setIds",
+                    "setNames",
+                    "setModTime",
+                    "setModTime",
+                    "getModTime",
+                    "getFile",
+                    "getSize",
+                    "setSize",
+                    "isDirectory",
+                    "getDirectoryEntries",
+                    "writeEntryHeader",
+                    "parseTarHeader"
+                ]
+            }
+        ],
+        "functions": {
+            "equals": [
+                "getName",
+                "equals"
+            ],
+            "isDescendent": [
+                "getName",
+                "startsWith"
+            ],
+            "getName": [
+                "toString"
+            ],
+            "setName": [],
+            "getUserId": [],
+            "setUserId": [],
+            "getGroupId": [],
+            "setGroupId": [],
+            "getUserName": [
+                "toString"
+            ],
+            "setUserName": [],
+            "getGroupName": [
+                "toString"
+            ],
+            "setGroupName": [],
+            "setIds": [
+                "setUserId",
+                "setGroupId"
+            ],
+            "setNames": [
+                "setUserName",
+                "setGroupName"
+            ],
+            "setModTime": [
+                "getTime"
+            ],
+            "getModTime": [],
+            "getFile": [],
+            "getSize": [],
+            "setSize": [],
+            "isDirectory": [
+                "isDirectory",
+                "getName",
+                "endsWith"
+            ],
+            "getDirectoryEntries": [
+                "isDirectory",
+                "list"
+            ],
+            "writeEntryHeader": [
+                "getNameBytes",
+                "getOctalBytes",
+                "getLongOctalBytes",
+                "computeCheckSum",
+                "getCheckSumOctalBytes"
+            ],
+            "parseTarHeader": [
+                "parseName",
+                "parseOctal"
+            ]
+        }
+    },
+    "src/com/oreilly/servlet/MailMessage.java": {
+        "file_name": "/src/com/oreilly/servlet/MailMessage.java",
+        "imports": [
+            "java.io",
+            "java.net",
+            "java.util"
+        ],
+        "classes": [
+            {
+                "class_name": "MailMessage",
+                "methods": [
+                    "from",
+                    "to",
+                    "cc",
+                    "bcc",
+                    "setSubject",
+                    "setHeader",
+                    "getPrintStream",
+                    "setFromHeader",
+                    "setToHeader",
+                    "setCcHeader",
+                    "vectorToList",
+                    "flushHeaders",
+                    "sendAndClose",
+                    "sanitizeAddress",
+                    "connect",
+                    "getReady",
+                    "sendHelo",
+                    "sendFrom",
+                    "sendRcpt",
+                    "sendData",
+                    "sendDot",
+                    "sendQuit",
+                    "send",
+                    "isResponseOK",
+                    "disconnect"
+                ]
+            },
+            {
+                "class_name": "MailPrintStream",
+                "methods": [
+                    "write",
+                    "write",
+                    "rawWrite",
+                    "rawPrint"
+                ]
+            }
+        ],
+        "functions": {
+            "from": [
+                "sendFrom"
+            ],
+            "to": [
+                "sendRcpt",
+                "addElement"
+            ],
+            "cc": [
+                "sendRcpt",
+                "addElement"
+            ],
+            "bcc": [
+                "sendRcpt"
+            ],
+            "setSubject": [
+                "put"
+            ],
+            "setHeader": [
+                "put"
+            ],
+            "getPrintStream": [
+                "setFromHeader",
+                "setToHeader",
+                "setCcHeader",
+                "sendData",
+                "flushHeaders"
+            ],
+            "setFromHeader": [
+                "setHeader"
+            ],
+            "setToHeader": [
+                "setHeader",
+                "vectorToList"
+            ],
+            "setCcHeader": [
+                "setHeader",
+                "vectorToList"
+            ],
+            "vectorToList": [
+                "elements",
+                "hasMoreElements",
+                "append",
+                "nextElement",
+                "toString"
+            ],
+            "flushHeaders": [
+                "keys",
+                "hasMoreElements",
+                "nextElement",
+                "get",
+                "println",
+                "flush"
+            ],
+            "sendAndClose": [
+                "sendDot",
+                "disconnect"
+            ],
+            "sanitizeAddress": [
+                "length",
+                "charAt",
+                "substring"
+            ],
+            "connect": [
+                "getOutputStream",
+                "getInputStream",
+                "getReady"
+            ],
+            "getReady": [
+                "readLine",
+                "isResponseOK"
+            ],
+            "sendHelo": [
+                "getLocalHost",
+                "getHostName",
+                "send"
+            ],
+            "sendFrom": [
+                "send",
+                "sanitizeAddress"
+            ],
+            "sendRcpt": [
+                "send",
+                "sanitizeAddress"
+            ],
+            "sendData": [
+                "send"
+            ],
+            "sendDot": [
+                "send"
+            ],
+            "sendQuit": [
+                "send"
+            ],
+            "send": [
+                "rawPrint",
+                "readLine",
+                "isResponseOK"
+            ],
+            "isResponseOK": [
+                "startsWith"
+            ],
+            "disconnect": [
+                "close"
+            ],
+            "write": [
+                "rawWrite",
+                "write"
+            ],
+            "rawWrite": [],
+            "rawPrint": [
+                "length",
+                "rawWrite",
+                "charAt"
+            ]
+        }
+    }
+}

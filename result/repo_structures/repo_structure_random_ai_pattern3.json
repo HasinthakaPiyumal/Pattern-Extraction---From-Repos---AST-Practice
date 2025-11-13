@@ -1,0 +1,95 @@
+{
+    "microservice/app/main.py": {
+        "file_name": "/microservice/app/main.py",
+        "imports": [
+            "flask.Flask",
+            "flask.request",
+            "random.random",
+            "requests",
+            "os"
+        ],
+        "classes": [],
+        "functions": {
+            "local_transaction": [
+                "get",
+                "random",
+                "log",
+                "route"
+            ],
+            "compensating_transaction": [
+                "get",
+                "log",
+                "route"
+            ],
+            "log": [
+                "get",
+                "format"
+            ]
+        }
+    },
+    "interface/app.py": {
+        "file_name": "/interface/app.py",
+        "imports": [
+            "flask.Flask",
+            "flask.render_template",
+            "flask.request",
+            "flask_socketio.SocketIO",
+            "flask_socketio.emit",
+            "requests",
+            "random"
+        ],
+        "classes": [],
+        "functions": {
+            "index": [
+                "render_template",
+                "route"
+            ],
+            "booking": [
+                "post",
+                "route"
+            ],
+            "log": [
+                "get",
+                "emit",
+                "route"
+            ]
+        }
+    },
+    "dags/workflow.py": {
+        "file_name": "/dags/workflow.py",
+        "imports": [
+            "datetime.timedelta",
+            "airflow.DAG",
+            "airflow.operators.bash_operator.BashOperator",
+            "airflow.operators.http_operator.SimpleHttpOperator",
+            "airflow.utils.dates.days_ago",
+            "airflow.models.Variable",
+            "airflow.models.connection.Connection",
+            "airflow.operators.python_operator.PythonOperator",
+            "airflow.operators.python_operator.BranchPythonOperator",
+            "random.randrange",
+            "airflow.AirflowException",
+            "os",
+            "requests"
+        ],
+        "classes": [],
+        "functions": {
+            "init_transaction": [
+                "str",
+                "randrange"
+            ],
+            "book_hotel_do": [
+                "get",
+                "xcom_pull"
+            ],
+            "book_flight_do": [
+                "get",
+                "xcom_pull"
+            ],
+            "book_car_rental_do": [
+                "get",
+                "xcom_pull"
+            ]
+        }
+    }
+}

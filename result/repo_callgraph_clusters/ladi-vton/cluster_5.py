@@ -1,0 +1,510 @@
+# Cluster 5
+
+class BoundedGridLocNet(nn.Module):
+
+    def __init__(self, grid_height, grid_width, target_control_points, n_layers):
+        super(BoundedGridLocNet, self).__init__()
+        self.regression = FeatureRegression(output_dim=grid_height * grid_width * 2)
+        bias = torch.from_numpy(np.arctanh(target_control_points.numpy()))
+        bias = bias.view(-1)
+        self.regression.linear.bias.data.copy_(bias)
+        self.regression.linear.weight.data.zero_()
+
+    def forward(self, x):
+        batch_size = x.size(0)
+        points = self.regression(x)
+        coor = points.view(batch_size, -1, 2)
+        row = self.get_row(coor, 5)
+        col = self.get_col(coor, 5)
+        rg_loss = sum(self.grad_row(coor, 5))
+        cg_loss = sum(self.grad_col(coor, 5))
+        rg_loss = torch.max(rg_loss, torch.tensor(0.02).cuda())
+        cg_loss = torch.max(cg_loss, torch.tensor(0.02).cuda())
+        rx, ry, cx, cy = (torch.tensor(0.08).cuda(), torch.tensor(0.08).cuda(), torch.tensor(0.08).cuda(), torch.tensor(0.08).cuda())
+        row_x, row_y = (row[:, :, 0], row[:, :, 1])
+        col_x, col_y = (col[:, :, 0], col[:, :, 1])
+        rx_loss = torch.max(rx, row_x).mean()
+        ry_loss = torch.max(ry, row_y).mean()
+        cx_loss = torch.max(cx, col_x).mean()
+        cy_loss = torch.max(cy, col_y).mean()
+        return (coor, rx_loss, ry_loss, cx_loss, cy_loss, rg_loss, cg_loss)
+
+    def get_row(self, coor, num):
+        sec_dic = []
+        for j in range(num):
+            sum = 0
+            buffer = 0
+            flag = False
+            max = -1
+            for i in range(num - 1):
+                differ = (coor[:, j * num + i + 1, :] - coor[:, j * num + i, :]) ** 2
+                if not flag:
+                    second_dif = 0
+                    flag = True
+                else:
+                    second_dif = torch.abs(differ - buffer)
+                    sec_dic.append(second_dif)
+                buffer = differ
+                sum += second_dif
+        return torch.stack(sec_dic, dim=1)
+
+    def get_col(self, coor, num):
+        sec_dic = []
+        for i in range(num):
+            sum = 0
+            buffer = 0
+            flag = False
+            max = -1
+            for j in range(num - 1):
+                differ = (coor[:, (j + 1) * num + i, :] - coor[:, j * num + i, :]) ** 2
+                if not flag:
+                    second_dif = 0
+                    flag = True
+                else:
+                    second_dif = torch.abs(differ - buffer)
+                    sec_dic.append(second_dif)
+                buffer = differ
+                sum += second_dif
+        return torch.stack(sec_dic, dim=1)
+
+    def grad_row(self, coor, num):
+        sec_term = []
+        for j in range(num):
+            for i in range(1, num - 1):
+                x0, y0 = coor[:, j * num + i - 1, :][0]
+                x1, y1 = coor[:, j * num + i + 0, :][0]
+                x2, y2 = coor[:, j * num + i + 1, :][0]
+                grad = torch.abs((y1 - y0) * (x1 - x2) - (y1 - y2) * (x1 - x0))
+                sec_term.append(grad)
+        return sec_term
+
+    def grad_col(self, coor, num):
+        sec_term = []
+        for i in range(num):
+            for j in range(1, num - 1):
+                x0, y0 = coor[:, (j - 1) * num + i, :][0]
+                x1, y1 = coor[:, j * num + i, :][0]
+                x2, y2 = coor[:, (j + 1) * num + i, :][0]
+                grad = torch.abs((y1 - y0) * (x1 - x2) - (y1 - y2) * (x1 - x0))
+                sec_term.append(grad)
+        return sec_term
+
+def get_row(self, coor, num):
+    sec_dic = []
+    for j in range(num):
+        sum = 0
+        buffer = 0
+        flag = False
+        max = -1
+        for i in range(num - 1):
+            differ = (coor[:, j * num + i + 1, :] - coor[:, j * num + i, :]) ** 2
+            if not flag:
+                second_dif = 0
+                flag = True
+            else:
+                second_dif = torch.abs(differ - buffer)
+                sec_dic.append(second_dif)
+            buffer = differ
+            sum += second_dif
+    return torch.stack(sec_dic, dim=1)
+
+def get_col(self, coor, num):
+    sec_dic = []
+    for i in range(num):
+        sum = 0
+        buffer = 0
+        flag = False
+        max = -1
+        for j in range(num - 1):
+            differ = (coor[:, (j + 1) * num + i, :] - coor[:, j * num + i, :]) ** 2
+            if not flag:
+                second_dif = 0
+                flag = True
+            else:
+                second_dif = torch.abs(differ - buffer)
+                sec_dic.append(second_dif)
+            buffer = differ
+            sum += second_dif
+    return torch.stack(sec_dic, dim=1)
+
+def grad_row(self, coor, num):
+    sec_term = []
+    for j in range(num):
+        for i in range(1, num - 1):
+            x0, y0 = coor[:, j * num + i - 1, :][0]
+            x1, y1 = coor[:, j * num + i + 0, :][0]
+            x2, y2 = coor[:, j * num + i + 1, :][0]
+            grad = torch.abs((y1 - y0) * (x1 - x2) - (y1 - y2) * (x1 - x0))
+            sec_term.append(grad)
+    return sec_term
+
+def grad_col(self, coor, num):
+    sec_term = []
+    for i in range(num):
+        for j in range(1, num - 1):
+            x0, y0 = coor[:, (j - 1) * num + i, :][0]
+            x1, y1 = coor[:, j * num + i, :][0]
+            x2, y2 = coor[:, (j + 1) * num + i, :][0]
+            grad = torch.abs((y1 - y0) * (x1 - x2) - (y1 - y2) * (x1 - x0))
+            sec_term.append(grad)
+    return sec_term
+
+class AutoencoderKL(ModelMixin, ConfigMixin):
+    """Variational Autoencoder (VAE) model with KL loss from the paper Auto-Encoding Variational Bayes by Diederik P. Kingma
+    and Max Welling.
+
+    This model inherits from [`ModelMixin`]. Check the superclass documentation for the generic methods the library
+    implements for all the model (such as downloading or saving, etc.)
+
+    Parameters:
+        in_channels (int, *optional*, defaults to 3): Number of channels in the input image.
+        out_channels (int,  *optional*, defaults to 3): Number of channels in the output.
+        down_block_types (`Tuple[str]`, *optional*, defaults to :
+            obj:`("DownEncoderBlock2D",)`): Tuple of downsample block types.
+        up_block_types (`Tuple[str]`, *optional*, defaults to :
+            obj:`("UpDecoderBlock2D",)`): Tuple of upsample block types.
+        block_out_channels (`Tuple[int]`, *optional*, defaults to :
+            obj:`(64,)`): Tuple of block output channels.
+        act_fn (`str`, *optional*, defaults to `"silu"`): The activation function to use.
+        latent_channels (`int`, *optional*, defaults to 4): Number of channels in the latent space.
+        sample_size (`int`, *optional*, defaults to `32`): TODO
+        scaling_factor (`float`, *optional*, defaults to 0.18215):
+            The component-wise standard deviation of the trained latent space computed using the first batch of the
+            training set. This is used to scale the latent space to have unit variance when training the diffusion
+            model. The latents are scaled with the formula `z = z * scaling_factor` before being passed to the
+            diffusion model. When decoding, the latents are scaled back to the original scale with the formula: `z = 1
+            / scaling_factor * z`. For more details, refer to sections 4.3.2 and D.1 of the [High-Resolution Image
+            Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) paper.
+    """
+
+    @register_to_config
+    def __init__(self, in_channels: int=3, out_channels: int=3, down_block_types: Tuple[str]=('DownEncoderBlock2D',), up_block_types: Tuple[str]=('UpDecoderBlock2D',), block_out_channels: Tuple[int]=(64,), layers_per_block: int=1, act_fn: str='silu', latent_channels: int=4, norm_num_groups: int=32, sample_size: int=32, scaling_factor: float=0.18215):
+        super().__init__()
+        self.encoder = Encoder(in_channels=in_channels, out_channels=latent_channels, down_block_types=down_block_types, block_out_channels=block_out_channels, layers_per_block=layers_per_block, act_fn=act_fn, norm_num_groups=norm_num_groups, double_z=True)
+        self.decoder = Decoder(in_channels=latent_channels, out_channels=out_channels, up_block_types=up_block_types, block_out_channels=block_out_channels, layers_per_block=layers_per_block, norm_num_groups=norm_num_groups, act_fn=act_fn)
+        self.quant_conv = nn.Conv2d(2 * latent_channels, 2 * latent_channels, 1)
+        self.post_quant_conv = nn.Conv2d(latent_channels, latent_channels, 1)
+        self.use_slicing = False
+        self.use_tiling = False
+        self.tile_sample_min_size = self.config.sample_size
+        sample_size = self.config.sample_size[0] if isinstance(self.config.sample_size, (list, tuple)) else self.config.sample_size
+        self.tile_latent_min_size = int(sample_size / 2 ** (len(self.block_out_channels) - 1))
+        self.tile_overlap_factor = 0.25
+
+    def enable_tiling(self, use_tiling: bool=True):
+        """
+        Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
+        compute decoding and encoding in several steps. This is useful to save a large amount of memory and to allow
+        the processing of larger images.
+        """
+        self.use_tiling = use_tiling
+
+    def disable_tiling(self):
+        """
+        Disable tiled VAE decoding. If `enable_vae_tiling` was previously invoked, this method will go back to
+        computing decoding in one step.
+        """
+        self.enable_tiling(False)
+
+    def enable_slicing(self):
+        """
+        Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
+        compute decoding in several steps. This is useful to save some memory and allow larger batch sizes.
+        """
+        self.use_slicing = True
+
+    def disable_slicing(self):
+        """
+        Disable sliced VAE decoding. If `enable_slicing` was previously invoked, this method will go back to computing
+        decoding in one step.
+        """
+        self.use_slicing = False
+
+    @apply_forward_hook
+    def encode(self, x: torch.FloatTensor, return_dict: bool=True) -> AutoencoderKLOutput:
+        if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
+            return self.tiled_encode(x, return_dict=return_dict)
+        h, intermediate_features = self.encoder(x)
+        moments = self.quant_conv(h)
+        posterior = DiagonalGaussianDistribution(moments)
+        if not return_dict:
+            return (posterior,)
+        return (AutoencoderKLOutput(latent_dist=posterior), intermediate_features)
+
+    def _decode(self, z: torch.FloatTensor, intermediate_features: list=None, int_layers: list=None, return_dict: bool=True) -> Union[DecoderOutput, torch.FloatTensor]:
+        if self.use_tiling and (z.shape[-1] > self.tile_latent_min_size or z.shape[-2] > self.tile_latent_min_size):
+            return self.tiled_decode(z, return_dict=return_dict)
+        z = self.post_quant_conv(z)
+        if intermediate_features:
+            dec = self.decoder(z, intermediate_features, int_layers)
+        else:
+            dec = self.decoder(z)
+        if not return_dict:
+            return (dec,)
+        return DecoderOutput(sample=dec)
+
+    @apply_forward_hook
+    def decode(self, z: torch.FloatTensor, intermediate_features: list=None, int_layers: list=None, return_dict: bool=True) -> Union[DecoderOutput, torch.FloatTensor]:
+        if self.use_slicing and z.shape[0] > 1:
+            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+            decoded = torch.cat(decoded_slices)
+        elif intermediate_features:
+            decoded = self._decode(z, intermediate_features, int_layers).sample
+        else:
+            decoded = self._decode(z).sample
+        if not return_dict:
+            return (decoded,)
+        return DecoderOutput(sample=decoded)
+
+    def blend_v(self, a, b, blend_extent):
+        for y in range(blend_extent):
+            b[:, :, y, :] = a[:, :, -blend_extent + y, :] * (1 - y / blend_extent) + b[:, :, y, :] * (y / blend_extent)
+        return b
+
+    def blend_h(self, a, b, blend_extent):
+        for x in range(blend_extent):
+            b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)
+        return b
+
+    def tiled_encode(self, x: torch.FloatTensor, return_dict: bool=True) -> AutoencoderKLOutput:
+        """Encode a batch of images using a tiled encoder.
+        Args:
+        When this option is enabled, the VAE will split the input tensor into tiles to compute encoding in several
+        steps. This is useful to keep memory use constant regardless of image size. The end result of tiled encoding is:
+        different from non-tiled encoding due to each tile using a different encoder. To avoid tiling artifacts, the
+        tiles overlap and are blended together to form a smooth output. You may still see tile-sized changes in the
+        look of the output, but they should be much less noticeable.
+            x (`torch.FloatTensor`): Input batch of images. return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`AutoencoderKLOutput`] instead of a plain tuple.
+        """
+        overlap_size = int(self.tile_sample_min_size * (1 - self.tile_overlap_factor))
+        blend_extent = int(self.tile_latent_min_size * self.tile_overlap_factor)
+        row_limit = self.tile_latent_min_size - blend_extent
+        rows = []
+        for i in range(0, x.shape[2], overlap_size):
+            row = []
+            for j in range(0, x.shape[3], overlap_size):
+                tile = x[:, :, i:i + self.tile_sample_min_size, j:j + self.tile_sample_min_size]
+                tile, intermediate_features = self.encoder(tile)
+                tile = self.quant_conv(tile)
+                row.append(tile)
+            rows.append(row)
+        result_rows = []
+        for i, row in enumerate(rows):
+            result_row = []
+            for j, tile in enumerate(row):
+                if i > 0:
+                    tile = self.blend_v(rows[i - 1][j], tile, blend_extent)
+                if j > 0:
+                    tile = self.blend_h(row[j - 1], tile, blend_extent)
+                result_row.append(tile[:, :, :row_limit, :row_limit])
+            result_rows.append(torch.cat(result_row, dim=3))
+        moments = torch.cat(result_rows, dim=2)
+        posterior = DiagonalGaussianDistribution(moments)
+        if not return_dict:
+            return (posterior,)
+        return (AutoencoderKLOutput(latent_dist=posterior), intermediate_features)
+
+    def tiled_decode(self, z: torch.FloatTensor, return_dict: bool=True) -> Union[DecoderOutput, torch.FloatTensor]:
+        """Decode a batch of images using a tiled decoder.
+        Args:
+        When this option is enabled, the VAE will split the input tensor into tiles to compute decoding in several
+        steps. This is useful to keep memory use constant regardless of image size. The end result of tiled decoding is:
+        different from non-tiled decoding due to each tile using a different decoder. To avoid tiling artifacts, the
+        tiles overlap and are blended together to form a smooth output. You may still see tile-sized changes in the
+        look of the output, but they should be much less noticeable.
+            z (`torch.FloatTensor`): Input batch of latent vectors. return_dict (`bool`, *optional*, defaults to
+            `True`):
+                Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
+        """
+        overlap_size = int(self.tile_latent_min_size * (1 - self.tile_overlap_factor))
+        blend_extent = int(self.tile_sample_min_size * self.tile_overlap_factor)
+        row_limit = self.tile_sample_min_size - blend_extent
+        rows = []
+        for i in range(0, z.shape[2], overlap_size):
+            row = []
+            for j in range(0, z.shape[3], overlap_size):
+                tile = z[:, :, i:i + self.tile_latent_min_size, j:j + self.tile_latent_min_size]
+                tile = self.post_quant_conv(tile)
+                decoded = self.decoder(tile)
+                row.append(decoded)
+            rows.append(row)
+        result_rows = []
+        for i, row in enumerate(rows):
+            result_row = []
+            for j, tile in enumerate(row):
+                if i > 0:
+                    tile = self.blend_v(rows[i - 1][j], tile, blend_extent)
+                if j > 0:
+                    tile = self.blend_h(row[j - 1], tile, blend_extent)
+                result_row.append(tile[:, :, :row_limit, :row_limit])
+            result_rows.append(torch.cat(result_row, dim=3))
+        dec = torch.cat(result_rows, dim=2)
+        if not return_dict:
+            return (dec,)
+        return DecoderOutput(sample=dec)
+
+    def forward(self, sample: torch.FloatTensor, sample_posterior: bool=False, return_dict: bool=True, generator: Optional[torch.Generator]=None) -> Union[DecoderOutput, torch.FloatTensor]:
+        """
+        Args:
+            sample (`torch.FloatTensor`): Input sample.
+            sample_posterior (`bool`, *optional*, defaults to `False`):
+                Whether to sample from the posterior.
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
+        """
+        x = sample
+        posterior = self.encode(x).latent_dist
+        if sample_posterior:
+            z = posterior.sample(generator=generator)
+        else:
+            z = posterior.mode()
+        dec = self.decode(z).sample
+        if not return_dict:
+            return (dec,)
+        return DecoderOutput(sample=dec)
+
+@apply_forward_hook
+def encode(self, x: torch.FloatTensor, return_dict: bool=True) -> AutoencoderKLOutput:
+    if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
+        return self.tiled_encode(x, return_dict=return_dict)
+    h, intermediate_features = self.encoder(x)
+    moments = self.quant_conv(h)
+    posterior = DiagonalGaussianDistribution(moments)
+    if not return_dict:
+        return (posterior,)
+    return (AutoencoderKLOutput(latent_dist=posterior), intermediate_features)
+
+def _decode(self, z: torch.FloatTensor, intermediate_features: list=None, int_layers: list=None, return_dict: bool=True) -> Union[DecoderOutput, torch.FloatTensor]:
+    if self.use_tiling and (z.shape[-1] > self.tile_latent_min_size or z.shape[-2] > self.tile_latent_min_size):
+        return self.tiled_decode(z, return_dict=return_dict)
+    z = self.post_quant_conv(z)
+    if intermediate_features:
+        dec = self.decoder(z, intermediate_features, int_layers)
+    else:
+        dec = self.decoder(z)
+    if not return_dict:
+        return (dec,)
+    return DecoderOutput(sample=dec)
+
+@apply_forward_hook
+def decode(self, z: torch.FloatTensor, intermediate_features: list=None, int_layers: list=None, return_dict: bool=True) -> Union[DecoderOutput, torch.FloatTensor]:
+    if self.use_slicing and z.shape[0] > 1:
+        decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+        decoded = torch.cat(decoded_slices)
+    elif intermediate_features:
+        decoded = self._decode(z, intermediate_features, int_layers).sample
+    else:
+        decoded = self._decode(z).sample
+    if not return_dict:
+        return (decoded,)
+    return DecoderOutput(sample=decoded)
+
+def blend_v(self, a, b, blend_extent):
+    for y in range(blend_extent):
+        b[:, :, y, :] = a[:, :, -blend_extent + y, :] * (1 - y / blend_extent) + b[:, :, y, :] * (y / blend_extent)
+    return b
+
+def blend_h(self, a, b, blend_extent):
+    for x in range(blend_extent):
+        b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)
+    return b
+
+def tiled_encode(self, x: torch.FloatTensor, return_dict: bool=True) -> AutoencoderKLOutput:
+    """Encode a batch of images using a tiled encoder.
+        Args:
+        When this option is enabled, the VAE will split the input tensor into tiles to compute encoding in several
+        steps. This is useful to keep memory use constant regardless of image size. The end result of tiled encoding is:
+        different from non-tiled encoding due to each tile using a different encoder. To avoid tiling artifacts, the
+        tiles overlap and are blended together to form a smooth output. You may still see tile-sized changes in the
+        look of the output, but they should be much less noticeable.
+            x (`torch.FloatTensor`): Input batch of images. return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`AutoencoderKLOutput`] instead of a plain tuple.
+        """
+    overlap_size = int(self.tile_sample_min_size * (1 - self.tile_overlap_factor))
+    blend_extent = int(self.tile_latent_min_size * self.tile_overlap_factor)
+    row_limit = self.tile_latent_min_size - blend_extent
+    rows = []
+    for i in range(0, x.shape[2], overlap_size):
+        row = []
+        for j in range(0, x.shape[3], overlap_size):
+            tile = x[:, :, i:i + self.tile_sample_min_size, j:j + self.tile_sample_min_size]
+            tile, intermediate_features = self.encoder(tile)
+            tile = self.quant_conv(tile)
+            row.append(tile)
+        rows.append(row)
+    result_rows = []
+    for i, row in enumerate(rows):
+        result_row = []
+        for j, tile in enumerate(row):
+            if i > 0:
+                tile = self.blend_v(rows[i - 1][j], tile, blend_extent)
+            if j > 0:
+                tile = self.blend_h(row[j - 1], tile, blend_extent)
+            result_row.append(tile[:, :, :row_limit, :row_limit])
+        result_rows.append(torch.cat(result_row, dim=3))
+    moments = torch.cat(result_rows, dim=2)
+    posterior = DiagonalGaussianDistribution(moments)
+    if not return_dict:
+        return (posterior,)
+    return (AutoencoderKLOutput(latent_dist=posterior), intermediate_features)
+
+def tiled_decode(self, z: torch.FloatTensor, return_dict: bool=True) -> Union[DecoderOutput, torch.FloatTensor]:
+    """Decode a batch of images using a tiled decoder.
+        Args:
+        When this option is enabled, the VAE will split the input tensor into tiles to compute decoding in several
+        steps. This is useful to keep memory use constant regardless of image size. The end result of tiled decoding is:
+        different from non-tiled decoding due to each tile using a different decoder. To avoid tiling artifacts, the
+        tiles overlap and are blended together to form a smooth output. You may still see tile-sized changes in the
+        look of the output, but they should be much less noticeable.
+            z (`torch.FloatTensor`): Input batch of latent vectors. return_dict (`bool`, *optional*, defaults to
+            `True`):
+                Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
+        """
+    overlap_size = int(self.tile_latent_min_size * (1 - self.tile_overlap_factor))
+    blend_extent = int(self.tile_sample_min_size * self.tile_overlap_factor)
+    row_limit = self.tile_sample_min_size - blend_extent
+    rows = []
+    for i in range(0, z.shape[2], overlap_size):
+        row = []
+        for j in range(0, z.shape[3], overlap_size):
+            tile = z[:, :, i:i + self.tile_latent_min_size, j:j + self.tile_latent_min_size]
+            tile = self.post_quant_conv(tile)
+            decoded = self.decoder(tile)
+            row.append(decoded)
+        rows.append(row)
+    result_rows = []
+    for i, row in enumerate(rows):
+        result_row = []
+        for j, tile in enumerate(row):
+            if i > 0:
+                tile = self.blend_v(rows[i - 1][j], tile, blend_extent)
+            if j > 0:
+                tile = self.blend_h(row[j - 1], tile, blend_extent)
+            result_row.append(tile[:, :, :row_limit, :row_limit])
+        result_rows.append(torch.cat(result_row, dim=3))
+    dec = torch.cat(result_rows, dim=2)
+    if not return_dict:
+        return (dec,)
+    return DecoderOutput(sample=dec)
+
+def forward(self, sample: torch.FloatTensor, sample_posterior: bool=False, return_dict: bool=True, generator: Optional[torch.Generator]=None) -> Union[DecoderOutput, torch.FloatTensor]:
+    """
+        Args:
+            sample (`torch.FloatTensor`): Input sample.
+            sample_posterior (`bool`, *optional*, defaults to `False`):
+                Whether to sample from the posterior.
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
+        """
+    x = sample
+    posterior = self.encode(x).latent_dist
+    if sample_posterior:
+        z = posterior.sample(generator=generator)
+    else:
+        z = posterior.mode()
+    dec = self.decode(z).sample
+    if not return_dict:
+        return (dec,)
+    return DecoderOutput(sample=dec)
+
