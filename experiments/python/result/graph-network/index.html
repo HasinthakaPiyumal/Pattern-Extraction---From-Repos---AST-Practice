@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Repository List</title>
+    <style>
+        :root{
+            --bg:#0f1724; --card:#0b1220; --muted:#9aa4b2; --accent:#38bdf8;
+            --radius:10px; --gap:12px; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        }
+        html,body{height:100%; margin:0; background:linear-gradient(180deg,#061028 0%, #081427 100%); color:#e6eef6}
+        .wrap{max-width:980px; margin:28px auto; padding:20px; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border-radius:12px; box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+        header{display:flex; gap:12px; align-items:center; margin-bottom:18px}
+        h1{font-size:18px; margin:0 4px 0 0}
+        .controls{margin-left:auto; display:flex; gap:8px; align-items:center}
+        input[type="search"]{background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); padding:8px 10px; border-radius:8px; min-width:220px}
+        select{background:transparent; color:var(--muted); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.06)}
+        .list{display:grid; gap:10px; margin-top:12px}
+        .repo{display:flex; gap:12px; align-items:flex-start; padding:12px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:10px; border:1px solid rgba(255,255,255,0.03)}
+        .meta{flex:1}
+        .title{display:flex; gap:8px; align-items:center; margin-bottom:6px}
+        .title a{color:#e6f8ff; font-weight:600; text-decoration:none; font-size:15px}
+        .title a:hover{text-decoration:underline}
+        .badge{background:rgba(56,189,248,0.12); color:var(--accent); padding:4px 8px; border-radius:999px; font-size:12px}
+        .desc{color:var(--muted); font-size:13px; margin-bottom:8px}
+        .meta-row{display:flex; gap:12px; align-items:center; color:var(--muted); font-size:12px}
+        .lang-dot{width:10px; height:10px; border-radius:50%}
+        .empty{padding:18px; color:var(--muted); text-align:center}
+        .section-title{font-size:16px; margin:24px 0 8px; font-weight:600; color:#f0f6ff}
+        @media (max-width:560px){
+            header{flex-direction:column; align-items:flex-start; gap:8px}
+            .controls{width:100%; justify-content:space-between}
+            .title a{font-size:14px}
+        }
+    </style>
+</head>
+<body>
+    <main class="wrap" id="app">
+
+        <h2 class="section-title">Network Graphs</h2>
+        <section class="list" id="folders-list" aria-live="polite">
+            <!-- GitHub folders injected here -->
+        </section>
+        <div class="empty" id="folders-empty">Loading…</div>
+
+        <h2 class="section-title">Sample Repositories</h2>
+        <section class="list" id="list" aria-live="polite">
+            <!-- repo items injected here -->
+        </section>
+
+        <div class="empty" id="empty" hidden>No repositories found.</div>
+    </main>
+
+    <script>
+
+        const GITHUB_CONTENTS_URL = "https://api.github.com/repos/HasinthakaPiyumal/Pattern-Extraction---From-Repos---AST-Practice/contents/experiments/python/result/graph-network?ref=main";
+
+        // Utilities
+        const toDate = s => new Date(s || 0);
+        const el = id => document.getElementById(id);
+
+        function render(list) {
+            const container = el('list');
+            container.innerHTML = '';
+            el('empty').hidden = true;
+            for (const r of list) {
+                const item = document.createElement('article');
+                item.className = 'repo';
+                item.innerHTML = `
+                    <div class="meta">
+                        <div class="title">
+                            <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.name)}</a>
+                            <span class="badge">${r.stars ?? 0} ★</span>
+                        </div>
+                        <div class="desc">${escapeHtml(r.description || '')}</div>
+                        <div class="meta-row">
+                            <span style="display:inline-flex;align-items:center;gap:8px">
+                                <span class="lang-dot" style="background:${escapeHtml(r.color || '#999')}"></span>
+                                <span>${escapeHtml(r.language || '—')}</span>
+                            </span>
+                            <span>Updated ${timeAgo(r.updated)}</span>
+                            <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" style="margin-left:auto;color:var(--muted);text-decoration:none">Open</a>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(item);
+            }
+        }
+
+        async function loadGithubFolders() {
+            const container = el('folders-list');
+            const emptyState = el('folders-empty');
+            if (!container || !emptyState) {
+                return;
+            }
+
+            container.innerHTML = '';
+            emptyState.hidden = false;
+            emptyState.textContent = 'Loading…';
+
+            try {
+                const response = await fetch(GITHUB_CONTENTS_URL, {
+                    headers: {
+                        Accept: 'application/vnd.github+json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`GitHub API error: ${response.status}`);
+                }
+
+                const entries = await response.json();
+                const directories = entries.filter(item => item.type === 'dir');
+                const listing = directories.length ? directories : entries.filter(item => item.type === 'file');
+                const usingFiles = !directories.length;
+
+                container.innerHTML = '';
+
+                if (!listing.length) {
+                    emptyState.hidden = false;
+                    emptyState.textContent = 'No items found in GitHub folder.';
+                    return;
+                }
+
+                if (usingFiles) {
+                    emptyState.hidden = false;
+                    emptyState.textContent = 'No subfolders detected; showing files instead.';
+                } else {
+                    emptyState.hidden = true;
+                }
+
+                for (const entry of listing) {
+                    const displayName = entry.name.replace(/\/$/, '');
+                    const href = entry.html_url;
+                    const badgeLabel = entry.type === 'dir' ? 'folder' : 'file';
+                    const description = entry.type === 'dir'
+                        ? 'GitHub directory'
+                        : 'File shown because no folders were found.';
+                    let relativePath = entry.path.replace('experiments/python/result/graph-network/', '');
+                    console.log(relativePath)
+                    relativePath = relativePath.replace("https://github.com/HasinthakaPiyumal/Pattern-Extraction---From-Repos---AST-Practice/blob/main","https://raw.githubusercontent.com/HasinthakaPiyumal/Paper-Mining/main/https:/github.com/HasinthakaPiyumal/Pattern-Extraction---From-Repos---AST-Practice/tree/main")
+                    const article = document.createElement('article');
+                    article.className = 'repo';
+                    article.innerHTML = `
+                        <div class="meta">
+                            <div class="title">
+                                <a href="https://raw.githubusercontent.com/HasinthakaPiyumal/Paper-Mining/main/https:/github.com/HasinthakaPiyumal/Pattern-Extraction---From-Repos---AST-Practice/tree/main/experiments/python/result/graph-network/${escapeHtml(relativePath)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayName)}</a>
+                            </div>
+                            <div class="meta-row">
+                                <span>${escapeHtml(relativePath)}</span>
+                                <a href="https://raw.githubusercontent.com/HasinthakaPiyumal/Paper-Mining/main/https:/github.com/HasinthakaPiyumal/Pattern-Extraction---From-Repos---AST-Practice/tree/main/experiments/python/result/graph-network/${escapeHtml(relativePath)}" target="_blank" rel="noopener noreferrer" style="margin-left:auto;color:var(--muted);text-decoration:none">Open</a>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(article);
+                }
+            } catch (error) {
+                console.error(error);
+                container.innerHTML = '';
+                emptyState.hidden = false;
+                emptyState.textContent = 'Unable to load GitHub items.';
+            }
+        }
+
+        // Very small HTML escape for user-supplied strings
+        function escapeHtml(s) {
+            return String(s || '')
+                .replaceAll('&','&amp;')
+                .replaceAll('<','&lt;')
+                .replaceAll('>','&gt;')
+                .replaceAll('"','&quot;')
+                .replaceAll("'",'&#39;');
+        }
+
+        // Simple debounce
+        function debounce(fn, wait=200){
+            let t;
+            return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), wait); };
+        }
+
+        // Initial render
+        // update();
+    loadGithubFolders();
+
+        // Optionally: load JSON from same folder (repos.json) if present.
+        // fetch('repos.json').then(r=>r.ok? r.json(): null).then(j=>{ if(Array.isArray(j)) { repos.length=0; repos.push(...j); update(); } }).catch(()=>{});
+    </script>
+</body>
+</html>
