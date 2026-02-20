@@ -1,0 +1,21 @@
+// Cluster 9
+
+package com.itachallenge.document;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients(basePackages = "com.itachallenge.document.proxy")
+public class App {
+
+    public static void main(String[] args) {
+        SpringApplication.run(App.class, args);
+    }
+}
+
+// Node: repos/cloned_ms_repos/ita-challenges-backend/itachallenge-document/src/main/java/com/itachallenge/document/App.java:App.<init>
+// Node: EnableFeignClients

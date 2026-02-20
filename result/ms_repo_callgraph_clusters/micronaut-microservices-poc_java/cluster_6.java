@@ -1,0 +1,19 @@
+// Cluster 6
+
+package pl.altkom.asc.lab.micronaut.poc.dashboard.infrastructure.adapters.bus;
+
+import io.micronaut.context.ApplicationContext;
+import pl.altkom.asc.lab.micronaut.poc.command.bus.Registry;
+
+import javax.inject.Singleton;
+
+@Singleton
+public class DashboardRegistry extends Registry {
+    public DashboardRegistry(ApplicationContext applicationContext) {
+        super(applicationContext);
+    }
+}
+
+
+// Node: repos/cloned_ms_repos/micronaut-microservices-poc/dashboard-service/src/main/java/pl/altkom/asc/lab/micronaut/poc/dashboard/infrastructure/adapters/bus/DashboardRegistry.java:DashboardRegistry.<init>
+// Node: DashboardRegistry

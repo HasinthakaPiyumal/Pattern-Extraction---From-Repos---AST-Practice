@@ -4,8 +4,8 @@ import os
 import subprocess
 import concurrent.futures
 
-clone_dir = "repos/cloned_repos"
-json_file = "data/finalized-repost.json"
+clone_dir = "repos/cloned_ms_repos"
+json_file = "data/ms-repos.json"
 
 os.makedirs(clone_dir, exist_ok=True)
 

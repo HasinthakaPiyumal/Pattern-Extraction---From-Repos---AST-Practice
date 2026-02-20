@@ -1,0 +1,6 @@
+# Cluster 17
+
+def sleep_for(num_of_seconds):
+    time.sleep(num_of_seconds)
+
+# Node: sleep

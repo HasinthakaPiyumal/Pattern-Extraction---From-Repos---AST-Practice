@@ -1,0 +1,178 @@
+[
+  {
+    "full_name": "pzy2000/RepoGenesis",
+    "stars": null,
+    "svn_url": "https://github.com/pzy2000/RepoGenesis",
+    "description": "RepoGenesis benchmark for generating microservice repositories from natural language requirements (arxiv branch).",
+    "topics": ["microservice", "benchmark", "repository-generation", "nl2code"],
+    "owner": "https://github.com/pzy2000"
+  },
+  {
+    "full_name": "mybatis/jpetstore-6",
+    "stars": null,
+    "svn_url": "https://github.com/mybatis/jpetstore-6",
+    "description": "Sample web app using Java, Spring, MyBatis, Stripes, SQL, JSP.",
+    "topics": ["java", "spring", "mybatis", "jsp", "sample-app"],
+    "owner": "https://github.com/mybatis"
+  },
+  {
+    "full_name": "acmeair/acmeair",
+    "stars": null,
+    "svn_url": "https://github.com/acmeair/acmeair",
+    "description": "Airline microservices reference; primary Java implementation plus Node.js alternative.",
+    "topics": ["java", "nodejs", "microservices", "reference"],
+    "owner": "https://github.com/acmeair"
+  },
+  {
+    "full_name": "WASdev/sample.daytrader7",
+    "stars": null,
+    "svn_url": "https://github.com/WASdev/sample.daytrader7",
+    "description": "DayTrader7 Java EE 7 sample application.",
+    "topics": ["java", "java-ee", "sample", "trading"],
+    "owner": "https://github.com/WASdev"
+  },
+  {
+    "full_name": "WASdev/sample.plantsbywebsphere",
+    "stars": null,
+    "svn_url": "https://github.com/WASdev/sample.plantsbywebsphere",
+    "description": "Plants by WebSphere Java EE sample application.",
+    "topics": ["java", "java-ee", "sample"],
+    "owner": "https://github.com/WASdev"
+  },
+  {
+    "full_name": "FudanSELab/train-ticket",
+    "stars": null,
+    "svn_url": "https://github.com/FudanSELab/train-ticket",
+    "description": "Train ticket system microservices in Java Spring Boot with Node.js, Python Django, and Go services.",
+    "topics": ["java", "spring-boot", "nodejs", "python", "go", "microservices"],
+    "owner": "https://github.com/FudanSELab"
+  },
+  {
+    "full_name": "spring-projects/spring-petclinic",
+    "stars": null,
+    "svn_url": "https://github.com/spring-projects/spring-petclinic",
+    "description": "Spring Boot pet clinic sample with HTML, SCSS, JavaScript UI.",
+    "topics": ["java", "spring-boot", "demo", "web"],
+    "owner": "https://github.com/spring-projects"
+  },
+  {
+    "full_name": "microservices-demo/microservices-demo",
+    "stars": null,
+    "svn_url": "https://github.com/microservices-demo/microservices-demo",
+    "description": "Sock Shop polyglot microservices demo (Go, Java, Node.js, Python, .NET).",
+    "topics": ["microservices", "polyglot", "demo", "go", "java", "nodejs", "python", "dotnet"],
+    "owner": "https://github.com/microservices-demo"
+  },
+  {
+    "full_name": "delimitrou/DeathStarBench",
+    "stars": null,
+    "svn_url": "https://github.com/delimitrou/DeathStarBench",
+    "description": "DeathStarBench microservice benchmark suite (C++, Python, Node.js).",
+    "topics": ["benchmark", "microservices", "c++", "python", "nodejs"],
+    "owner": "https://github.com/delimitrou"
+  },
+  {
+    "full_name": "diku-dk/OnlineMarketplaceBenchmark",
+    "stars": null,
+    "svn_url": "https://github.com/diku-dk/OnlineMarketplaceBenchmark",
+    "description": "Online marketplace microservices benchmark in Java and SQL.",
+    "topics": ["java", "sql", "benchmark", "marketplace", "microservices"],
+    "owner": "https://github.com/diku-dk"
+  },
+  {
+    "full_name": "GoogleCloudPlatform/microservices-demo",
+    "stars": null,
+    "svn_url": "https://github.com/GoogleCloudPlatform/microservices-demo",
+    "description": "Online boutique multi-language microservices (Go, Java, Python).",
+    "topics": ["microservices", "go", "java", "python", "demo"],
+    "owner": "https://github.com/GoogleCloudPlatform"
+  },
+  {
+    "full_name": "microservices-patterns/ftgo-application",
+    "stars": null,
+    "svn_url": "https://github.com/microservices-patterns/ftgo-application",
+    "description": "FTGO food delivery microservices applying saga pattern and event sourcing in Java.",
+    "topics": ["java", "microservices", "saga", "event-sourcing", "spring"],
+    "owner": "https://github.com/microservices-patterns"
+  },
+  {
+    "full_name": "sqshq/piggymetrics",
+    "stars": null,
+    "svn_url": "https://github.com/sqshq/piggymetrics",
+    "description": "Spring Boot microservices for personal finance with Spring Cloud config server.",
+    "topics": ["java", "spring-boot", "spring-cloud", "microservices"],
+    "owner": "https://github.com/sqshq"
+  },
+  {
+    "full_name": "asc-lab/micronaut-microservices-poc",
+    "stars": null,
+    "svn_url": "https://github.com/asc-lab/micronaut-microservices-poc",
+    "description": "Micronaut microservices proof of concept with Java, Kotlin, Vue.js, TypeScript.",
+    "topics": ["java", "kotlin", "micronaut", "vue", "typescript", "microservices"],
+    "owner": "https://github.com/asc-lab"
+  },
+  {
+    "full_name": "Nasruddin/spring-boot-based-microservices",
+    "stars": null,
+    "svn_url": "https://github.com/Nasruddin/spring-boot-based-microservices",
+    "description": "Spring Boot based microservices reference implementation.",
+    "topics": ["java", "spring-boot", "microservices"],
+    "owner": "https://github.com/Nasruddin"
+  },
+  {
+    "full_name": "IT-Academy-BCN/ita-challenges-backend",
+    "stars": null,
+    "svn_url": "https://github.com/IT-Academy-BCN/ita-challenges-backend",
+    "description": "Spring Boot backend challenges with MongoDB.",
+    "topics": ["java", "spring-boot", "mongodb", "backend"],
+    "owner": "https://github.com/IT-Academy-BCN"
+  },
+  {
+    "full_name": "haphong463/springboot-kafka-microservices",
+    "stars": null,
+    "svn_url": "https://github.com/haphong463/springboot-kafka-microservices",
+    "description": "Spring Boot microservices with Kafka integration and HTML UI.",
+    "topics": ["java", "spring-boot", "kafka", "microservices"],
+    "owner": "https://github.com/haphong463"
+  },
+  {
+    "full_name": "purushottam-mca/Retail-Banking-System",
+    "stars": null,
+    "svn_url": "https://github.com/purushottam-mca/Retail-Banking-System",
+    "description": "Retail banking microservices in Spring Boot with Angular frontend and H2 database.",
+    "topics": ["java", "spring-boot", "angular", "h2", "banking", "microservices"],
+    "owner": "https://github.com/purushottam-mca"
+  },
+  {
+    "full_name": "huynhthanhbinh/saigonparking",
+    "stars": null,
+    "svn_url": "https://github.com/huynhthanhbinh/saigonparking",
+    "description": "Saigon Parking microservices in Spring Boot with JavaScript clients.",
+    "topics": ["java", "spring-boot", "parking", "microservices"],
+    "owner": "https://github.com/huynhthanhbinh"
+  },
+  {
+    "full_name": "PacktPublishing/Hands-on-Microservices-with-Python",
+    "stars": null,
+    "svn_url": "https://github.com/PacktPublishing/Hands-on-Microservices-with-Python",
+    "description": "Hands-on Microservices with Python examples and code.",
+    "topics": ["python", "microservices", "examples"],
+    "owner": "https://github.com/PacktPublishing"
+  },
+  {
+    "full_name": "mahdjourOussama/Chatbot",
+    "stars": null,
+    "svn_url": "https://github.com/mahdjourOussama/Chatbot",
+    "description": "Chatbot application in Java Spring Boot with JavaScript components.",
+    "topics": ["java", "spring-boot", "chatbot", "javascript"],
+    "owner": "https://github.com/mahdjourOussama"
+  },
+  {
+    "full_name": "kruglov-dmitry/crypto_crawler",
+    "stars": null,
+    "svn_url": "https://github.com/kruglov-dmitry/crypto_crawler",
+    "description": "Crypto crawler services in Python with TSQL.",
+    "topics": ["python", "tsql", "crawler", "crypto"],
+    "owner": "https://github.com/kruglov-dmitry"
+  }
+]

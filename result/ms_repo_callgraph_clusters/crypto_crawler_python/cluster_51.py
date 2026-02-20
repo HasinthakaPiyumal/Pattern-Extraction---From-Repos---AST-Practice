@@ -1,0 +1,141 @@
+# Cluster 51
+
+class ConnectionPool:
+
+    def __init__(self, pool_size=POOL_SIZE):
+        self.session = requests.Session()
+        self.pool_size = pool_size
+        self.network_pool = Pool(self.pool_size)
+
+    @classmethod
+    def _process_futures(cls, work_units_batch):
+        """
+            Operate under `WorkUnit` objects after returning from async calls.
+            Try to apply job specific constructor method for response returned by exchange.
+            In case constructor method fail for any reason - try to wrap all available details into debug string.
+
+        :param work_units_batch:
+        :return: array of either object, parsed from exchange responce or error messages as string
+        """
+        res = []
+        for work_unit in work_units_batch:
+            if get_logging_level() >= LOG_ALL_DEBUG:
+                log_responce(work_unit)
+            result = None
+            if work_unit.future_value is None or work_unit.future_status_code != HTTP_SUCCESS:
+                result = log_responce_cant_be_parsed(work_unit)
+                res.append(result)
+            else:
+                try:
+                    result = work_unit.method(work_unit.future_value_json, *work_unit.args)
+                except Exception as e:
+                    pass
+                if result is not None:
+                    if type(result) is list:
+                        res += result
+                    else:
+                        res.append(result)
+                else:
+                    result = log_responce_cant_be_parsed(work_unit)
+                    res.append(result)
+        return res
+
+    def async_get_to_list(self, work_units, timeout):
+        res = []
+        for work_units_batch in batch(work_units, self.pool_size):
+            futures = []
+            for work_unit in work_units_batch:
+                some_future = self.network_pool.spawn(self.session.get, work_unit.url, timeout=timeout)
+                work_unit.add_future(some_future)
+                futures.append(some_future)
+            gevent.joinall(futures)
+            res += self._process_futures(work_units_batch)
+        return res
+
+    def async_post_to_list(self, work_units, timeout):
+        res = []
+        for work_units_batch in batch(work_units, self.pool_size):
+            futures = []
+            for work_unit in work_units_batch:
+                some_future = self.network_pool.spawn(self.session.post, work_unit.post_details.final_url, data=work_unit.post_details.body, headers=work_unit.post_details.headers, timeout=timeout)
+                work_unit.add_future(some_future)
+                futures.append(some_future)
+            gevent.joinall(futures)
+            res += self._process_futures(work_units_batch)
+        return res
+
+    def process_async_get(self, work, timeout):
+        return self.async_get_to_list(work, timeout)
+
+    def process_async_post(self, work, timeout):
+        return self.async_post_to_list(work, timeout)
+
+    def _get_http_method_by_type(self, http_method_type):
+        return {HTTP_REQUEST.POST: self.session.post, HTTP_REQUEST.GET: self.session.get}[http_method_type]
+
+    def process_async_custom(self, work_units, timeout):
+        """
+        :param work_units:
+        :param timeout:
+        :return:    error_code, failure in case at least one of query were problematic in processing
+                    list of results, for failed query must be set to None
+        """
+        err_code = STATUS.SUCCESS
+        futures = []
+        for work_unit in work_units:
+            http_method = self._get_http_method_by_type(work_unit.http_method)
+            some_future = self.network_pool.spawn(http_method, work_unit.post_details.final_url, data=work_unit.post_details.body, headers=work_unit.post_details.headers, timeout=timeout)
+            work_unit.add_future(some_future)
+            futures.append(some_future)
+        gevent.joinall(futures)
+        res = self._process_futures(work_units)
+        return (err_code, res)
+
+def async_get_to_list(self, work_units, timeout):
+    res = []
+    for work_units_batch in batch(work_units, self.pool_size):
+        futures = []
+        for work_unit in work_units_batch:
+            some_future = self.network_pool.spawn(self.session.get, work_unit.url, timeout=timeout)
+            work_unit.add_future(some_future)
+            futures.append(some_future)
+        gevent.joinall(futures)
+        res += self._process_futures(work_units_batch)
+    return res
+
+# Node: batch
+# Node: spawn
+# Node: add_future
+# Node: joinall
+# Node: _process_futures
+def async_post_to_list(self, work_units, timeout):
+    res = []
+    for work_units_batch in batch(work_units, self.pool_size):
+        futures = []
+        for work_unit in work_units_batch:
+            some_future = self.network_pool.spawn(self.session.post, work_unit.post_details.final_url, data=work_unit.post_details.body, headers=work_unit.post_details.headers, timeout=timeout)
+            work_unit.add_future(some_future)
+            futures.append(some_future)
+        gevent.joinall(futures)
+        res += self._process_futures(work_units_batch)
+    return res
+
+def process_async_custom(self, work_units, timeout):
+    """
+        :param work_units:
+        :param timeout:
+        :return:    error_code, failure in case at least one of query were problematic in processing
+                    list of results, for failed query must be set to None
+        """
+    err_code = STATUS.SUCCESS
+    futures = []
+    for work_unit in work_units:
+        http_method = self._get_http_method_by_type(work_unit.http_method)
+        some_future = self.network_pool.spawn(http_method, work_unit.post_details.final_url, data=work_unit.post_details.body, headers=work_unit.post_details.headers, timeout=timeout)
+        work_unit.add_future(some_future)
+        futures.append(some_future)
+    gevent.joinall(futures)
+    res = self._process_futures(work_units)
+    return (err_code, res)
+
+# Node: _get_http_method_by_type
